@@ -1,0 +1,20 @@
+# Rust build artifacts
+/target/
+
+# Environment secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# Editor and OS
+.DS_Store
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# sqlx offline query cache (commit this if you want offline compile-time checks)
+# .sqlx/
+
+# Test output
+/test-results/

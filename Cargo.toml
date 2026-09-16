@@ -1,0 +1,44 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/coordinator",
+    "crates/agent-protocol",
+    "crates/agent-mock",
+    "crates/agent-agy",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = []
+
+# ─── Shared dependency versions ───────────────────────────────────────────────
+# All crates in this workspace reference these via { workspace = true }
+# to keep version pins consistent.
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# IDs and time
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Logging / tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# NATS with JetStream
+async-nats = "0.35"
+
+# Shared protocol crate (local path)
+agent-protocol = { path = "crates/agent-protocol" }

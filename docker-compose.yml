@@ -1,0 +1,58 @@
+# AgentMesh — Docker Compose Stack
+#
+# Services:
+#   postgres  — PostgreSQL 16 (source of truth for all project/task/agent state)
+#   nats      — NATS 2.x with JetStream enabled (task delivery + agent event transport)
+#
+# The coordinator binary runs outside Docker during development.
+# For production, add a coordinator service using the built binary.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agentmesh
+      POSTGRES_USER: agentmesh
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentmesh_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentmesh -d agentmesh"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  nats:
+    image: nats:2.10-alpine
+    restart: unless-stopped
+    # -js          : enable JetStream
+    # -auth        : token authentication (replace in production with NKey credentials)
+    # -sd          : JetStream store directory (persisted in volume)
+    # -m 8222      : HTTP monitoring endpoint
+    command:
+      - "-js"
+      - "-auth"
+      - "${NATS_AUTH_TOKEN:-agentmesh_dev_token}"
+      - "-sd"
+      - "/data/jetstream"
+      - "-m"
+      - "8222"
+    ports:
+      - "4222:4222"   # NATS client connections
+      - "8222:8222"   # HTTP monitoring (http://localhost:8222)
+    volumes:
+      - nats_data:/data/jetstream
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  postgres_data:
+  nats_data:
