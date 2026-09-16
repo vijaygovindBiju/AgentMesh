@@ -131,14 +131,14 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 ## Phase 2 — Agent Protocol & NATS Infrastructure
 
 ### `agent-protocol` crate
-- [ ] Define `AgentMessage` enum (all agent → coordinator messages)
-- [ ] Define `CoordinatorMessage` enum (all coordinator → agent messages)
-- [ ] Define `TaskSpec` struct
-- [ ] Define `AgentStatus`, `DeliveryAck` types
-- [ ] Round-trip serialization tests for all message types
+- [x] Define `AgentMessage` enum (all agent → coordinator messages)
+- [x] Define `CoordinatorMessage` enum (all coordinator → agent messages)
+- [x] Define `TaskSpec` struct
+- [x] Define `AgentStatus`, `DeliveryAck` types
+- [x] Round-trip serialization tests for all message types
 
 ### NATS Infrastructure (coordinator)
-- [ ] NATS connection setup with JetStream (`messaging/client.rs`)
+- [~] NATS connection setup with JetStream (`messaging/client.rs`)
 - [ ] Create JetStream streams: `TASK_ASSIGNMENTS`, `AGENT_EVENTS`
 - [ ] Implement publisher: coordinator → agent task assignments
 - [ ] Implement subscriber: coordinator ← agent events
