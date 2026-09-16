@@ -125,6 +125,12 @@ When a `TaskDelivery` reaches `Terminal` state:
 
 **The human must approve reassignment.** The coordinator does not silently reassign failed tasks.
 
+### Delivery Failure vs. Execution Failure
+In v0.1, both delivery failures (agent never started before timeout/exhaustion) and execution failures (agent started work but encountered an error) transition `Task.status` to `Failed`. The distinction is preserved in the audit layer:
+- `TaskDelivery` stores transport/startup failure details (`failure_reason`, `attempt`, `Terminal` status).
+- `agent_events` stores runtime execution failure details (`message`, `payload`).
+This design avoids premature expansion of the core `TaskStatus` enum while preserving the full diagnostic trail for human review.
+
 ---
 
 ## Consequences

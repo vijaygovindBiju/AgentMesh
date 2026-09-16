@@ -46,6 +46,13 @@ This is the central invariant of the system. The LLM can only ever produce `Prop
 - The coordinator's assignment logic (deterministic code) advances `Approved → Assigned`.
 - The coordinator never skips `HumanReview`, even on retry or reassignment of a previously-approved task. New assignments go through a new `Proposal`.
 
+### Note on Failure Modes: Delivery Failure vs. Execution Failure
+In v0.1, both failure modes map to `TaskStatus::Failed` to keep the initial state model clean while preserving full context:
+1. **Delivery Failure (Transport / Startup Window):** The agent never reaches `Executing` (e.g. NATS redelivery exhausted, or agent crashed after JetStream ACK before reporting `TaskStarted`, causing `expires_at` timeout). The failure context is captured in `TaskDelivery.failure_reason` and `TaskDelivery.status = 'terminal'`.
+2. **Execution Failure:** The agent successfully entered `Executing`, but subsequently reported `AgentMessage::Failed` due to build errors, runtime exceptions, or missing dependencies. The context is captured in `agent_events`.
+
+In a future version, these may be split into explicit states (`DeliveryFailed` vs `ExecutionFailed`) if distinct automated recovery policies are required.
+
 ---
 
 ## Domain Types
