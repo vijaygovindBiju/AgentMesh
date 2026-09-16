@@ -58,10 +58,13 @@ impl TaskStatus {
                 // Execution path
                 | (Approved, Assigned)
                 | (Assigned, Executing)
+                | (Assigned, Failed)
                 | (Executing, Blocked)
                 | (Executing, Completed)
                 | (Executing, Failed)
                 | (Blocked, Executing)
+                // Reassignment path (human approves reassignment of failed task)
+                | (Failed, Approved)
                 // Cancellation (allowed from non-terminal active states)
                 | (Approved, Cancelled)
                 | (Assigned, Cancelled)
@@ -210,9 +213,11 @@ mod tests {
             (TaskStatus::HumanReview, TaskStatus::Rejected),
             (TaskStatus::Approved, TaskStatus::Assigned),
             (TaskStatus::Assigned, TaskStatus::Executing),
+            (TaskStatus::Assigned, TaskStatus::Failed),
             (TaskStatus::Executing, TaskStatus::Blocked),
             (TaskStatus::Executing, TaskStatus::Completed),
             (TaskStatus::Executing, TaskStatus::Failed),
+            (TaskStatus::Failed, TaskStatus::Approved),
             (TaskStatus::Blocked, TaskStatus::Executing),
             (TaskStatus::Approved, TaskStatus::Cancelled),
             (TaskStatus::Executing, TaskStatus::Cancelled),
