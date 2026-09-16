@@ -113,8 +113,8 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 ### Database
 - [x] Create `migrations/001_initial_schema.sql`
 - [x] Set up sqlx database connection pool (`coordinator/src/db/pool.rs`)
-- [~] Implement `ProjectRepository`
-- [ ] Implement `TaskRepository`
+- [x] Implement `ProjectRepository`
+- [~] Implement `TaskRepository`
 - [ ] Implement `AgentRepository`
 - [ ] Implement `TaskDeliveryRepository`
 - [ ] Implement `AgentEventRepository`
