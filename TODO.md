@@ -104,14 +104,14 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 ## Phase 1 — Domain & Persistence
 
 ### Domain Types
-- [ ] Define `Task`, `Project`, `Agent`, `Proposal`, `TaskDependency` types in coordinator
-- [ ] Define `TaskDelivery` type (explicit delivery ownership model)
-- [ ] Define `OverlapWarning` type
-- [ ] Define `TaskApproval` type
-- [ ] All types serialize/deserialize correctly (unit tests)
+- [x] Define `Task`, `Project`, `Agent`, `Proposal`, `TaskDependency` types in coordinator
+- [x] Define `TaskDelivery` type (explicit delivery ownership model)
+- [x] Define `OverlapWarning` type
+- [x] Define `TaskApproval` type
+- [x] All types serialize/deserialize correctly (21/21 unit tests pass)
 
 ### Database
-- [ ] Create `migrations/001_initial_schema.sql`
+- [~] Create `migrations/001_initial_schema.sql`
 - [ ] Set up sqlx database connection pool (`coordinator/src/db/pool.rs`)
 - [ ] Implement `ProjectRepository`
 - [ ] Implement `TaskRepository`

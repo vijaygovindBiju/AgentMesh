@@ -1,11 +1,11 @@
 use anyhow::Result;
 
-// Module declarations (uncommented as phases progress):
-//
-// Phase 1: mod config; mod db;
-// Phase 3: mod ai;
-// Phase 4: mod tui;
-// Phase 5: mod coordinator; mod messaging;
+// Modules uncommented as phases progress:
+pub mod domain; // Phase 1: domain types
+                // Phase 1: mod db;
+                // Phase 3: mod ai;
+                // Phase 4: mod tui;
+                // Phase 5: mod coordinator; mod messaging;
 
 #[tokio::main]
 async fn main() -> Result<()> {
