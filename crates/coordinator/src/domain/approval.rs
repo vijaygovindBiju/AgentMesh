@@ -11,7 +11,7 @@ use uuid::Uuid;
 /// A `TaskApproval` record with one of these statuses is the **only** mechanism
 /// that can advance a task from `HumanReview` to `Approved` or `Rejected`.
 /// See `docs/decisions/008-human-approval-boundary.md`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "approval_status", rename_all = "snake_case")]
 pub enum ApprovalStatus {
     /// Human pressed [Y] — task approved as proposed.

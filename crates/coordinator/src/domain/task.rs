@@ -15,7 +15,7 @@ use uuid::Uuid;
 /// PostgreSQL enum type: `task_status`
 /// Values: "proposed", "human_review", "approved", "rejected",
 ///         "assigned", "executing", "blocked", "completed", "failed", "cancelled"
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "task_status", rename_all = "snake_case")]
 pub enum TaskStatus {
     /// LLM has generated this task. Only entry point for AI output.
@@ -89,7 +89,7 @@ impl TaskStatus {
 /// How one task relates to another.
 ///
 /// PostgreSQL enum type: `dependency_kind`
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "dependency_kind", rename_all = "snake_case")]
 pub enum DependencyKind {
     /// The dependent task cannot start until `depends_on` is `Completed`.
