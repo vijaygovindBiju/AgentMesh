@@ -114,17 +114,17 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Create `migrations/001_initial_schema.sql`
 - [x] Set up sqlx database connection pool (`coordinator/src/db/pool.rs`)
 - [x] Implement `ProjectRepository`
-- [~] Implement `TaskRepository`
-- [ ] Implement `AgentRepository`
-- [ ] Implement `TaskDeliveryRepository`
-- [ ] Implement `AgentEventRepository`
-- [ ] Implement `OverlapWarningRepository`
+- [x] Implement `TaskRepository`
+- [x] Implement `AgentRepository`
+- [x] Implement `TaskDeliveryRepository`
+- [x] Implement `AgentEventRepository`
+- [x] Implement `OverlapWarningRepository`
 
 ### Acceptance Criteria — Phase 1
-- [ ] All domain types compile and round-trip through serde
-- [ ] All repositories compile with correct SQL (sqlx compile-time checked)
-- [ ] `sqlx migrate run` succeeds against a running PostgreSQL instance
-- [ ] Unit tests pass for domain type construction and state transitions
+- [x] All domain types compile and round-trip through serde (21 tests pass)
+- [x] All repositories compile with correct SQL (sqlx compile-time checked)
+- [x] `sqlx migrate run` succeeds against a running PostgreSQL instance (verified on PostgreSQL 16)
+- [x] Unit tests pass for domain type construction and state transitions (28/28 tests pass)
 
 ---
 

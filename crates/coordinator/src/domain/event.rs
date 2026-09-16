@@ -8,7 +8,7 @@ use uuid::Uuid;
 /// The kind of lifecycle event an agent reported.
 ///
 /// PostgreSQL enum type: `event_type`
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "event_type", rename_all = "snake_case")]
 pub enum AgentEventType {
     /// Agent acknowledged the task and began work.

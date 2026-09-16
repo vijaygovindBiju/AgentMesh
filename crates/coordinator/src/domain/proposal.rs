@@ -7,7 +7,7 @@ use uuid::Uuid;
 /// Review progress of a coordinator-generated plan.
 ///
 /// PostgreSQL enum type: `proposal_status`
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "proposal_status", rename_all = "snake_case")]
 pub enum ProposalStatus {
     /// Awaiting human review. No tasks approved yet.

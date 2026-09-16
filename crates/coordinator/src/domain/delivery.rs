@@ -9,7 +9,7 @@ use uuid::Uuid;
 /// PostgreSQL enum type: `delivery_status`
 ///
 /// Full lifecycle and transitions are defined in `docs/decisions/007-nats-delivery-semantics.md`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "delivery_status", rename_all = "snake_case")]
 pub enum DeliveryStatus {
     /// `TaskDelivery` record created in PostgreSQL; NATS publish not yet confirmed.
@@ -36,7 +36,7 @@ pub enum DeliveryStatus {
 /// How the agent responded to a task delivery.
 ///
 /// PostgreSQL enum type: `ack_kind`
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "ack_kind", rename_all = "snake_case")]
 pub enum AckKind {
     /// Agent accepted the task and will begin processing.

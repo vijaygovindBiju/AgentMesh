@@ -8,7 +8,7 @@ use uuid::Uuid;
 /// The operational status of a registered agent.
 ///
 /// PostgreSQL enum type: `agent_status`
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "agent_status", rename_all = "snake_case")]
 pub enum AgentStatus {
     /// Agent process is not connected to NATS.
@@ -28,7 +28,7 @@ pub enum AgentStatus {
 /// Which runtime backs this agent.
 ///
 /// PostgreSQL enum type: `adapter_type`
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "adapter_type", rename_all = "snake_case")]
 pub enum AdapterType {
     /// `agent-mock` binary — real protocol, simulated work.

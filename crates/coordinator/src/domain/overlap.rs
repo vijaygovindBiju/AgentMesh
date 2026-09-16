@@ -8,7 +8,7 @@ use uuid::Uuid;
 /// How serious a detected resource overlap is.
 ///
 /// PostgreSQL enum type: `overlap_severity`
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "overlap_severity", rename_all = "snake_case")]
 pub enum OverlapSeverity {
     /// Informational — same file mentioned, but tasks are sequential.
