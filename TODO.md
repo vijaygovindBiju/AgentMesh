@@ -250,24 +250,24 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 ## Phase 7 — Integration & Demo
 
 ### End-to-End Validation
-- [ ] Integration test: 2 mock agents, project description, full lifecycle
-- [ ] Demonstrate dependency chain: Task B waits for Task A `Completed`
-- [ ] Demonstrate overlap warning: Task A and Task B share a resource path
-- [ ] All 10 v0.1 success criteria satisfied (see `docs/architecture.md`)
+- [x] Integration test: 2 mock agents, project description, full lifecycle (`phase7_e2e_demo.rs`)
+- [x] Demonstrate dependency chain: Task B waits for Task A `Completed` (verified in tests)
+- [x] Demonstrate overlap warning: Task A and Task B share a resource path (verified in tests)
+- [x] All 10 v0.1 success criteria satisfied (see `docs/architecture.md`)
 
 ### Deployment
-- [ ] Full stack starts cleanly via `docker compose up`
-- [ ] README setup instructions verified end-to-end by following them literally
-- [ ] No hardcoded secrets in source or Docker images
+- [x] Full stack starts cleanly via `docker compose up` (PostgreSQL 16 + NATS JetStream 2.10 verified healthy)
+- [x] README setup instructions verified end-to-end by following them literally
+- [x] No hardcoded secrets in source or Docker images (verified across workspace)
 
 ### Acceptance Criteria — v0.1 Complete
-- [ ] Human enters project description in TUI ✓
-- [ ] LLM produces dependency-aware task plan ✓
-- [ ] Human reviews tasks one-at-a-time with Y/N/E/↑↓/Enter ✓
-- [ ] Coordinator assigns approved tasks, dependency-ordered ✓
-- [ ] Tasks delivered via NATS JetStream to mock agents ✓
-- [ ] Mock agents report: started, progress, blocked, completed ✓
-- [ ] TUI live dashboard shows agent + task state ✓
-- [ ] One dependency chain demonstrated ✓
-- [ ] One overlap warning demonstrated ✓
-- [ ] Full stack starts with `docker compose up` ✓
+- [x] Human enters project description in TUI ✓
+- [x] LLM produces dependency-aware task plan ✓
+- [x] Human reviews tasks one-at-a-time with Y/N/E/↑↓/Enter ✓
+- [x] Coordinator assigns approved tasks, dependency-ordered ✓
+- [x] Tasks delivered via NATS JetStream to mock agents ✓
+- [x] Mock agents report: started, progress, blocked, completed ✓
+- [x] TUI live dashboard shows agent + task state ✓
+- [x] One dependency chain demonstrated ✓
+- [x] One overlap warning demonstrated ✓
+- [x] Full stack starts with `docker compose up` ✓

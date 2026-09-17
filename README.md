@@ -101,14 +101,14 @@ sqlx migrate run
 cargo run --bin coordinator
 ```
 
-### 5. Start mock agents (in separate terminals)
+### 5. Start mock agents (optional, in separate terminals)
 
 ```bash
 # Agent A
-MOCK_AGENT_ID=mock-agent-a MOCK_AGENT_OWNER=Alice cargo run --bin agent-mock
+MOCK_AGENT_OWNER="Alice (Backend Lead)" cargo run --bin agent-mock
 
 # Agent B
-MOCK_AGENT_ID=mock-agent-b MOCK_AGENT_OWNER=Bob cargo run --bin agent-mock
+MOCK_AGENT_OWNER="Bob (Infra Lead)" cargo run --bin agent-mock
 ```
 
 ---
@@ -147,7 +147,7 @@ AgentMesh/
 | TUI | ratatui + crossterm |
 | Database | PostgreSQL 16 (via sqlx) |
 | Message queue | NATS 2.x + JetStream |
-| AI provider | Configurable: Anthropic / OpenAI / Gemini |
+| AI provider | Configurable: Anthropic / OpenAI / Gemini / Mock |
 | Deployment | Docker Compose |
 
 ---
@@ -164,6 +164,14 @@ AgentMesh/
 
 ## Status
 
-**Phase 0 — Foundation** (in progress)
+**v0.1 Complete** — All 8 phases (Phase 0 through Phase 7) are fully implemented, verified, and passing all tests:
+- **Phase 0:** Workspace scaffolding, docker-compose infrastructure, and ADRs
+- **Phase 1:** PostgreSQL schema migrations, sqlx repositories, and strict domain model state machines
+- **Phase 2:** NATS JetStream pub/sub streams, agent registration, heartbeats, and mock agent adapter
+- **Phase 3:** AI planning layer, deterministic plan validation, and PostgreSQL proposal persistence
+- **Phase 4:** Ratatui interactive TUI, per-task human review, and inline description editing
+- **Phase 5:** Coordinator core engine, human approval gating, dependency-ordered assignment, and concurrency locking
+- **Phase 6:** Live dashboard projection, resource overlap detection, and conflict gating
+- **Phase 7:** End-to-end integration demo satisfying all 10 v0.1 success criteria
 
-See [`TODO.md`](TODO.md) for full implementation status.
+See [`TODO.md`](TODO.md) for full implementation status and verification details.
