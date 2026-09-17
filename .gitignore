@@ -16,5 +16,31 @@
 # sqlx offline query cache (commit this if you want offline compile-time checks)
 # .sqlx/
 
-# Test output
+# Test and coverage output
 /test-results/
+coverage/
+*.lcov
+tarpaulin-report.html
+
+# Logs and runtime dumps
+*.log
+logs/
+
+# Unnecessary / temporary documents, drafts, and scratch notes
+scratch/
+notes/
+notes.txt
+*.draft.md
+*.scratch.md
+*.tmp
+*.temp
+*.bak
+*.old
+*~
+~$*
+
+# Generated documentation builds
+docs/build/
+docs/_build/
+site/
+book/
