@@ -39,8 +39,24 @@ notes.txt
 *~
 ~$*
 
-# Generated documentation builds
+# Generated documentation builds and documentation files
+docs/
+doc/
 docs/build/
 docs/_build/
 site/
 book/
+*.doc
+*.docx
+
+# Todo lists and task tracking
+TODO.md
+todo.md
+TODO
+todo
+TODO.txt
+todo.txt
+*.todo
+*.todo.md
+TODO/
+todo/
