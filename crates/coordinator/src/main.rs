@@ -1,11 +1,9 @@
 use anyhow::Result;
 
 // Modules uncommented as phases progress:
-pub mod domain; // Phase 1: domain types
-pub mod db;     // Phase 1: database pool & repositories
-                // Phase 3: mod ai;
-                // Phase 4: mod tui;
-                // Phase 5: mod coordinator; mod messaging;
+pub mod domain;    // Phase 1: domain types
+pub mod db;        // Phase 1: database pool & repositories
+pub mod messaging; // Phase 2: NATS infrastructure & streams
 
 #[tokio::main]
 async fn main() -> Result<()> {
