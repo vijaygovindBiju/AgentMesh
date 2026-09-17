@@ -146,14 +146,21 @@ impl DetailsPaneWidget {
         frame.render_widget(res_p, chunks[3]);
 
         // 5. Overlap Warnings Banner
+        let has_unacked = selected.overlap_warnings.iter().any(|w| !w.acknowledged);
         let warn_block = Block::default()
             .borders(Borders::ALL)
-            .border_style(if !selected.overlap_warnings.is_empty() {
+            .border_style(if has_unacked {
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+            } else if !selected.overlap_warnings.is_empty() {
+                Style::default().fg(Color::Green)
             } else {
                 Style::default().fg(Color::DarkGray)
             })
-            .title(" Resource Overlap Analysis ");
+            .title(if has_unacked {
+                " Resource Overlap Analysis [Press 'A' to acknowledge] "
+            } else {
+                " Resource Overlap Analysis "
+            });
 
         let warn_lines: Vec<Line> = if selected.overlap_warnings.is_empty() {
             vec![Line::from(Span::styled("  ✔ No concurrent resource collisions detected", Style::default().fg(Color::Green)))]
@@ -162,18 +169,26 @@ impl DetailsPaneWidget {
                 .overlap_warnings
                 .iter()
                 .map(|w| {
-                    let sev_style = match w.severity {
-                        OverlapSeverity::Critical => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                        OverlapSeverity::Warning => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                        OverlapSeverity::Info => Style::default().fg(Color::Blue),
-                    };
-                    Line::from(vec![
-                        Span::styled(format!("  [{:?}] ", w.severity), sev_style),
-                        Span::styled(format!("Resource '{}' is shared with other task(s)", w.resource), Style::default().fg(Color::White)),
-                    ])
+                    if w.acknowledged {
+                        Line::from(vec![
+                            Span::styled("  [ACKNOWLEDGED] ", Style::default().fg(Color::Green)),
+                            Span::styled(format!("Resource '{}' is shared (conflict accepted)", w.resource), Style::default().fg(Color::DarkGray)),
+                        ])
+                    } else {
+                        let sev_style = match w.severity {
+                            OverlapSeverity::Critical => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                            OverlapSeverity::Warning => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                            OverlapSeverity::Info => Style::default().fg(Color::Blue),
+                        };
+                        Line::from(vec![
+                            Span::styled(format!("  [{:?}] ", w.severity), sev_style),
+                            Span::styled(format!("Resource '{}' is shared with other task(s)", w.resource), Style::default().fg(Color::White)),
+                        ])
+                    }
                 })
                 .collect()
         };
+
 
         let warn_p = Paragraph::new(warn_lines).block(warn_block);
         frame.render_widget(warn_p, chunks[4]);

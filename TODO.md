@@ -226,23 +226,24 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 ## Phase 6 — Dashboard & Overlap Detection
 
 ### Live Dashboard TUI
-- [ ] Implement dashboard screen (`coordinator/src/tui/screens/dashboard.rs`)
-- [ ] Show all agents: name, owner, current task, status
-- [ ] Show all tasks: short ID, title, status, assigned agent
-- [ ] Real-time updates from NATS events (async channel → TUI)
+- [x] Implement dashboard screen (`coordinator/src/tui/screens/dashboard.rs`)
+- [x] Show all agents: name, owner, current task, status
+- [x] Show all tasks: short ID, title, status, assigned agent
+- [x] Real-time updates from NATS events (async channel → TUI)
 
 ### Overlap Detection
-- [ ] Implement resource-level overlap detection (`coordinator/src/coordinator/overlap.rs`)
-- [ ] On proposal generation: compare `affected_resources` across all proposed tasks
-- [ ] Generate `OverlapWarning` record for each shared resource; persist to DB
-- [ ] Surface warning on affected task card in plan review screen
-- [ ] Surface active unacknowledged warnings in dashboard
+- [x] Implement resource-level overlap detection (`coordinator/src/coordinator/overlap.rs`)
+- [x] On proposal generation: compare `affected_resources` across all proposed tasks
+- [x] Generate `OverlapWarning` record for each shared resource; persist to DB
+- [x] Surface warning on affected task card in plan review screen
+- [x] Surface active unacknowledged warnings in dashboard
 
 ### Acceptance Criteria — Phase 6
-- [ ] Dashboard updates live as agent events arrive (no full restart needed)
-- [ ] When Task A and Task B share a resource, `OverlapWarning` is created in DB
-- [ ] Warning visible in plan review screen before human approves the task
-- [ ] Warning visible in dashboard for unacknowledged overlaps
+- [x] Dashboard updates live as agent events arrive (no full restart needed)
+- [x] When Task A and Task B share a resource, `OverlapWarning` is created in DB
+- [x] Warning visible in plan review screen before human approves the task
+- [x] Warning visible in dashboard for unacknowledged overlaps
+
 
 ---
 

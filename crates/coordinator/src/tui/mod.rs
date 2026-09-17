@@ -22,7 +22,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 
-pub use state::{AppState, CurrentScreen, InputMode, ReviewTaskState, TuiAction};
+pub use state::{AppState, CurrentScreen, InputMode, ReviewTaskState, TuiAction, TuiUpdateEvent};
 pub use ui::render;
 
 /// Manages terminal initialization, event loop, and cleanup.
@@ -41,15 +41,25 @@ impl TerminalApp {
         Ok(Self { terminal })
     }
 
-    /// Runs the interactive event loop with the given mutable AppState.
-    /// Returns any `TuiAction` emitted during the session.
-    pub fn run<F>(&mut self, state: &mut AppState, mut action_handler: F) -> Result<()>
+    /// Runs the interactive event loop with an incoming update channel.
+    /// Real-time updates from NATS / background coordinator tasks are received over `update_rx`.
+    pub fn run_with_channel<F>(
+        &mut self,
+        state: &mut AppState,
+        mut update_rx: tokio::sync::mpsc::UnboundedReceiver<TuiUpdateEvent>,
+        mut action_handler: F,
+    ) -> Result<()>
     where
         F: FnMut(TuiAction, &mut AppState),
     {
-        let tick_rate = Duration::from_millis(100);
+        let tick_rate = Duration::from_millis(50);
 
         while !state.should_quit {
+            // Drain all pending incoming updates from async channel
+            while let Ok(update) = update_rx.try_recv() {
+                state.apply_update(update);
+            }
+
             self.terminal.draw(|f| render(f, state))?;
 
             if event::poll(tick_rate)? {
@@ -63,7 +73,18 @@ impl TerminalApp {
 
         Ok(())
     }
+
+    /// Runs the interactive event loop with the given mutable AppState.
+    /// Returns any `TuiAction` emitted during the session.
+    pub fn run<F>(&mut self, state: &mut AppState, action_handler: F) -> Result<()>
+    where
+        F: FnMut(TuiAction, &mut AppState),
+    {
+        let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        self.run_with_channel(state, rx, action_handler)
+    }
 }
+
 
 impl Drop for TerminalApp {
     fn drop(&mut self) {

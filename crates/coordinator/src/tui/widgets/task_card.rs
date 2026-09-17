@@ -86,18 +86,31 @@ impl TaskCardWidget {
 
         // 3. Overlap warning banner (if any)
         if !item.overlap_warnings.is_empty() {
-            let count = item.overlap_warnings.len();
-            lines.push(Line::from(vec![
-                Span::raw("    "),
-                Span::styled(
-                    format!(" ⚠ {count} Resource Overlap Warning(s) "),
-                    Style::default()
-                        .fg(Color::Red)
-                        .bg(Color::Black)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ]));
+            let unacked_count = item.overlap_warnings.iter().filter(|w| !w.acknowledged).count();
+            if unacked_count > 0 {
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(
+                        format!(" ⚠ {unacked_count} Resource Overlap Warning(s) [A to ack] "),
+                        Style::default()
+                            .fg(Color::Red)
+                            .bg(Color::Black)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+            } else {
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(
+                        format!(" ✔ {} Overlap Warning(s) Acknowledged ", item.overlap_warnings.len()),
+                        Style::default()
+                            .fg(Color::Green)
+                            .bg(Color::Black),
+                    ),
+                ]));
+            }
         }
+
 
         // 4. Dependencies preview
         let deps_summary = if item.dependencies.is_empty() {

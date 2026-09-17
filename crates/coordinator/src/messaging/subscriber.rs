@@ -211,7 +211,37 @@ impl EventSubscriber {
 
         Ok(())
     }
+
+    /// Polls and processes a single message from JetStream, updating PostgreSQL state
+    /// and forwarding the event to an async channel for real-time live TUI dashboard updates.
+    pub async fn process_one_event(
+        pool: &PgPool,
+        consumer: &PullConsumer,
+        update_tx: Option<&tokio::sync::mpsc::UnboundedSender<AgentMessage>>,
+    ) -> Result<Option<AgentMessage>> {
+        use futures::StreamExt;
+        let mut messages = consumer.messages().await.context("Failed to get message stream")?;
+
+        if let Some(msg_result) = messages.next().await {
+            let msg = msg_result.context("Failed to receive message from stream")?;
+            let agent_msg: AgentMessage = serde_json::from_slice(&msg.payload)
+                .context("Failed to deserialize AgentMessage payload")?;
+
+            msg.ack().await.map_err(|e| anyhow::anyhow!("Failed to ack message: {e}"))?;
+
+            Self::handle_agent_message(pool, agent_msg.clone()).await?;
+
+            if let Some(tx) = update_tx {
+                let _ = tx.send(agent_msg.clone());
+            }
+
+            return Ok(Some(agent_msg));
+        }
+
+        Ok(None)
+    }
 }
+
 
 #[cfg(test)]
 mod tests {

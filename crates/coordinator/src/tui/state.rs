@@ -23,11 +23,25 @@ pub enum TuiAction {
         name: String,
         description: String,
     },
+    /// Human acknowledged a detected resource overlap warning
+    AcknowledgeOverlap { warning_id: Uuid },
     /// Request refresh of project / agent data from storage
     RefreshData,
     /// Human requested exit
     Quit,
 }
+
+/// Incoming real-time events sent to the TUI from NATS subscriber or coordinator.
+#[derive(Debug, Clone)]
+pub enum TuiUpdateEvent {
+    AgentMessage(agent_protocol::AgentMessage),
+    CoordinatorEvent(crate::coordinator::CoordinatorEvent),
+    Tasks(Vec<ReviewTaskState>),
+    Agents(Vec<Agent>),
+    Overlaps(Vec<OverlapWarning>),
+    StatusMessage(String),
+}
+
 
 /// Active top-level screen
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -104,6 +118,7 @@ pub struct AppState {
     // Dashboard / System context
     pub agents: Vec<Agent>,
     pub active_overlaps: Vec<OverlapWarning>,
+    pub selected_overlap_index: usize,
 
     // Status bar & messaging
     pub status_message: Option<String>,
@@ -137,6 +152,7 @@ impl AppState {
 
             agents: Vec::new(),
             active_overlaps: Vec::new(),
+            selected_overlap_index: 0,
 
             status_message: Some("Welcome to AgentMesh Coordinator. Press [Tab] to switch screens.".to_string()),
             should_quit: false,
@@ -323,8 +339,53 @@ impl AppState {
                     }
                     None
                 }
-                CurrentScreen::Dashboard => None,
+                CurrentScreen::Dashboard => self.handle_dashboard_key(key),
             },
+        }
+    }
+
+    fn handle_dashboard_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.selected_overlap_index > 0 {
+                    self.selected_overlap_index -= 1;
+                }
+                None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !self.active_overlaps.is_empty()
+                    && self.selected_overlap_index + 1 < self.active_overlaps.len()
+                {
+                    self.selected_overlap_index += 1;
+                }
+                None
+            }
+            KeyCode::Char('a') | KeyCode::Char('A') | KeyCode::Enter => {
+                if !self.active_overlaps.is_empty()
+                    && self.selected_overlap_index < self.active_overlaps.len()
+                {
+                    let warning = self.active_overlaps.remove(self.selected_overlap_index);
+                    let warning_id = warning.id;
+                    for rt in &mut self.review_tasks {
+                        for w in &mut rt.overlap_warnings {
+                            if w.id == warning_id {
+                                w.acknowledged = true;
+                            }
+                        }
+                    }
+                    if self.selected_overlap_index >= self.active_overlaps.len()
+                        && self.selected_overlap_index > 0
+                    {
+                        self.selected_overlap_index -= 1;
+                    }
+                    self.status_message =
+                        Some(format!("Acknowledged overlap on '{}'.", warning.resource));
+                    Some(TuiAction::AcknowledgeOverlap { warning_id })
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 
@@ -350,6 +411,20 @@ impl AppState {
                 self.show_details_pane = !self.show_details_pane;
                 None
             }
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                if let Some(item) = self.review_tasks.get_mut(self.selected_task_index) {
+                    if let Some(pos) = item.overlap_warnings.iter().position(|w| !w.acknowledged) {
+                        let warning_id = item.overlap_warnings[pos].id;
+                        let res = item.overlap_warnings[pos].resource.clone();
+                        item.overlap_warnings[pos].acknowledged = true;
+                        self.active_overlaps.retain(|w| w.id != warning_id);
+                        self.status_message = Some(format!("Acknowledged overlap on '{res}'."));
+                        return Some(TuiAction::AcknowledgeOverlap { warning_id });
+                    }
+                }
+                None
+            }
+
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let task_id = self.review_tasks[self.selected_task_index].task.id;
                 let short_id = self.review_tasks[self.selected_task_index].task.short_id.clone();
@@ -499,7 +574,185 @@ impl AppState {
     pub fn selected_task(&self) -> Option<&ReviewTaskState> {
         self.review_tasks.get(self.selected_task_index)
     }
+
+    /// Updates local in-memory state based on incoming AgentMessage protocol events.
+    pub fn apply_agent_message(&mut self, msg: &agent_protocol::AgentMessage) {
+        match msg {
+            agent_protocol::AgentMessage::TaskStarted {
+                agent_id,
+                task_id,
+                ..
+            } => {
+                let mut short_id_opt = None;
+                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                    rt.task.status = TaskStatus::Executing;
+                    rt.task.assigned_agent_id = Some(*agent_id);
+                    short_id_opt = Some(rt.task.short_id.clone());
+                }
+                if let Some(agent) = self.agents.iter_mut().find(|a| a.id == *agent_id) {
+                    agent.status = crate::domain::AgentStatus::Busy;
+                    agent.current_task_id = Some(*task_id);
+                }
+                let display_name = short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
+                self.status_message = Some(format!("Task {display_name} is now EXECUTING."));
+            }
+            agent_protocol::AgentMessage::ProgressUpdate {
+                task_id,
+                percent,
+                message,
+                ..
+            } => {
+                let short_id = self
+                    .review_tasks
+                    .iter()
+                    .find(|rt| rt.task.id == *task_id)
+                    .map(|rt| rt.task.short_id.clone())
+                    .unwrap_or_else(|| task_id.to_string()[..8].to_string());
+                self.status_message = Some(format!("Task {short_id} ({percent}%): {message}"));
+            }
+            agent_protocol::AgentMessage::Blocked {
+                agent_id,
+                task_id,
+                reason,
+                ..
+            } => {
+                let mut short_id_opt = None;
+                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                    rt.task.status = TaskStatus::Blocked;
+                    short_id_opt = Some(rt.task.short_id.clone());
+                }
+                if let Some(agent) = self.agents.iter_mut().find(|a| a.id == *agent_id) {
+                    agent.status = crate::domain::AgentStatus::Blocked;
+                }
+                let display_name = short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
+                self.status_message = Some(format!("Task {display_name} is BLOCKED: {reason}"));
+            }
+            agent_protocol::AgentMessage::Completed {
+                agent_id,
+                task_id,
+                summary,
+                ..
+            } => {
+                let mut short_id_opt = None;
+                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                    rt.task.status = TaskStatus::Completed;
+                    short_id_opt = Some(rt.task.short_id.clone());
+                }
+                if let Some(agent) = self.agents.iter_mut().find(|a| a.id == *agent_id) {
+                    agent.status = crate::domain::AgentStatus::Idle;
+                    agent.current_task_id = None;
+                }
+                let display_name = short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
+                self.status_message = Some(format!("Task {display_name} COMPLETED: {summary}"));
+            }
+            agent_protocol::AgentMessage::Failed {
+                agent_id,
+                task_id,
+                error,
+                ..
+            } => {
+                let mut short_id_opt = None;
+                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                    rt.task.status = TaskStatus::Failed;
+                    short_id_opt = Some(rt.task.short_id.clone());
+                }
+                if let Some(agent) = self.agents.iter_mut().find(|a| a.id == *agent_id) {
+                    agent.status = crate::domain::AgentStatus::Error;
+                    agent.current_task_id = None;
+                }
+                let display_name = short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
+                self.status_message = Some(format!("Task {display_name} FAILED: {error}"));
+            }
+            agent_protocol::AgentMessage::Heartbeat {
+                agent_id,
+                status,
+                current_task_id,
+                ..
+            } => {
+                if let Some(agent) = self.agents.iter_mut().find(|a| a.id == *agent_id) {
+                    agent.status = match status {
+                        agent_protocol::AgentStatus::Offline => crate::domain::AgentStatus::Offline,
+                        agent_protocol::AgentStatus::Idle => crate::domain::AgentStatus::Idle,
+                        agent_protocol::AgentStatus::Busy => crate::domain::AgentStatus::Busy,
+                        agent_protocol::AgentStatus::Blocked => crate::domain::AgentStatus::Blocked,
+                        agent_protocol::AgentStatus::Error => crate::domain::AgentStatus::Error,
+                    };
+                    agent.current_task_id = *current_task_id;
+                    agent.last_seen = Some(chrono::Utc::now());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Updates local in-memory state based on coordinator events.
+    pub fn apply_coordinator_event(&mut self, event: &crate::coordinator::CoordinatorEvent) {
+        match event {
+            crate::coordinator::CoordinatorEvent::TaskApproved { task_id } => {
+                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                    rt.human_decision = Some(ApprovalStatus::Approved);
+                    rt.task.status = TaskStatus::Approved;
+                }
+            }
+            crate::coordinator::CoordinatorEvent::TaskRejected { task_id } => {
+                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                    rt.human_decision = Some(ApprovalStatus::Rejected);
+                    rt.task.status = TaskStatus::Rejected;
+                }
+            }
+            crate::coordinator::CoordinatorEvent::TaskStatusChanged {
+                task_id,
+                new_status,
+                ..
+            } => {
+                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                    rt.task.status = *new_status;
+                }
+            }
+            crate::coordinator::CoordinatorEvent::TaskAssigned { task_id, agent_id } => {
+                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                    rt.task.status = TaskStatus::Assigned;
+                    rt.task.assigned_agent_id = Some(*agent_id);
+                }
+                if let Some(agent) = self.agents.iter_mut().find(|a| a.id == *agent_id) {
+                    agent.status = crate::domain::AgentStatus::Busy;
+                    agent.current_task_id = Some(*task_id);
+                }
+            }
+            crate::coordinator::CoordinatorEvent::OverlapAcknowledged { warning_id } => {
+                self.active_overlaps.retain(|w| w.id != *warning_id);
+                for rt in &mut self.review_tasks {
+                    for w in &mut rt.overlap_warnings {
+                        if w.id == *warning_id {
+                            w.acknowledged = true;
+                        }
+                    }
+                }
+                self.status_message = Some("Overlap warning acknowledged.".to_string());
+            }
+            crate::coordinator::CoordinatorEvent::TaskApprovalBlocked { reason, .. } => {
+                self.status_message = Some(format!("Approval blocked: {reason}"));
+            }
+            crate::coordinator::CoordinatorEvent::CommandFailed { message } => {
+                self.status_message = Some(format!("Command error: {message}"));
+            }
+            _ => {}
+        }
+    }
+
+    /// Dispatches a high-level update event into state.
+    pub fn apply_update(&mut self, event: TuiUpdateEvent) {
+        match event {
+            TuiUpdateEvent::AgentMessage(msg) => self.apply_agent_message(&msg),
+            TuiUpdateEvent::CoordinatorEvent(evt) => self.apply_coordinator_event(&evt),
+            TuiUpdateEvent::Tasks(tasks) => self.review_tasks = tasks,
+            TuiUpdateEvent::Agents(agents) => self.agents = agents,
+            TuiUpdateEvent::Overlaps(overlaps) => self.active_overlaps = overlaps,
+            TuiUpdateEvent::StatusMessage(msg) => self.status_message = Some(msg),
+        }
+    }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -690,4 +943,71 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn test_plan_review_overlap_acknowledgment() {
+        let mut state = AppState::new().with_mock_data();
+        assert_eq!(state.current_screen, CurrentScreen::PlanReview);
+        assert_eq!(state.selected_task_index, 0);
+        assert_eq!(state.review_tasks[0].overlap_warnings.len(), 1);
+        assert!(!state.review_tasks[0].overlap_warnings[0].acknowledged);
+        assert_eq!(state.active_overlaps.len(), 1);
+
+        let warn_id = state.review_tasks[0].overlap_warnings[0].id;
+
+        // Press 'a' to acknowledge overlap
+        let action = state.handle_key(make_key(KeyCode::Char('a')));
+        assert_eq!(action, Some(TuiAction::AcknowledgeOverlap { warning_id: warn_id }));
+        assert!(state.review_tasks[0].overlap_warnings[0].acknowledged);
+        assert!(state.active_overlaps.is_empty());
+    }
+
+    #[test]
+    fn test_dashboard_overlap_acknowledgment() {
+        let mut state = AppState::new().with_mock_data();
+        state.current_screen = CurrentScreen::Dashboard;
+        assert_eq!(state.active_overlaps.len(), 1);
+
+        let warn_id = state.active_overlaps[0].id;
+
+        // Press 'a' in dashboard to acknowledge
+        let action = state.handle_key(make_key(KeyCode::Char('a')));
+        assert_eq!(action, Some(TuiAction::AcknowledgeOverlap { warning_id: warn_id }));
+        assert!(state.active_overlaps.is_empty());
+    }
+
+    #[test]
+    fn test_live_agent_message_projection() {
+        let mut state = AppState::new().with_mock_data();
+        let agent_id = state.agents[0].id;
+        let task_id = state.review_tasks[0].task.id;
+
+        // Agent reports TaskStarted
+        let start_msg = agent_protocol::AgentMessage::TaskStarted {
+            agent_id,
+            task_id,
+            idempotency_key: "idem-1".to_string(),
+            timestamp: chrono::Utc::now(),
+        };
+        state.apply_agent_message(&start_msg);
+
+        assert_eq!(state.review_tasks[0].task.status, TaskStatus::Executing);
+        assert_eq!(state.review_tasks[0].task.assigned_agent_id, Some(agent_id));
+        assert_eq!(state.agents[0].status, crate::domain::AgentStatus::Busy);
+        assert_eq!(state.agents[0].current_task_id, Some(task_id));
+
+        // Agent reports Completed
+        let complete_msg = agent_protocol::AgentMessage::Completed {
+            agent_id,
+            task_id,
+            summary: "Done successfully".to_string(),
+            timestamp: chrono::Utc::now(),
+        };
+        state.apply_agent_message(&complete_msg);
+
+        assert_eq!(state.review_tasks[0].task.status, TaskStatus::Completed);
+        assert_eq!(state.agents[0].status, crate::domain::AgentStatus::Idle);
+        assert_eq!(state.agents[0].current_task_id, None);
+    }
 }
+
