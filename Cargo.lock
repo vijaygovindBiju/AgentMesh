@@ -357,6 +357,7 @@ dependencies = [
  "agent-protocol",
  "anyhow",
  "async-nats",
+ "async-trait",
  "chrono",
  "config",
  "crossterm 0.27.0",

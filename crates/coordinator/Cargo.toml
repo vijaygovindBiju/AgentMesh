@@ -24,6 +24,7 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+async-trait = "0.1"
 async-nats = { workspace = true }
 agent-protocol = { workspace = true }
 futures = "0.3"

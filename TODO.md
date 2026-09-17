@@ -164,19 +164,20 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 
 ## Phase 3 — AI Planning
 
-### `LlmProvider` Trait
-- [ ] Define `LlmProvider` trait (`coordinator/src/ai/provider.rs`)
-- [ ] Define `ProposedPlan`, `ProposedTask`, `ProposedDependency` types
-- [ ] Implement one LLM provider (selected by `AI_PROVIDER` env var)
-- [ ] Implement task decomposition prompt with structured JSON output
-- [ ] Parse + validate LLM JSON output; handle malformed output gracefully
-- [ ] Implement `MockLlmProvider` for testing (returns deterministic plans)
+### AI Planning Layer (`coordinator/src/ai/`)
+- [x] Define `LlmProvider` trait and planning schemas (`ai/provider.rs`, `ai/schema.rs`)
+- [x] Implement deterministic plan validator (`ai/validator.rs`): cycles, dependencies, agents, overlaps, non-empty tasks
+- [x] Implement `MockLlmProvider` for deterministic testing
+- [x] Comprehensive validation & test matrix (malformed JSON, broken deps, cycles, invalid agents, empty plan)
+- [x] Implement prompt templates with structured JSON output schema (`ai/prompts.rs`)
+- [x] Implement real LLM provider (`ai/anthropic.rs` or `ai/gemini.rs` via reqwest, runtime configurable)
+- [x] Proposal persistence service (`ai/service.rs`): converts validated plan into PostgreSQL `Proposal` & `tasks`
 
 ### Acceptance Criteria — Phase 3
-- [ ] Given a project description, LLM returns a valid `ProposedPlan` with tasks + dependencies
-- [ ] Switching `AI_PROVIDER` env var changes the provider without code changes
-- [ ] Malformed LLM output logs a warning and surfaces error in TUI; does not crash
-- [ ] `MockLlmProvider` is usable in integration tests without real API keys
+- [x] Given a project description, LLM returns a valid `ProposedPlan` with tasks + dependencies
+- [x] Switching `AI_PROVIDER` env var changes the provider without code changes
+- [x] Malformed LLM output logs a warning and surfaces error in TUI; does not crash
+- [x] `MockLlmProvider` is usable in integration tests without real API keys
 
 ---
 
