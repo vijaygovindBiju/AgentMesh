@@ -149,6 +149,38 @@ impl OverlapWarningRepository {
 
         Ok(rows > 0)
     }
+
+    /// Returns unacknowledged critical overlap warnings that involve the specified task.
+    pub async fn list_unacknowledged_critical_for_task(
+        pool: &PgPool,
+        task_id: Uuid,
+    ) -> Result<Vec<OverlapWarning>> {
+        let task_id_json = json!([task_id.to_string()]);
+        let warnings = sqlx::query_as!(
+            OverlapWarning,
+            r#"
+            SELECT
+                id,
+                project_id,
+                task_ids,
+                resource,
+                severity AS "severity: OverlapSeverity",
+                acknowledged,
+                created_at
+            FROM overlap_warnings
+            WHERE severity = 'critical'
+              AND acknowledged = false
+              AND task_ids @> $1
+            ORDER BY created_at ASC
+            "#,
+            task_id_json
+        )
+        .fetch_all(pool)
+        .await
+        .context("Failed to list unacknowledged critical overlaps for task")?;
+
+        Ok(warnings)
+    }
 }
 
 #[cfg(test)]

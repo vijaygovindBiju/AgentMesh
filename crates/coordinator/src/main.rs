@@ -1,10 +1,12 @@
 use anyhow::Result;
 
-pub mod domain;    // Phase 1: domain types
-pub mod db;        // Phase 1: database pool & repositories
-pub mod messaging; // Phase 2: NATS infrastructure & streams
-pub mod ai;        // Phase 3: AI planning layer
-pub mod tui;       // Phase 4: TUI skeleton
+pub mod domain;      // Phase 1: domain types
+pub mod db;          // Phase 1: database pool & repositories
+pub mod messaging;   // Phase 2: NATS infrastructure & streams
+pub mod ai;          // Phase 3: AI planning layer
+pub mod tui;         // Phase 4: TUI skeleton
+pub mod coordinator; // Phase 5: Coordinator Core
+
 
 #[tokio::main]
 async fn main() -> Result<()> {

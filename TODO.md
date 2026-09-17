@@ -207,19 +207,19 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 ## Phase 5 — Coordinator Core
 
 ### State Machine
-- [ ] Implement coordinator state machine (`coordinator/src/coordinator/state.rs`)
+- [x] Implement coordinator state machine (`coordinator/src/coordinator/state.rs`)
   - States: `Idle` → `ProjectInput` → `Planning` → `HumanReview` → `Assigning` → `Executing` → `Done`
-- [ ] Assignment logic: only assigns tasks whose dependencies are `Completed`
-- [ ] Approval gating: no task advances past `Approved` to `Assigned` without human action
-- [ ] Event processor: update task state from incoming `AgentMessage` events
-- [ ] Dependency tracker: gate `Assigned` tasks until blocking tasks reach `Completed`
-- [ ] Human can override LLM assignment proposal (reassign to different agent)
+- [x] Assignment logic: only assigns tasks whose dependencies are `Completed`
+- [x] Approval gating: no task advances past `Approved` to `Assigned` without human action
+- [x] Event processor: update task state from incoming `AgentMessage` events
+- [x] Dependency tracker: gate `Assigned` tasks until blocking tasks reach `Completed`
+- [x] Human can override LLM assignment proposal (reassign to different agent)
 
 ### Acceptance Criteria — Phase 5
-- [ ] No task reaches `Assigned` state without a `TaskApproval` record with `Approved` status
-- [ ] Task B does not start until Task A (blocker) reports `Completed`
-- [ ] `Blocked` agent event sets task to `Blocked` in DB and TUI
-- [ ] State machine transitions are persisted to PostgreSQL before side effects
+- [x] No task reaches `Assigned` state without a `TaskApproval` record with `Approved` status (verified in tests)
+- [x] Task B does not start until Task A (blocker) reports `Completed` (verified in tests)
+- [x] `Blocked` agent event sets task to `Blocked` in DB and TUI (verified in tests)
+- [x] State machine transitions are persisted to PostgreSQL before side effects (verified in tests)
 
 ---
 
