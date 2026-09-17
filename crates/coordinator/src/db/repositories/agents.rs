@@ -43,6 +43,46 @@ impl AgentRepository {
         Ok(agent)
     }
 
+    /// Registers a new agent with a pre-specified ID. Status defaults to `offline`.
+    pub async fn create_with_id(
+        pool: &PgPool,
+        id: Uuid,
+        new_agent: &NewAgent,
+    ) -> Result<Agent> {
+        let capabilities_json = json!(new_agent.capabilities);
+
+        let agent = sqlx::query_as!(
+            Agent,
+            r#"
+            INSERT INTO agents (id, human_owner, api_key_hash, adapter_type, capabilities, nats_subject, status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at
+            "#,
+            id,
+            new_agent.human_owner,
+            new_agent.api_key_hash,
+            new_agent.adapter_type as AdapterType,
+            capabilities_json,
+            new_agent.nats_subject,
+            AgentStatus::Offline as AgentStatus,
+        )
+        .fetch_one(pool)
+        .await
+        .context("Failed to insert agent with id")?;
+
+        Ok(agent)
+    }
+
     /// Finds an agent by primary key ID.
     pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Agent>> {
         let agent = sqlx::query_as!(

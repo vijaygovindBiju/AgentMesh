@@ -9,7 +9,6 @@ use uuid::Uuid;
 
 use agent_protocol::AgentMessage;
 use crate::db::repositories::AgentRepository;
-use crate::domain::AgentStatus;
 
 pub const HEARTBEAT_SUBJECT: &str = "coordinator.agents.heartbeat.*";
 
@@ -75,7 +74,7 @@ impl HeartbeatMonitor {
 mod tests {
     use super::*;
     use crate::db::pool::{create_pool, run_migrations};
-    use crate::domain::{AdapterType, NewAgent};
+    use crate::domain::{AdapterType, AgentStatus, NewAgent};
 
     async fn setup_pool() -> Option<PgPool> {
         let _ = dotenvy::dotenv();

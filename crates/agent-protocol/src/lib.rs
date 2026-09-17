@@ -11,10 +11,12 @@
 //!   and speaks the same vocabulary.
 //! - The coordinator imports this crate to construct and parse messages.
 
+pub mod adapter;
 pub mod messages;
 pub mod spec;
 pub mod status;
 
+pub use adapter::AgentAdapter;
 pub use messages::{AgentMessage, CoordinatorMessage};
 pub use spec::TaskSpec;
 pub use status::{AckKind, AgentStatus, DeliveryAck};

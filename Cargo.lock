@@ -27,6 +27,7 @@ dependencies = [
  "anyhow",
  "async-nats",
  "chrono",
+ "futures",
  "rand 0.8.8",
  "serde",
  "serde_json",
@@ -352,6 +353,7 @@ dependencies = [
 name = "coordinator"
 version = "0.1.0"
 dependencies = [
+ "agent-mock",
  "agent-protocol",
  "anyhow",
  "async-nats",

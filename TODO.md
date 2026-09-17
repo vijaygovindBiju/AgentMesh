@@ -138,27 +138,27 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Round-trip serialization tests for all message types
 
 ### NATS Infrastructure (coordinator)
-- [~] NATS connection setup with JetStream (`messaging/client.rs`)
-- [ ] Create JetStream streams: `TASK_ASSIGNMENTS`, `AGENT_EVENTS`
-- [ ] Implement publisher: coordinator → agent task assignments
-- [ ] Implement subscriber: coordinator ← agent events
-- [ ] Implement agent registration handler
-- [ ] Implement heartbeat monitor (agent timeout detection)
+- [x] NATS connection setup with JetStream (`messaging/client.rs`)
+- [x] Create JetStream streams: `TASK_ASSIGNMENTS`, `AGENT_EVENTS`
+- [x] Implement publisher: coordinator → agent task assignments
+- [x] Implement subscriber: coordinator ← agent events
+- [x] Implement agent registration handler
+- [x] Implement heartbeat monitor (agent timeout detection)
 
 ### Mock Agent (`agent-mock`)
-- [ ] Implement NATS connection with JetStream consumer
-- [ ] Implement task subscription from `TASK_ASSIGNMENTS` stream
-- [ ] Report full lifecycle: `TaskStarted`, `ProgressUpdate`, `Blocked`, `Completed`, `Failed`
-- [ ] Configurable work-simulation delay (env var `MOCK_TASK_DELAY_MS`)
-- [ ] Implement heartbeat loop
-- [ ] Scenario: task that gets `Blocked` then unblocked and `Completed`
-- [ ] Implements same `AgentAdapter` trait that agy adapter will implement
+- [x] Implement NATS connection with JetStream consumer
+- [x] Implement task subscription from `TASK_ASSIGNMENTS` stream
+- [x] Report full lifecycle: `TaskStarted`, `ProgressUpdate`, `Blocked`, `Completed`, `Failed`
+- [x] Configurable work-simulation delay (env var `MOCK_TASK_DELAY_MS`)
+- [x] Implement heartbeat loop
+- [x] Scenario: task that gets `Blocked` then unblocked and `Completed`
+- [x] Implements same `AgentAdapter` trait that agy adapter will implement
 
 ### Acceptance Criteria — Phase 2
-- [ ] Mock agent connects, receives task, reports full lifecycle to coordinator
-- [ ] Coordinator receives all events via `AGENT_EVENTS` JetStream stream
-- [ ] JetStream durable delivery verified: restart agent mid-task, task redelivered
-- [ ] TaskDelivery record in PostgreSQL reflects correct state after each event
+- [x] Mock agent connects, receives task, reports full lifecycle to coordinator
+- [x] Coordinator receives all events via `AGENT_EVENTS` JetStream stream
+- [x] JetStream durable delivery verified: restart agent mid-task, task redelivered
+- [x] TaskDelivery record in PostgreSQL reflects correct state after each event
 
 ---
 

@@ -71,7 +71,7 @@ impl RegistrationHandler {
                     capabilities,
                     nats_subject: nats_subject.clone(),
                 };
-                AgentRepository::create(pool, &new_agent).await?;
+                AgentRepository::create_with_id(pool, agent_id, &new_agent).await?;
             }
         }
 

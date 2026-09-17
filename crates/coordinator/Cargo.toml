@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 description = "AgentMesh Coordinator — TUI, AI planning, state management, and agent coordination"
 
+[lib]
+name = "coordinator"
+path = "src/lib.rs"
+
 [[bin]]
 name = "coordinator"
 path = "src/main.rs"
@@ -45,3 +49,6 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 # Configuration
 config = "0.14"
 dotenvy = "0.15"
+
+[dev-dependencies]
+agent-mock = { path = "../agent-mock" }
