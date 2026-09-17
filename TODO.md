@@ -184,23 +184,23 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 ## Phase 4 — TUI Skeleton
 
 ### ratatui Application
-- [ ] Set up ratatui + crossterm event loop (`coordinator/src/tui/app.rs`)
-- [ ] Implement project input screen (`project_input.rs`)
-- [ ] Implement plan review screen with per-task approval flow:
-  - [ ] `[Y]` Approve
-  - [ ] `[N]` Reject
-  - [ ] `[E]` Edit description inline
-  - [ ] `[↑/↓]` Navigate between tasks
-  - [ ] `[Enter]` Show details pane (dependencies, overlap warnings)
-- [ ] Task card widget: title, assigned agent, dependencies, affected resources
-- [ ] Details pane: full description + dependency list + overlap warnings
-- [ ] Overlap warning banner appears on affected task cards
+- [x] Set up ratatui + crossterm event loop (`coordinator/src/tui/mod.rs`)
+- [x] Implement project input screen (`project_input.rs`)
+- [x] Implement plan review screen with per-task approval flow:
+  - [x] `[Y]` Approve
+  - [x] `[N]` Reject
+  - [x] `[E]` Edit description inline
+  - [x] `[↑/↓]` Navigate between tasks
+  - [x] `[Enter]` Show details pane (dependencies, overlap warnings)
+- [x] Task card widget: title, assigned agent, dependencies, affected resources
+- [x] Details pane: full description + dependency list + overlap warnings
+- [x] Overlap warning banner appears on affected task cards
 
 ### Acceptance Criteria — Phase 4
-- [ ] TUI renders without errors in a standard terminal
-- [ ] All 5 keybindings work correctly in plan review
-- [ ] Human can view dependency and overlap info before approving a task
-- [ ] Edit flow: `[E]` makes description editable; `Enter` confirms edit + approves
+- [x] TUI renders without errors in a standard terminal
+- [x] All 5 keybindings work correctly in plan review
+- [x] Human can view dependency and overlap info before approving a task
+- [x] Edit flow: `[E]` makes description editable; `Enter` confirms edit + approves
 
 ---
 

@@ -1,0 +1,693 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use uuid::Uuid;
+
+use crate::domain::{
+    Agent, ApprovalStatus, OverlapWarning, Project, Task, TaskDependency, TaskStatus,
+};
+
+/// Actions emitted by the TUI to be handled by the outer application or coordinator.
+/// The TUI NEVER performs side effects (DB writes, NATS publishes, LLM requests) directly.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TuiAction {
+    /// Human approved a task
+    ApproveTask { task_id: Uuid },
+    /// Human rejected a task
+    RejectTask { task_id: Uuid },
+    /// Human edited task description inline
+    EditTaskDescription {
+        task_id: Uuid,
+        new_description: String,
+    },
+    /// Human submitted a new project for AI planning
+    SubmitProject {
+        name: String,
+        description: String,
+    },
+    /// Request refresh of project / agent data from storage
+    RefreshData,
+    /// Human requested exit
+    Quit,
+}
+
+/// Active top-level screen
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CurrentScreen {
+    #[default]
+    ProjectInput,
+    PlanReview,
+    Dashboard,
+}
+
+impl CurrentScreen {
+    pub fn title(&self) -> &'static str {
+        match self {
+            CurrentScreen::ProjectInput => "1. Project Input",
+            CurrentScreen::PlanReview => "2. Plan Review",
+            CurrentScreen::Dashboard => "3. Dashboard",
+        }
+    }
+}
+
+/// Current keyboard input mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InputMode {
+    #[default]
+    Normal,
+    EditingDescription,
+    EnteringProject,
+}
+
+/// In-memory view model for a task presented during plan review
+#[derive(Debug, Clone)]
+pub struct ReviewTaskState {
+    pub task: Task,
+    pub dependencies: Vec<TaskDependency>,
+    pub suggested_agent_name: Option<String>,
+    pub overlap_warnings: Vec<OverlapWarning>,
+    pub human_decision: Option<ApprovalStatus>,
+}
+
+impl ReviewTaskState {
+    pub fn new(task: Task) -> Self {
+        Self {
+            task,
+            dependencies: Vec::new(),
+            suggested_agent_name: None,
+            overlap_warnings: Vec::new(),
+            human_decision: None,
+        }
+    }
+}
+
+/// Central in-memory state of the TUI application
+pub struct AppState {
+    pub current_screen: CurrentScreen,
+    pub input_mode: InputMode,
+
+    // Project input fields
+    pub project_name_input: String,
+    pub project_desc_input: String,
+    pub project_input_cursor: usize,
+    /// 0 = Name, 1 = Description
+    pub project_focus_field: usize,
+
+    // Active project context
+    pub active_project: Option<Project>,
+
+    // Plan review state
+    pub review_tasks: Vec<ReviewTaskState>,
+    pub selected_task_index: usize,
+    pub show_details_pane: bool,
+    pub edit_buffer: String,
+    pub edit_cursor: usize,
+
+    // Dashboard / System context
+    pub agents: Vec<Agent>,
+    pub active_overlaps: Vec<OverlapWarning>,
+
+    // Status bar & messaging
+    pub status_message: Option<String>,
+    pub should_quit: bool,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AppState {
+    pub fn new() -> Self {
+        Self {
+            current_screen: CurrentScreen::ProjectInput,
+            input_mode: InputMode::Normal,
+
+            project_name_input: String::new(),
+            project_desc_input: String::new(),
+            project_input_cursor: 0,
+            project_focus_field: 0,
+
+            active_project: None,
+
+            review_tasks: Vec::new(),
+            selected_task_index: 0,
+            show_details_pane: true,
+            edit_buffer: String::new(),
+            edit_cursor: 0,
+
+            agents: Vec::new(),
+            active_overlaps: Vec::new(),
+
+            status_message: Some("Welcome to AgentMesh Coordinator. Press [Tab] to switch screens.".to_string()),
+            should_quit: false,
+        }
+    }
+
+    /// Helper to seed mock data for UI testing and demonstration
+    pub fn with_mock_data(mut self) -> Self {
+        let proj_id = Uuid::new_v4();
+        let agent1_id = Uuid::new_v4();
+        let agent2_id = Uuid::new_v4();
+
+        self.active_project = Some(Project {
+            id: proj_id,
+            name: "Cloud Migration Mesh".to_string(),
+            description: "Decompose and migrate monolith services to cloud native workers".to_string(),
+            status: crate::domain::ProjectStatus::Planning,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        });
+
+        self.agents = vec![
+            Agent {
+                id: agent1_id,
+                human_owner: "agent-backend (Alice)".to_string(),
+                api_key_hash: "mock_hash_backend".to_string(),
+                adapter_type: crate::domain::AdapterType::Agy,
+                capabilities: serde_json::json!(["backend", "rust"]),
+                nats_subject: format!("agents.{agent1_id}.events"),
+                status: crate::domain::AgentStatus::Idle,
+                current_task_id: None,
+                last_seen: Some(chrono::Utc::now()),
+                created_at: chrono::Utc::now(),
+            },
+            Agent {
+                id: agent2_id,
+                human_owner: "agent-infra (Bob)".to_string(),
+                api_key_hash: "mock_hash_infra".to_string(),
+                adapter_type: crate::domain::AdapterType::Mock,
+                capabilities: serde_json::json!(["infra", "nats", "docker"]),
+                nats_subject: format!("agents.{agent2_id}.events"),
+                status: crate::domain::AgentStatus::Busy,
+                current_task_id: None,
+                last_seen: Some(chrono::Utc::now()),
+                created_at: chrono::Utc::now(),
+            },
+        ];
+
+        let prop_id = Uuid::new_v4();
+        let task1_id = Uuid::new_v4();
+        let task2_id = Uuid::new_v4();
+        let task3_id = Uuid::new_v4();
+
+        let task1 = Task {
+            id: task1_id,
+            project_id: proj_id,
+            short_id: "PLAN-1".to_string(),
+            title: "Database schema migration".to_string(),
+            description: "Apply initial PostgreSQL schemas and verify RLS policies".to_string(),
+            affected_resources: serde_json::json!(["migrations/001_init.sql", "crates/db"]),
+            status: TaskStatus::HumanReview,
+            assigned_agent_id: None,
+            estimated_size: Some("M".to_string()),
+            proposal_id: prop_id,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        let task2 = Task {
+            id: task2_id,
+            project_id: proj_id,
+            short_id: "PLAN-2".to_string(),
+            title: "Implement REST and NATS endpoints".to_string(),
+            description: "Add handlers for agent events and task streaming".to_string(),
+            affected_resources: serde_json::json!(["crates/coordinator/src/messaging"]),
+            status: TaskStatus::HumanReview,
+            assigned_agent_id: None,
+            estimated_size: Some("L".to_string()),
+            proposal_id: prop_id,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        let task3 = Task {
+            id: task3_id,
+            project_id: proj_id,
+            short_id: "PLAN-3".to_string(),
+            title: "Shared configuration refactor".to_string(),
+            description: "Update database connection pooling and messaging settings".to_string(),
+            affected_resources: serde_json::json!(["crates/db", "config/default.toml"]),
+            status: TaskStatus::HumanReview,
+            assigned_agent_id: None,
+            estimated_size: Some("S".to_string()),
+            proposal_id: prop_id,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        let warning = OverlapWarning {
+            id: Uuid::new_v4(),
+            project_id: proj_id,
+            resource: "crates/db".to_string(),
+            task_ids: serde_json::json!([task1_id.to_string(), task3_id.to_string()]),
+            severity: crate::domain::OverlapSeverity::Critical,
+            acknowledged: false,
+            created_at: chrono::Utc::now(),
+        };
+
+        self.active_overlaps = vec![warning.clone()];
+
+        let mut review1 = ReviewTaskState::new(task1);
+        review1.suggested_agent_name = Some("agent-backend".to_string());
+        review1.overlap_warnings = vec![warning.clone()];
+
+        let mut review2 = ReviewTaskState::new(task2);
+        review2.suggested_agent_name = Some("agent-infra".to_string());
+        review2.dependencies = vec![TaskDependency {
+            dependent_id: task2_id,
+            depends_on_id: task1_id,
+            kind: crate::domain::DependencyKind::Blocks,
+        }];
+
+        let mut review3 = ReviewTaskState::new(task3);
+        review3.suggested_agent_name = Some("agent-backend".to_string());
+        review3.overlap_warnings = vec![warning];
+
+        self.review_tasks = vec![review1, review2, review3];
+        self.current_screen = CurrentScreen::PlanReview;
+        self
+    }
+
+    /// Handles a keyboard event and returns an optional `TuiAction` for outer handling.
+    pub fn handle_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
+        // Discard key releases to avoid duplicate handling
+        if key.kind != KeyEventKind::Press {
+            return None;
+        }
+
+        // Global shortcuts: Ctrl+C always quits
+        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
+            self.should_quit = true;
+            return Some(TuiAction::Quit);
+        }
+
+        match self.input_mode {
+            InputMode::Normal => self.handle_normal_mode_key(key),
+            InputMode::EditingDescription => self.handle_editing_key(key),
+            InputMode::EnteringProject => self.handle_project_input_key(key),
+        }
+    }
+
+    fn handle_normal_mode_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Char('Q') => {
+                self.should_quit = true;
+                Some(TuiAction::Quit)
+            }
+            KeyCode::Tab => {
+                self.cycle_screen();
+                None
+            }
+            KeyCode::Char('1') => {
+                self.current_screen = CurrentScreen::ProjectInput;
+                None
+            }
+            KeyCode::Char('2') => {
+                self.current_screen = CurrentScreen::PlanReview;
+                None
+            }
+            KeyCode::Char('3') => {
+                self.current_screen = CurrentScreen::Dashboard;
+                None
+            }
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                self.status_message = Some("Refreshed data.".to_string());
+                Some(TuiAction::RefreshData)
+            }
+            _ => match self.current_screen {
+                CurrentScreen::PlanReview => self.handle_plan_review_key(key),
+                CurrentScreen::ProjectInput => {
+                    if key.code == KeyCode::Enter || key.code == KeyCode::Char('i') {
+                        self.input_mode = InputMode::EnteringProject;
+                        self.status_message = Some("Entering project details. [Tab] switch field, [Enter] submit, [Esc] cancel.".to_string());
+                    }
+                    None
+                }
+                CurrentScreen::Dashboard => None,
+            },
+        }
+    }
+
+    fn handle_plan_review_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
+        if self.review_tasks.is_empty() {
+            return None;
+        }
+
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.selected_task_index > 0 {
+                    self.selected_task_index -= 1;
+                }
+                None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.selected_task_index + 1 < self.review_tasks.len() {
+                    self.selected_task_index += 1;
+                }
+                None
+            }
+            KeyCode::Enter => {
+                self.show_details_pane = !self.show_details_pane;
+                None
+            }
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                let task_id = self.review_tasks[self.selected_task_index].task.id;
+                let short_id = self.review_tasks[self.selected_task_index].task.short_id.clone();
+                self.review_tasks[self.selected_task_index].human_decision = Some(ApprovalStatus::Approved);
+                self.review_tasks[self.selected_task_index].task.status = TaskStatus::Approved;
+                self.status_message = Some(format!("Task {short_id} marked Approved."));
+                
+                // Advance selection if not at end
+                if self.selected_task_index + 1 < self.review_tasks.len() {
+                    self.selected_task_index += 1;
+                }
+                Some(TuiAction::ApproveTask { task_id })
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') => {
+                let task_id = self.review_tasks[self.selected_task_index].task.id;
+                let short_id = self.review_tasks[self.selected_task_index].task.short_id.clone();
+                self.review_tasks[self.selected_task_index].human_decision = Some(ApprovalStatus::Rejected);
+                self.status_message = Some(format!("Task {short_id} marked Rejected."));
+                
+                if self.selected_task_index + 1 < self.review_tasks.len() {
+                    self.selected_task_index += 1;
+                }
+                Some(TuiAction::RejectTask { task_id })
+            }
+            KeyCode::Char('e') | KeyCode::Char('E') => {
+                let current_desc = self.review_tasks[self.selected_task_index].task.description.clone();
+                self.edit_buffer = current_desc;
+                self.edit_cursor = self.edit_buffer.len();
+                self.input_mode = InputMode::EditingDescription;
+                self.status_message = Some("Editing description inline. [Enter] save & approve, [Esc] cancel.".to_string());
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn handle_editing_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
+        match key.code {
+            KeyCode::Esc => {
+                self.input_mode = InputMode::Normal;
+                self.status_message = Some("Edit cancelled.".to_string());
+                None
+            }
+            KeyCode::Enter => {
+                self.input_mode = InputMode::Normal;
+                let task_id = self.review_tasks[self.selected_task_index].task.id;
+                let short_id = self.review_tasks[self.selected_task_index].task.short_id.clone();
+                let new_desc = self.edit_buffer.trim().to_string();
+
+                self.review_tasks[self.selected_task_index].task.description = new_desc.clone();
+                // Acceptance criteria: [E] edit description, Enter confirms edit + approves
+                self.review_tasks[self.selected_task_index].human_decision = Some(ApprovalStatus::EditedAndApproved);
+                self.review_tasks[self.selected_task_index].task.status = TaskStatus::Approved;
+                self.status_message = Some(format!("Updated {short_id} description & marked Approved."));
+
+                Some(TuiAction::EditTaskDescription {
+                    task_id,
+                    new_description: new_desc,
+                })
+            }
+            KeyCode::Backspace => {
+                if self.edit_cursor > 0 && !self.edit_buffer.is_empty() {
+                    self.edit_cursor -= 1;
+                    self.edit_buffer.remove(self.edit_cursor);
+                }
+                None
+            }
+            KeyCode::Left => {
+                if self.edit_cursor > 0 {
+                    self.edit_cursor -= 1;
+                }
+                None
+            }
+            KeyCode::Right => {
+                if self.edit_cursor < self.edit_buffer.len() {
+                    self.edit_cursor += 1;
+                }
+                None
+            }
+            KeyCode::Char(c) => {
+                self.edit_buffer.insert(self.edit_cursor, c);
+                self.edit_cursor += 1;
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn handle_project_input_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
+        match key.code {
+            KeyCode::Esc => {
+                self.input_mode = InputMode::Normal;
+                self.status_message = Some("Project input cancelled.".to_string());
+                None
+            }
+            KeyCode::Tab => {
+                self.project_focus_field = (self.project_focus_field + 1) % 2;
+                None
+            }
+            KeyCode::BackTab => {
+                self.project_focus_field = if self.project_focus_field == 0 { 1 } else { 0 };
+                None
+            }
+            KeyCode::Enter => {
+                if self.project_name_input.trim().is_empty() {
+                    self.status_message = Some("Project name cannot be empty.".to_string());
+                    return None;
+                }
+                self.input_mode = InputMode::Normal;
+                let name = self.project_name_input.trim().to_string();
+                let desc = self.project_desc_input.trim().to_string();
+                self.status_message = Some(format!("Submitted project '{name}' for decomposition."));
+
+                Some(TuiAction::SubmitProject {
+                    name,
+                    description: desc,
+                })
+            }
+            KeyCode::Backspace => {
+                if self.project_focus_field == 0 {
+                    self.project_name_input.pop();
+                } else {
+                    self.project_desc_input.pop();
+                }
+                None
+            }
+            KeyCode::Char(c) => {
+                if self.project_focus_field == 0 {
+                    self.project_name_input.push(c);
+                } else {
+                    self.project_desc_input.push(c);
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    pub fn cycle_screen(&mut self) {
+        self.current_screen = match self.current_screen {
+            CurrentScreen::ProjectInput => CurrentScreen::PlanReview,
+            CurrentScreen::PlanReview => CurrentScreen::Dashboard,
+            CurrentScreen::Dashboard => CurrentScreen::ProjectInput,
+        };
+    }
+
+    pub fn selected_task(&self) -> Option<&ReviewTaskState> {
+        self.review_tasks.get(self.selected_task_index)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn test_initial_app_state() {
+        let state = AppState::new();
+        assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+        assert_eq!(state.input_mode, InputMode::Normal);
+        assert!(!state.should_quit);
+    }
+
+    #[test]
+    fn test_screen_navigation_cycle() {
+        let mut state = AppState::new();
+        assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+
+        state.handle_key(make_key(KeyCode::Tab));
+        assert_eq!(state.current_screen, CurrentScreen::PlanReview);
+
+        state.handle_key(make_key(KeyCode::Tab));
+        assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+
+        state.handle_key(make_key(KeyCode::Tab));
+        assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+
+        // Direct number keys
+        state.handle_key(make_key(KeyCode::Char('2')));
+        assert_eq!(state.current_screen, CurrentScreen::PlanReview);
+
+        state.handle_key(make_key(KeyCode::Char('3')));
+        assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+
+        state.handle_key(make_key(KeyCode::Char('1')));
+        assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+    }
+
+    #[test]
+    fn test_quit_action_emitted() {
+        let mut state = AppState::new();
+        let action = state.handle_key(make_key(KeyCode::Char('q')));
+        assert_eq!(action, Some(TuiAction::Quit));
+        assert!(state.should_quit);
+
+        let mut state2 = AppState::new();
+        let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        let action2 = state2.handle_key(ctrl_c);
+        assert_eq!(action2, Some(TuiAction::Quit));
+        assert!(state2.should_quit);
+    }
+
+    #[test]
+    fn test_plan_review_navigation() {
+        let mut state = AppState::new().with_mock_data();
+        assert_eq!(state.selected_task_index, 0);
+
+        // Navigate Down
+        state.handle_key(make_key(KeyCode::Down));
+        assert_eq!(state.selected_task_index, 1);
+
+        // Navigate Down with 'j'
+        state.handle_key(make_key(KeyCode::Char('j')));
+        assert_eq!(state.selected_task_index, 2);
+
+        // Clamped at max index
+        state.handle_key(make_key(KeyCode::Down));
+        assert_eq!(state.selected_task_index, 2);
+
+        // Navigate Up
+        state.handle_key(make_key(KeyCode::Up));
+        assert_eq!(state.selected_task_index, 1);
+
+        // Navigate Up with 'k'
+        state.handle_key(make_key(KeyCode::Char('k')));
+        assert_eq!(state.selected_task_index, 0);
+
+        // Clamped at 0
+        state.handle_key(make_key(KeyCode::Up));
+        assert_eq!(state.selected_task_index, 0);
+    }
+
+    #[test]
+    fn test_task_approval_emits_action_and_updates_local_status() {
+        let mut state = AppState::new().with_mock_data();
+        let task0_id = state.review_tasks[0].task.id;
+
+        let action = state.handle_key(make_key(KeyCode::Char('y')));
+        assert_eq!(action, Some(TuiAction::ApproveTask { task_id: task0_id }));
+        assert_eq!(state.review_tasks[0].human_decision, Some(ApprovalStatus::Approved));
+        assert_eq!(state.review_tasks[0].task.status, TaskStatus::Approved);
+        // Automatically advances to index 1
+        assert_eq!(state.selected_task_index, 1);
+    }
+
+    #[test]
+    fn test_task_rejection_emits_action_and_updates_local_status() {
+        let mut state = AppState::new().with_mock_data();
+        let task0_id = state.review_tasks[0].task.id;
+
+        let action = state.handle_key(make_key(KeyCode::Char('n')));
+        assert_eq!(action, Some(TuiAction::RejectTask { task_id: task0_id }));
+        assert_eq!(state.review_tasks[0].human_decision, Some(ApprovalStatus::Rejected));
+        assert_eq!(state.selected_task_index, 1);
+    }
+
+    #[test]
+    fn test_task_edit_workflow_and_approval_confirmation() {
+        let mut state = AppState::new().with_mock_data();
+        let task0_id = state.review_tasks[0].task.id;
+        let original_desc = state.review_tasks[0].task.description.clone();
+
+        // Press 'E' to enter edit mode
+        let action = state.handle_key(make_key(KeyCode::Char('e')));
+        assert_eq!(action, None);
+        assert_eq!(state.input_mode, InputMode::EditingDescription);
+        assert_eq!(state.edit_buffer, original_desc);
+
+        // Type additional text: " (Revised)"
+        for c in " (Revised)".chars() {
+            state.handle_key(make_key(KeyCode::Char(c)));
+        }
+        assert!(state.edit_buffer.ends_with(" (Revised)"));
+
+        // Press Enter to commit
+        let commit_action = state.handle_key(make_key(KeyCode::Enter));
+        assert_eq!(state.input_mode, InputMode::Normal);
+        assert_eq!(
+            commit_action,
+            Some(TuiAction::EditTaskDescription {
+                task_id: task0_id,
+                new_description: format!("{original_desc} (Revised)"),
+            })
+        );
+        assert_eq!(state.review_tasks[0].task.description, format!("{original_desc} (Revised)"));
+        assert_eq!(state.review_tasks[0].human_decision, Some(ApprovalStatus::EditedAndApproved));
+    }
+
+    #[test]
+    fn test_task_edit_cancel_with_escape() {
+        let mut state = AppState::new().with_mock_data();
+        let original_desc = state.review_tasks[0].task.description.clone();
+
+        state.handle_key(make_key(KeyCode::Char('e')));
+        state.handle_key(make_key(KeyCode::Char('X')));
+        assert_eq!(state.input_mode, InputMode::EditingDescription);
+
+        // Press Esc to discard
+        let action = state.handle_key(make_key(KeyCode::Esc));
+        assert_eq!(action, None);
+        assert_eq!(state.input_mode, InputMode::Normal);
+        // Original description remains intact
+        assert_eq!(state.review_tasks[0].task.description, original_desc);
+        assert_eq!(state.review_tasks[0].human_decision, None);
+    }
+
+    #[test]
+    fn test_project_input_submission() {
+        let mut state = AppState::new();
+        state.handle_key(make_key(KeyCode::Char('i')));
+        assert_eq!(state.input_mode, InputMode::EnteringProject);
+
+        // Type Project Name
+        for c in "Mesh Proj".chars() {
+            state.handle_key(make_key(KeyCode::Char(c)));
+        }
+
+        // Switch to Description field
+        state.handle_key(make_key(KeyCode::Tab));
+        assert_eq!(state.project_focus_field, 1);
+
+        for c in "Test Desc".chars() {
+            state.handle_key(make_key(KeyCode::Char(c)));
+        }
+
+        // Submit
+        let action = state.handle_key(make_key(KeyCode::Enter));
+        assert_eq!(state.input_mode, InputMode::Normal);
+        assert_eq!(
+            action,
+            Some(TuiAction::SubmitProject {
+                name: "Mesh Proj".to_string(),
+                description: "Test Desc".to_string(),
+            })
+        );
+    }
+}
