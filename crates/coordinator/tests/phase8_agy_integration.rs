@@ -428,3 +428,490 @@ async fn test_agy_task_failure_lifecycle() {
     );
 }
 
+#[tokio::test]
+async fn test_agy_task_blocked_lifecycle() {
+    let Some((pool, client, jetstream)) = setup_test_env().await else {
+        eprintln!("Skipping test: services not reachable");
+        return;
+    };
+
+    // Simulated script that asks a question / gets blocked
+    let script = TempScript::new(
+        "#!/bin/bash\n\
+         echo '{\"event\":\"init\",\"conversation_id\":\"conv-block-001\"}'\n\
+         sleep 0.05\n\
+         echo '{\"event\":\"step_update\",\"step_update\":{\"step_index\":1,\"state\":\"waiting_for_input\",\"step_type\":\"ask_question\",\"text_delta\":\"Please clarify API specification\"}}'\n\
+         sleep 0.05\n\
+         exit 0",
+    );
+
+    let agent_id = Uuid::new_v4();
+    let agy_agent = AgyAgent::new("AgyBlockedDev", "key_block_test")
+        .with_id(agent_id)
+        .with_agy_path(script.path.clone())
+        .with_timeout(Duration::from_secs(5));
+
+    let reg_msg = AgentMessage::Register {
+        agent_id: agy_agent.id,
+        human_owner: agy_agent.human_owner.clone(),
+        adapter_type: "Agy".to_string(),
+        capabilities: agy_agent.capabilities.clone(),
+        api_key: agy_agent.api_key.clone(),
+    };
+    RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
+
+    let project = ProjectRepository::create(
+        &pool,
+        &NewProject {
+            name: "Phase 8 Block Proj".to_string(),
+            description: "Testing blocked propagation".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let proposal = ProposalRepository::create(
+        &pool,
+        &NewProposal {
+            project_id: project.id,
+            ai_provider: "mock".to_string(),
+            ai_model: "mock-v1".to_string(),
+            raw_prompt: "phase 8 block".to_string(),
+            raw_response: "{}".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let task = TaskRepository::create(
+        &pool,
+        &NewTask {
+            project_id: project.id,
+            proposal_id: proposal.id,
+            short_id: "AGY-BLOCK-001".to_string(),
+            title: "Task requiring clarification".to_string(),
+            description: "Verify Blocked event handling".to_string(),
+            affected_resources: vec!["crates/agent-agy/src/runner.rs".to_string()],
+            estimated_size: Some("S".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent_id)).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+
+    let idempotency_key = format!("test-block-{}", Uuid::new_v4());
+    TaskDeliveryRepository::create(
+        &pool,
+        &NewTaskDelivery {
+            task_id: task.id,
+            agent_id,
+            attempt: 1,
+            nats_stream: "TASK_ASSIGNMENTS".to_string(),
+            nats_subject: format!("coordinator.tasks.assign.{agent_id}"),
+            idempotency_key: idempotency_key.clone(),
+            expires_at: Utc::now() + chrono::Duration::seconds(60),
+        },
+    )
+    .await
+    .unwrap();
+
+    let spec = TaskSpec {
+        task_id: task.id,
+        short_id: task.short_id.clone(),
+        title: task.title.clone(),
+        description: task.description.clone(),
+        affected_resources: task.resources(),
+        depends_on: vec![],
+        idempotency_key: idempotency_key.clone(),
+        assigned_at: Utc::now(),
+    };
+
+    TaskPublisher::publish_assignment(&jetstream, agent_id, &spec)
+        .await
+        .expect("Failed to publish assignment");
+
+    let sub_pool = pool.clone();
+    let events_consumer = EventSubscriber::create_consumer(&jetstream).await.unwrap();
+    let subscriber_handle = tokio::spawn(async move {
+        let mut messages = events_consumer.messages().await.unwrap();
+        while let Some(Ok(msg)) = messages.next().await {
+            let _ = msg.ack().await;
+            if let Ok(agent_msg) = serde_json::from_slice::<AgentMessage>(&msg.payload) {
+                let _ = EventSubscriber::handle_agent_message(&sub_pool, agent_msg).await;
+            }
+        }
+    });
+
+    let task_consumer = AgyAgentRunner::create_task_consumer(&jetstream, agent_id)
+        .await
+        .unwrap();
+
+    let mut task_messages = task_consumer.messages().await.unwrap();
+    let assignment_msg = task_messages.next().await.unwrap().unwrap();
+    assignment_msg.ack().await.unwrap();
+
+    let coord_msg: CoordinatorMessage = serde_json::from_slice(&assignment_msg.payload).unwrap();
+    let received_spec = match coord_msg {
+        CoordinatorMessage::TaskAssignment { spec } => spec,
+        other => panic!("Expected TaskAssignment, got {other:?}"),
+    };
+
+    let event_subject = format!("agents.{agent_id}.events");
+    let _ = AgyAgentRunner::execute_task(&client, &agy_agent, &received_spec, &event_subject).await;
+
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    subscriber_handle.abort();
+
+    let final_task = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    assert_eq!(
+        final_task.status,
+        TaskStatus::Blocked,
+        "Task must transition to Blocked when agy requests clarification"
+    );
+
+    let events = AgentEventRepository::list_by_task(&pool, task.id).await.unwrap();
+    assert!(
+        events.iter().any(|e| e.event_type == coordinator::domain::AgentEventType::Blocked),
+        "Must record Blocked event in DB"
+    );
+}
+
+#[tokio::test]
+async fn test_two_agy_instances_parallel_execution() {
+    let Some((pool, client, jetstream)) = setup_test_env().await else {
+        eprintln!("Skipping test: services not reachable");
+        return;
+    };
+
+    // Script for Agent 1 (Alice)
+    let script1 = TempScript::new(
+        "#!/bin/bash\n\
+         echo '{\"event\":\"init\",\"conversation_id\":\"conv-parallel-1\"}'\n\
+         sleep 0.05\n\
+         echo '{\"event\":\"step_update\",\"step_update\":{\"step_index\":1,\"text_delta\":\"Backend API done\"}}'\n\
+         sleep 0.05\n\
+         echo '{\"event\":\"result\",\"result\":{\"status\":\"SUCCESS\",\"response\":\"Backend complete\"}}'\n\
+         exit 0",
+    );
+
+    // Script for Agent 2 (Bob)
+    let script2 = TempScript::new(
+        "#!/bin/bash\n\
+         echo '{\"event\":\"init\",\"conversation_id\":\"conv-parallel-2\"}'\n\
+         sleep 0.05\n\
+         echo '{\"event\":\"step_update\",\"step_update\":{\"step_index\":1,\"text_delta\":\"Frontend UI done\"}}'\n\
+         sleep 0.05\n\
+         echo '{\"event\":\"result\",\"result\":{\"status\":\"SUCCESS\",\"response\":\"Frontend complete\"}}'\n\
+         exit 0",
+    );
+
+    let agent_id1 = Uuid::new_v4();
+    let agent1 = AgyAgent::new("Alice", "key_alice")
+        .with_id(agent_id1)
+        .with_agy_path(script1.path.clone());
+
+    let agent_id2 = Uuid::new_v4();
+    let agent2 = AgyAgent::new("Bob", "key_bob")
+        .with_id(agent_id2)
+        .with_agy_path(script2.path.clone());
+
+    // Register both agents
+    for agent in [&agent1, &agent2] {
+        let reg_msg = AgentMessage::Register {
+            agent_id: agent.id,
+            human_owner: agent.human_owner.clone(),
+            adapter_type: "Agy".to_string(),
+            capabilities: agent.capabilities.clone(),
+            api_key: agent.api_key.clone(),
+        };
+        RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
+    }
+
+    let project = ProjectRepository::create(
+        &pool,
+        &NewProject {
+            name: "Phase 8 Parallel Proj".to_string(),
+            description: "Testing two real agy instances".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let proposal = ProposalRepository::create(
+        &pool,
+        &NewProposal {
+            project_id: project.id,
+            ai_provider: "mock".to_string(),
+            ai_model: "mock-v1".to_string(),
+            raw_prompt: "phase 8 parallel".to_string(),
+            raw_response: "{}".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    // Create Task 1 for Agent 1
+    let task1 = TaskRepository::create(
+        &pool,
+        &NewTask {
+            project_id: project.id,
+            proposal_id: proposal.id,
+            short_id: "PARALLEL-001".to_string(),
+            title: "Task A for Alice".to_string(),
+            description: "Backend implementation".to_string(),
+            affected_resources: vec!["backend.rs".to_string()],
+            estimated_size: Some("M".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    // Create Task 2 for Agent 2
+    let task2 = TaskRepository::create(
+        &pool,
+        &NewTask {
+            project_id: project.id,
+            proposal_id: proposal.id,
+            short_id: "PARALLEL-002".to_string(),
+            title: "Task B for Bob".to_string(),
+            description: "Frontend implementation".to_string(),
+            affected_resources: vec!["frontend.rs".to_string()],
+            estimated_size: Some("M".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    for (t, a_id) in [(&task1, agent_id1), (&task2, agent_id2)] {
+        TaskRepository::update_status(&pool, t.id, TaskStatus::HumanReview).await.unwrap();
+        TaskRepository::update_status(&pool, t.id, TaskStatus::Approved).await.unwrap();
+        TaskRepository::assign_agent(&pool, t.id, Some(a_id)).await.unwrap();
+        TaskRepository::update_status(&pool, t.id, TaskStatus::Assigned).await.unwrap();
+
+        let idem_key = format!("test-parallel-{}", t.id);
+        TaskDeliveryRepository::create(
+            &pool,
+            &NewTaskDelivery {
+                task_id: t.id,
+                agent_id: a_id,
+                attempt: 1,
+                nats_stream: "TASK_ASSIGNMENTS".to_string(),
+                nats_subject: format!("coordinator.tasks.assign.{a_id}"),
+                idempotency_key: idem_key.clone(),
+                expires_at: Utc::now() + chrono::Duration::seconds(60),
+            },
+        )
+        .await
+        .unwrap();
+
+        let spec = TaskSpec {
+            task_id: t.id,
+            short_id: t.short_id.clone(),
+            title: t.title.clone(),
+            description: t.description.clone(),
+            affected_resources: t.resources(),
+            depends_on: vec![],
+            idempotency_key: idem_key,
+            assigned_at: Utc::now(),
+        };
+
+        TaskPublisher::publish_assignment(&jetstream, a_id, &spec).await.unwrap();
+    }
+
+    // Start event subscriber
+    let sub_pool = pool.clone();
+    let events_consumer = EventSubscriber::create_consumer(&jetstream).await.unwrap();
+    let subscriber_handle = tokio::spawn(async move {
+        let mut messages = events_consumer.messages().await.unwrap();
+        while let Some(Ok(msg)) = messages.next().await {
+            let _ = msg.ack().await;
+            if let Ok(agent_msg) = serde_json::from_slice::<AgentMessage>(&msg.payload) {
+                let _ = EventSubscriber::handle_agent_message(&sub_pool, agent_msg).await;
+            }
+        }
+    });
+
+    // Run both agy agents concurrently
+    let (h1, h2) = tokio::join!(
+        async {
+            let consumer = AgyAgentRunner::create_task_consumer(&jetstream, agent_id1).await.unwrap();
+            let mut msgs = consumer.messages().await.unwrap();
+            let msg = msgs.next().await.unwrap().unwrap();
+            msg.ack().await.unwrap();
+            let CoordinatorMessage::TaskAssignment { spec } = serde_json::from_slice(&msg.payload).unwrap() else { panic!() };
+            AgyAgentRunner::execute_task(&client, &agent1, &spec, &format!("agents.{agent_id1}.events")).await.unwrap();
+        },
+        async {
+            let consumer = AgyAgentRunner::create_task_consumer(&jetstream, agent_id2).await.unwrap();
+            let mut msgs = consumer.messages().await.unwrap();
+            let msg = msgs.next().await.unwrap().unwrap();
+            msg.ack().await.unwrap();
+            let CoordinatorMessage::TaskAssignment { spec } = serde_json::from_slice(&msg.payload).unwrap() else { panic!() };
+            AgyAgentRunner::execute_task(&client, &agent2, &spec, &format!("agents.{agent_id2}.events")).await.unwrap();
+        }
+    );
+    let _ = (h1, h2);
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    subscriber_handle.abort();
+
+    // Verify both tasks reached Completed state independently
+    let t1_final = TaskRepository::find_by_id(&pool, task1.id).await.unwrap().unwrap();
+    let t2_final = TaskRepository::find_by_id(&pool, task2.id).await.unwrap().unwrap();
+
+    assert_eq!(t1_final.status, TaskStatus::Completed, "Task 1 must complete");
+    assert_eq!(t2_final.status, TaskStatus::Completed, "Task 2 must complete");
+}
+
+#[tokio::test]
+async fn test_one_real_agy_binary_instance() {
+    let Some((pool, client, jetstream)) = setup_test_env().await else {
+        eprintln!("Skipping test: services not reachable");
+        return;
+    };
+
+    // Locate the real agy binary on this host
+    let agy_binary_path = std::path::PathBuf::from("/home/pirate/.local/bin/agy");
+    if !agy_binary_path.exists() {
+        eprintln!("Skipping real agy test: {} not found on system", agy_binary_path.display());
+        return;
+    }
+
+    let agent_id = Uuid::new_v4();
+    let agy_agent = AgyAgent::new("RealAgyOperator", "key_real_agy")
+        .with_id(agent_id)
+        .with_agy_path(agy_binary_path)
+        .with_effort("low")
+        .with_timeout(Duration::from_secs(180));
+
+    let reg_msg = AgentMessage::Register {
+        agent_id: agy_agent.id,
+        human_owner: agy_agent.human_owner.clone(),
+        adapter_type: "Agy".to_string(),
+        capabilities: agy_agent.capabilities.clone(),
+        api_key: agy_agent.api_key.clone(),
+    };
+    RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
+
+    let project = ProjectRepository::create(
+        &pool,
+        &NewProject {
+            name: "Phase 8 Real agy Binary Proj".to_string(),
+            description: "Executing against real agy CLI binary".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let proposal = ProposalRepository::create(
+        &pool,
+        &NewProposal {
+            project_id: project.id,
+            ai_provider: "mock".to_string(),
+            ai_model: "mock-v1".to_string(),
+            raw_prompt: "phase 8 real agy".to_string(),
+            raw_response: "{}".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let task = TaskRepository::create(
+        &pool,
+        &NewTask {
+            project_id: project.id,
+            proposal_id: proposal.id,
+            short_id: "REAL-AGY-001".to_string(),
+            title: "Respond with greeting".to_string(),
+            description: "Please respond with 'Hello from real agy'.".to_string(),
+            affected_resources: vec![],
+            estimated_size: Some("S".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent_id)).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+
+    let idempotency_key = format!("test-real-agy-{}", Uuid::new_v4());
+    TaskDeliveryRepository::create(
+        &pool,
+        &NewTaskDelivery {
+            task_id: task.id,
+            agent_id,
+            attempt: 1,
+            nats_stream: "TASK_ASSIGNMENTS".to_string(),
+            nats_subject: format!("coordinator.tasks.assign.{agent_id}"),
+            idempotency_key: idempotency_key.clone(),
+            expires_at: Utc::now() + chrono::Duration::seconds(240),
+        },
+    )
+    .await
+    .unwrap();
+
+    let spec = TaskSpec {
+        task_id: task.id,
+        short_id: task.short_id.clone(),
+        title: task.title.clone(),
+        description: task.description.clone(),
+        affected_resources: task.resources(),
+        depends_on: vec![],
+        idempotency_key: idempotency_key.clone(),
+        assigned_at: Utc::now(),
+    };
+
+    TaskPublisher::publish_assignment(&jetstream, agent_id, &spec).await.unwrap();
+
+    let sub_pool = pool.clone();
+    let events_consumer = EventSubscriber::create_consumer(&jetstream).await.unwrap();
+    let subscriber_handle = tokio::spawn(async move {
+        let mut messages = events_consumer.messages().await.unwrap();
+        while let Some(Ok(msg)) = messages.next().await {
+            let _ = msg.ack().await;
+            if let Ok(agent_msg) = serde_json::from_slice::<AgentMessage>(&msg.payload) {
+                let _ = EventSubscriber::handle_agent_message(&sub_pool, agent_msg).await;
+            }
+        }
+    });
+
+    let task_consumer = AgyAgentRunner::create_task_consumer(&jetstream, agent_id).await.unwrap();
+    let mut task_messages = task_consumer.messages().await.unwrap();
+    let assignment_msg = task_messages.next().await.unwrap().unwrap();
+    assignment_msg.ack().await.unwrap();
+
+    let CoordinatorMessage::TaskAssignment { spec: received_spec } = serde_json::from_slice(&assignment_msg.payload).unwrap() else { panic!() };
+    let event_subject = format!("agents.{agent_id}.events");
+
+    // Execute against the real agy CLI
+    let exec_res = AgyAgentRunner::execute_task(&client, &agy_agent, &received_spec, &event_subject).await;
+    assert!(exec_res.is_ok(), "Real agy execution failed: {:?}", exec_res.err());
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    subscriber_handle.abort();
+
+    let final_task = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    assert_eq!(
+        final_task.status,
+        TaskStatus::Completed,
+        "Task must transition to Completed with real agy binary"
+    );
+
+    let events = AgentEventRepository::list_by_task(&pool, task.id).await.unwrap();
+    assert!(
+        events.iter().any(|e| e.event_type == coordinator::domain::AgentEventType::TaskStarted),
+        "Must record TaskStarted from real agy CLI"
+    );
+    assert!(
+        events.iter().any(|e| e.event_type == coordinator::domain::AgentEventType::Completed),
+        "Must record Completed from real agy CLI"
+    );
+}
+
+

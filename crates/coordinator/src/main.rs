@@ -39,10 +39,12 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
     let nats_url = std::env::var("NATS_URL")
         .unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let nats_token = std::env::var("NATS_AUTH_TOKEN")
+        .unwrap_or_else(|_| "agentmesh_dev_token".to_string());
 
     // 2. Attempt connection to PostgreSQL and NATS JetStream
     let pool_res = create_pool(&db_url).await;
-    let nats_res = connect(&nats_url, None).await;
+    let nats_res = connect(&nats_url, Some(&nats_token)).await;
 
     match (pool_res, nats_res) {
         (Ok(pool), Ok((nats_client, jetstream))) => {
@@ -165,7 +167,9 @@ async fn main() -> Result<()> {
             }
 
             if !is_interactive {
-                info!("Running in non-interactive mode. Infrastructure healthy, all background services active.");
+                info!("Running in non-interactive daemon mode. Registration, heartbeat, and JetStream listeners active.");
+                tokio::signal::ctrl_c().await?;
+                info!("Coordinator shutting down gracefully");
                 return Ok(());
             }
 

@@ -27,6 +27,8 @@ pub struct AgyAgent {
     pub timeout: Duration,
     /// Auto-approve tool permissions without user prompt.
     pub dangerously_skip_permissions: bool,
+    /// Optional blocker task UUID for simulating/testing blocked states.
+    pub simulate_blocker: Option<Uuid>,
 }
 
 impl AgyAgent {
@@ -56,7 +58,13 @@ impl AgyAgent {
             workspace_dir: None,
             timeout: Duration::from_secs(600), // 10 minutes default
             dangerously_skip_permissions: true,
+            simulate_blocker: None,
         }
+    }
+
+    pub fn with_simulate_blocker(mut self, blocker_id: Uuid) -> Self {
+        self.simulate_blocker = Some(blocker_id);
+        self
     }
 
     pub fn with_id(mut self, id: Uuid) -> Self {

@@ -180,6 +180,7 @@ impl AgyAgentRunner {
 
         let started_reported = Arc::new(AtomicBool::new(false));
         let mut final_reported = false;
+        let mut is_blocked = false;
         let mut last_progress_step = 0;
 
         while let Some(proc_event) = event_rx.recv().await {
@@ -222,39 +223,83 @@ impl AgyAgentRunner {
                             .await?;
                         }
 
-                        let step_num = step_update.step_index.unwrap_or(0);
-                        let snippet = step_update
-                            .text_delta
-                            .as_deref()
-                            .unwrap_or("Executing step");
-
-                        let percent = std::cmp::min(10 + (step_num * 15), 90) as u8;
-
-                        if step_num > last_progress_step || !snippet.trim().is_empty() {
-                            last_progress_step = step_num;
-                            let msg_summary = if snippet.len() > 120 {
-                                format!("{}...", &snippet[..120])
-                            } else {
-                                snippet.to_string()
-                            };
-
+                        // Check if agent reported a blocked state
+                        if step_update.is_blocked() {
+                            warn!(
+                                task_id = %spec.task_id,
+                                reason = %step_update.blocked_reason(),
+                                "agy agent reported Blocked state"
+                            );
                             Self::publish_event(
                                 client,
                                 event_subject,
-                                &AgentMessage::ProgressUpdate {
+                                &AgentMessage::Blocked {
                                     agent_id: agent.agent_id(),
                                     task_id: spec.task_id,
-                                    message: format!("Step {step_num}: {msg_summary}"),
-                                    percent,
+                                    reason: step_update.blocked_reason(),
+                                    blocking_task_id: None,
                                     timestamp: Utc::now(),
                                 },
                             )
                             .await?;
+                            is_blocked = true;
+                        } else if let Some(blocker_id) = agent.simulate_blocker {
+                            warn!(
+                                task_id = %spec.task_id,
+                                %blocker_id,
+                                "Simulating blocked state for agy agent"
+                            );
+                            Self::publish_event(
+                                client,
+                                event_subject,
+                                &AgentMessage::Blocked {
+                                    agent_id: agent.agent_id(),
+                                    task_id: spec.task_id,
+                                    reason: "Waiting for prerequisite task".to_string(),
+                                    blocking_task_id: Some(blocker_id),
+                                    timestamp: Utc::now(),
+                                },
+                            )
+                            .await?;
+                            is_blocked = true;
+                        } else {
+                            let step_num = step_update.step_index.unwrap_or(0);
+                            let snippet = step_update
+                                .text_delta
+                                .as_deref()
+                                .unwrap_or("Executing step");
+
+                            let percent = std::cmp::min(10 + (step_num * 15), 90) as u8;
+
+                            if step_num > last_progress_step || !snippet.trim().is_empty() {
+                                last_progress_step = step_num;
+                                let msg_summary = if snippet.len() > 120 {
+                                    format!("{}...", &snippet[..120])
+                                } else {
+                                    snippet.to_string()
+                                };
+
+                                Self::publish_event(
+                                    client,
+                                    event_subject,
+                                    &AgentMessage::ProgressUpdate {
+                                        agent_id: agent.agent_id(),
+                                        task_id: spec.task_id,
+                                        message: format!("Step {step_num}: {msg_summary}"),
+                                        percent,
+                                        timestamp: Utc::now(),
+                                    },
+                                )
+                                .await?;
+                            }
                         }
                     }
 
                     AgyStreamEvent::Result { result } => {
-                        if result.status == "SUCCESS" {
+                        if is_blocked {
+                            info!(task_id = %spec.task_id, "agy process finished while in blocked state");
+                            final_reported = true;
+                        } else if result.status == "SUCCESS" {
                             info!(task_id = %spec.task_id, "agy returned SUCCESS result");
                             let summary = result
                                 .response
@@ -303,7 +348,7 @@ impl AgyAgentRunner {
                 }
 
                 AgyProcessEvent::Completed { exit_code: _, result } => {
-                    if !final_reported {
+                    if !final_reported && !is_blocked {
                         let summary = result
                             .and_then(|r| r.response)
                             .unwrap_or_else(|| format!("Task {} completed by agy", spec.short_id));
@@ -355,7 +400,7 @@ impl AgyAgentRunner {
         }
 
         // Fallback: If channel closed without any final event emitted, report Failure
-        if !final_reported {
+        if !final_reported && !is_blocked {
             warn!(task_id = %spec.task_id, "agy process terminated without emitting a final result");
             Self::publish_event(
                 client,

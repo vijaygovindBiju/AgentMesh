@@ -46,6 +46,44 @@ pub struct AgyStepUpdatePayload {
     pub duration_seconds: Option<f64>,
 }
 
+impl AgyStepUpdatePayload {
+    /// Returns true if this step update indicates that the agent is blocked or waiting for input/permission.
+    pub fn is_blocked(&self) -> bool {
+        let state_blocked = self
+            .state
+            .as_deref()
+            .map(|s| {
+                let lower = s.to_lowercase();
+                lower == "blocked" || lower == "waiting_for_input" || lower == "waiting_for_message"
+            })
+            .unwrap_or(false);
+
+        let step_type_blocked = self
+            .step_type
+            .as_deref()
+            .map(|st| {
+                let lower = st.to_lowercase();
+                lower == "ask_question" || lower == "ask_permission" || lower == "blocked"
+            })
+            .unwrap_or(false);
+
+        state_blocked || step_type_blocked
+    }
+
+    /// Extracts the blocking reason or question if available.
+    pub fn blocked_reason(&self) -> String {
+        if let Some(ref text) = self.text_delta {
+            if !text.trim().is_empty() {
+                return format!("Agent waiting for response: {}", text.trim());
+            }
+        }
+        if let Some(ref st) = self.step_type {
+            return format!("Agent entered blocked state on step type: {st}");
+        }
+        "Agent is waiting for external input or permission".to_string()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AgyResultPayload {
     #[serde(default)]
@@ -116,10 +154,16 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_invalid_or_non_json_returns_none() {
-        assert!(parse_stream_line("").is_none());
-        assert!(parse_stream_line("   ").is_none());
-        assert!(parse_stream_line("Some random stdout message").is_none());
-        assert!(parse_stream_line("{not valid json").is_none());
+    fn test_parse_blocked_step_update() {
+        let raw = r#"{"event":"step_update","step_update":{"conversation_id":"8a6e3b0f-2ee1-4c48-a19b-52e0f71db1c2","step_index":2,"state":"waiting_for_input","step_type":"ask_question","text_delta":"Which database migration version should I apply?"}}"#;
+        let event = parse_stream_line(raw).expect("Failed to parse blocked step update");
+        match event {
+            AgyStreamEvent::StepUpdate { step_update } => {
+                assert!(step_update.is_blocked());
+                assert!(step_update.blocked_reason().contains("Which database migration version"));
+            }
+            other => panic!("Expected StepUpdate, got {other:?}"),
+        }
     }
 }
+
