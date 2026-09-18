@@ -299,6 +299,133 @@ impl TaskRepository {
 
         Ok(rows > 0)
     }
+
+    /// Fetches Git coordination context for a task (branch, base branch, repo path, commits).
+    pub async fn find_git_context(pool: &PgPool, task_id: Uuid) -> Result<Option<TaskGitContext>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT t.task_branch,
+                   p.base_branch,
+                   p.repo_path,
+                   t.base_commit_sha,
+                   t.completion_commit_sha,
+                   t.actual_modified_resources
+            FROM tasks t
+            JOIN projects p ON t.project_id = p.id
+            WHERE t.id = $1
+            "#,
+            task_id
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to query task git context")?;
+
+        let Some(r) = row else { return Ok(None) };
+
+        let actual_modified = match r.actual_modified_resources {
+            serde_json::Value::Array(arr) => arr
+                .into_iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect(),
+            _ => Vec::new(),
+        };
+
+        Ok(Some(TaskGitContext {
+            task_branch: r.task_branch,
+            base_branch: Some(r.base_branch),
+            repo_path: r.repo_path,
+            base_commit_sha: r.base_commit_sha,
+            completion_commit_sha: r.completion_commit_sha,
+            actual_modified_resources: actual_modified,
+        }))
+    }
+
+    /// Updates task Git branch and starting base commit SHA.
+    pub async fn update_git_branch(
+        pool: &PgPool,
+        task_id: Uuid,
+        task_branch: &str,
+        base_commit_sha: &str,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE tasks
+            SET task_branch = $2, base_commit_sha = $3, updated_at = NOW()
+            WHERE id = $1
+            "#,
+            task_id,
+            task_branch,
+            base_commit_sha
+        )
+        .execute(pool)
+        .await
+        .context("Failed to update task git branch")?;
+
+        Ok(())
+    }
+
+    /// Records task completion Git state (completion commit SHA and actual modified resources).
+    pub async fn record_completion_git_state(
+        pool: &PgPool,
+        task_id: Uuid,
+        completion_commit_sha: &str,
+        modified_resources: &[String],
+    ) -> Result<()> {
+        let resources_json = serde_json::to_value(modified_resources)
+            .context("Failed to serialize modified resources")?;
+
+        sqlx::query!(
+            r#"
+            UPDATE tasks
+            SET completion_commit_sha = $2, actual_modified_resources = $3, updated_at = NOW()
+            WHERE id = $1
+            "#,
+            task_id,
+            completion_commit_sha,
+            resources_json
+        )
+        .execute(pool)
+        .await
+        .context("Failed to record task completion git state")?;
+
+        Ok(())
+    }
+
+    /// Updates the list of actual resources modified by the agent during task execution.
+    pub async fn update_actual_modified_resources(
+        pool: &PgPool,
+        task_id: Uuid,
+        modified_resources: &[String],
+    ) -> Result<()> {
+        let resources_json = serde_json::to_value(modified_resources)
+            .context("Failed to serialize modified resources")?;
+
+        sqlx::query!(
+            r#"
+            UPDATE tasks
+            SET actual_modified_resources = $2, updated_at = NOW()
+            WHERE id = $1
+            "#,
+            task_id,
+            resources_json
+        )
+        .execute(pool)
+        .await
+        .context("Failed to update task actual modified resources")?;
+
+        Ok(())
+    }
+}
+
+/// Git context associated with a task in AgentMesh.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TaskGitContext {
+    pub task_branch: Option<String>,
+    pub base_branch: Option<String>,
+    pub repo_path: Option<String>,
+    pub base_commit_sha: Option<String>,
+    pub completion_commit_sha: Option<String>,
+    pub actual_modified_resources: Vec<String>,
 }
 
 #[cfg(test)]

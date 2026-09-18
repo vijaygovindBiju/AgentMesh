@@ -199,16 +199,15 @@ async fn test_agy_task_lifecycle_execution() {
     .unwrap();
 
     // 3. Coordinator publishes task assignment to NATS JetStream
-    let spec = TaskSpec {
-        task_id: task.id,
-        short_id: task.short_id.clone(),
-        title: task.title.clone(),
-        description: task.description.clone(),
-        affected_resources: task.resources(),
-        depends_on: vec![],
-        idempotency_key: idempotency_key.clone(),
-        assigned_at: Utc::now(),
-    };
+    let spec = TaskSpec::new(
+        task.id,
+        &task.short_id,
+        &task.title,
+        &task.description,
+        task.resources(),
+        vec![],
+        &idempotency_key,
+    );
 
     TaskPublisher::publish_assignment(&jetstream, agent_id, &spec)
         .await
@@ -367,16 +366,15 @@ async fn test_agy_task_failure_lifecycle() {
     .await
     .unwrap();
 
-    let spec = TaskSpec {
-        task_id: task.id,
-        short_id: task.short_id.clone(),
-        title: task.title.clone(),
-        description: task.description.clone(),
-        affected_resources: task.resources(),
-        depends_on: vec![],
-        idempotency_key: idempotency_key.clone(),
-        assigned_at: Utc::now(),
-    };
+    let spec = TaskSpec::new(
+        task.id,
+        &task.short_id,
+        &task.title,
+        &task.description,
+        task.resources(),
+        vec![],
+        &idempotency_key,
+    );
 
     TaskPublisher::publish_assignment(&jetstream, agent_id, &spec)
         .await
@@ -519,16 +517,15 @@ async fn test_agy_task_blocked_lifecycle() {
     .await
     .unwrap();
 
-    let spec = TaskSpec {
-        task_id: task.id,
-        short_id: task.short_id.clone(),
-        title: task.title.clone(),
-        description: task.description.clone(),
-        affected_resources: task.resources(),
-        depends_on: vec![],
-        idempotency_key: idempotency_key.clone(),
-        assigned_at: Utc::now(),
-    };
+    let spec = TaskSpec::new(
+        task.id,
+        &task.short_id,
+        &task.title,
+        &task.description,
+        task.resources(),
+        vec![],
+        &idempotency_key,
+    );
 
     TaskPublisher::publish_assignment(&jetstream, agent_id, &spec)
         .await
@@ -708,16 +705,15 @@ async fn test_two_agy_instances_parallel_execution() {
         .await
         .unwrap();
 
-        let spec = TaskSpec {
-            task_id: t.id,
-            short_id: t.short_id.clone(),
-            title: t.title.clone(),
-            description: t.description.clone(),
-            affected_resources: t.resources(),
-            depends_on: vec![],
-            idempotency_key: idem_key,
-            assigned_at: Utc::now(),
-        };
+        let spec = TaskSpec::new(
+            t.id,
+            &t.short_id,
+            &t.title,
+            &t.description,
+            t.resources(),
+            vec![],
+            idem_key,
+        );
 
         TaskPublisher::publish_assignment(&jetstream, a_id, &spec).await.unwrap();
     }
@@ -856,16 +852,15 @@ async fn test_one_real_agy_binary_instance() {
     .await
     .unwrap();
 
-    let spec = TaskSpec {
-        task_id: task.id,
-        short_id: task.short_id.clone(),
-        title: task.title.clone(),
-        description: task.description.clone(),
-        affected_resources: task.resources(),
-        depends_on: vec![],
-        idempotency_key: idempotency_key.clone(),
-        assigned_at: Utc::now(),
-    };
+    let spec = TaskSpec::new(
+        task.id,
+        &task.short_id,
+        &task.title,
+        &task.description,
+        task.resources(),
+        vec![],
+        &idempotency_key,
+    );
 
     TaskPublisher::publish_assignment(&jetstream, agent_id, &spec).await.unwrap();
 

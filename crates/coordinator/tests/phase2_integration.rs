@@ -140,16 +140,15 @@ async fn test_mock_agent_registration_and_full_lifecycle() {
         .expect("Failed to create agent task consumer");
 
     // 6. Coordinator publishes TaskAssignment to JetStream
-    let spec = TaskSpec {
-        task_id: task.id,
-        short_id: task.short_id.clone(),
-        title: task.title.clone(),
-        description: task.description.clone(),
-        affected_resources: task.resources(),
-        depends_on: vec![],
-        idempotency_key: idempotency_key.clone(),
-        assigned_at: Utc::now(),
-    };
+    let spec = TaskSpec::new(
+        task.id,
+        &task.short_id,
+        &task.title,
+        &task.description,
+        task.resources(),
+        vec![],
+        &idempotency_key,
+    );
 
     let seq = TaskPublisher::publish_assignment(&jetstream, agent_id, &spec)
         .await
@@ -306,16 +305,15 @@ async fn test_mock_agent_blocked_and_resumed_lifecycle() {
     TaskRepository::assign_agent(&pool, task.id, Some(agent_id)).await.unwrap();
     TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
 
-    let spec = TaskSpec {
-        task_id: task.id,
-        short_id: task.short_id.clone(),
-        title: task.title.clone(),
-        description: task.description.clone(),
-        affected_resources: vec![],
-        depends_on: vec![blocker_id],
-        idempotency_key: format!("{}:1", task.id),
-        assigned_at: Utc::now(),
-    };
+    let spec = TaskSpec::new(
+        task.id,
+        &task.short_id,
+        &task.title,
+        &task.description,
+        vec![],
+        vec![blocker_id],
+        format!("{}:1", task.id),
+    );
 
     let event_subject = format!("agents.{agent_id}.events");
 
@@ -386,16 +384,15 @@ async fn test_jetstream_durable_redelivery_on_nak() {
 
     let agent_id = Uuid::new_v4();
     let task_id = Uuid::new_v4();
-    let spec = TaskSpec {
+    let spec = TaskSpec::new(
         task_id,
-        short_id: "REDELIV-001".to_string(),
-        title: "Redelivery Test".to_string(),
-        description: "Test NAK triggers redelivery".to_string(),
-        affected_resources: vec![],
-        depends_on: vec![],
-        idempotency_key: format!("{}:1", task_id),
-        assigned_at: Utc::now(),
-    };
+        "REDELIV-001",
+        "Redelivery Test",
+        "Test NAK triggers redelivery",
+        vec![],
+        vec![],
+        format!("{}:1", task_id),
+    );
 
     // 1. Create consumer for this agent
     let consumer = MockAgentRunner::create_task_consumer(&jetstream, agent_id)

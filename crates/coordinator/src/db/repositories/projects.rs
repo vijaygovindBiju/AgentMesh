@@ -102,6 +102,52 @@ impl ProjectRepository {
 
         Ok(rows_affected > 0)
     }
+
+    /// Updates project Git repository identity.
+    pub async fn update_git_identity(
+        pool: &PgPool,
+        project_id: Uuid,
+        repo_path: &str,
+        base_branch: &str,
+        current_commit_sha: Option<&str>,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE projects
+            SET repo_path = $2, base_branch = $3, current_commit_sha = $4, updated_at = NOW()
+            WHERE id = $1
+            "#,
+            project_id,
+            repo_path,
+            base_branch,
+            current_commit_sha
+        )
+        .execute(pool)
+        .await
+        .context("Failed to update project git identity")?;
+
+        Ok(())
+    }
+
+    /// Fetches project Git repository identity (repo_path, base_branch, current_commit_sha).
+    pub async fn get_git_identity(
+        pool: &PgPool,
+        project_id: Uuid,
+    ) -> Result<Option<(Option<String>, String, Option<String>)>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT repo_path, base_branch, current_commit_sha
+            FROM projects
+            WHERE id = $1
+            "#,
+            project_id
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to query project git identity")?;
+
+        Ok(row.map(|r| (r.repo_path, r.base_branch, r.current_commit_sha)))
+    }
 }
 
 #[cfg(test)]

@@ -145,19 +145,34 @@ impl AgyAgentRunner {
             spec.affected_resources.join(", ")
         };
 
-        format!(
+        let mut prompt = format!(
             "TASK IDENTIFIER: [{short_id}]\n\
              TITLE: {title}\n\n\
              DESCRIPTION:\n{description}\n\n\
-             AFFECTED RESOURCES:\n{resources_str}\n\n\
-             INSTRUCTIONS:\n\
-             Execute and implement the requested changes for this task. \
-             Ensure all code is written to disk and verified before completion.",
+             AFFECTED RESOURCES:\n{resources_str}\n\n",
             short_id = spec.short_id,
             title = spec.title,
             description = spec.description,
             resources_str = resources_str
-        )
+        );
+
+        if let Some(ref branch) = spec.task_branch {
+            prompt.push_str(&format!("TASK GIT BRANCH: {branch}\n"));
+        }
+        if let Some(ref base) = spec.base_branch {
+            prompt.push_str(&format!("BASE GIT BRANCH: {base}\n"));
+        }
+        if let Some(ref repo) = spec.repo_path {
+            prompt.push_str(&format!("REPOSITORY WORKSPACE: {repo}\n"));
+        }
+
+        prompt.push_str(
+            "\nINSTRUCTIONS:\n\
+             Execute and implement the requested changes for this task. \
+             Ensure all code is written to disk and verified before completion."
+        );
+
+        prompt
     }
 
     /// Executes a single assigned task by spawning `agy`, translating stream events,
@@ -175,8 +190,13 @@ impl AgyAgentRunner {
             "Dispatching task assignment to agy subprocess"
         );
 
+        let mut task_agent = agent.clone();
+        if let Some(ref repo_path) = spec.repo_path {
+            task_agent.workspace_dir = Some(std::path::PathBuf::from(repo_path));
+        }
+
         let prompt = Self::build_task_prompt(spec);
-        let mut event_rx = AgyProcess::run(agent, &prompt).await?;
+        let mut event_rx = AgyProcess::run(&task_agent, &prompt).await?;
 
         let started_reported = Arc::new(AtomicBool::new(false));
         let mut final_reported = false;
@@ -422,24 +442,26 @@ impl AgyAgentRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
 
     #[test]
     fn test_build_task_prompt() {
-        let spec = TaskSpec {
-            task_id: Uuid::new_v4(),
-            short_id: "TASK-001".to_string(),
-            title: "Implement User Authentication".to_string(),
-            description: "Add JWT token validation endpoint".to_string(),
-            affected_resources: vec!["src/auth.rs".to_string(), "migrations/002.sql".to_string()],
-            depends_on: vec![],
-            idempotency_key: "idem-key-1".to_string(),
-            assigned_at: Utc::now(),
-        };
+        let spec = TaskSpec::new(
+            Uuid::new_v4(),
+            "TASK-001",
+            "Implement User Authentication",
+            "Add JWT token validation endpoint",
+            vec!["src/auth.rs".to_string(), "migrations/002.sql".to_string()],
+            vec![],
+            "idem-key-1",
+        )
+        .with_git_context("/tmp/repo", "main", "agentmesh/task-001");
 
         let prompt = AgyAgentRunner::build_task_prompt(&spec);
         assert!(prompt.contains("[TASK-001]"));
         assert!(prompt.contains("Implement User Authentication"));
         assert!(prompt.contains("src/auth.rs, migrations/002.sql"));
+        assert!(prompt.contains("TASK GIT BRANCH: agentmesh/task-001"));
+        assert!(prompt.contains("BASE GIT BRANCH: main"));
+        assert!(prompt.contains("REPOSITORY WORKSPACE: /tmp/repo"));
     }
 }

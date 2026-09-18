@@ -80,16 +80,15 @@ mod tests {
 
         let agent_id = Uuid::new_v4();
         let task_id = Uuid::new_v4();
-        let spec = TaskSpec {
+        let spec = TaskSpec::new(
             task_id,
-            short_id: "PUB-001".to_string(),
-            title: "Publisher test".to_string(),
-            description: "Testing publish_assignment".to_string(),
-            affected_resources: vec!["src/main.rs".to_string()],
-            depends_on: vec![],
-            idempotency_key: format!("{}:1", task_id),
-            assigned_at: Utc::now(),
-        };
+            "PUB-001",
+            "Publisher test",
+            "Testing publish_assignment",
+            vec!["src/main.rs".to_string()],
+            vec![],
+            format!("{}:1", task_id),
+        );
 
         let seq = TaskPublisher::publish_assignment(&jetstream, agent_id, &spec)
             .await

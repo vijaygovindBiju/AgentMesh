@@ -166,16 +166,15 @@ mod tests {
         let task_id = Uuid::new_v4();
         let blocker_id = Uuid::new_v4();
 
-        let spec = TaskSpec {
+        let spec = TaskSpec::new(
             task_id,
-            short_id: "TASK-001".to_string(),
-            title: "Setup DB".to_string(),
-            description: "Run migrations".to_string(),
-            affected_resources: vec!["migrations/".to_string()],
-            depends_on: vec![],
-            idempotency_key: format!("{}:1", task_id),
-            assigned_at: now,
-        };
+            "TASK-001",
+            "Setup DB",
+            "Run migrations",
+            vec!["migrations/".to_string()],
+            vec![],
+            format!("{}:1", task_id),
+        );
 
         let messages = vec![
             CoordinatorMessage::TaskAssignment { spec },

@@ -206,16 +206,22 @@ impl AssignmentService {
                     .map(|d| d.depends_on_id)
                     .collect();
 
-                let spec = TaskSpec {
-                    task_id: task.id,
-                    short_id: task.short_id.clone(),
-                    title: task.title.clone(),
-                    description: task.description.clone(),
-                    affected_resources: task.resources(),
+                let mut spec = TaskSpec::new(
+                    task.id,
+                    &task.short_id,
+                    &task.title,
+                    &task.description,
+                    task.resources(),
                     depends_on,
-                    idempotency_key: idempotency_key.clone(),
-                    assigned_at: Utc::now(),
-                };
+                    &idempotency_key,
+                );
+
+                // Fetch git coordination info for task/project if present
+                if let Ok(Some(git_info)) = TaskRepository::find_git_context(pool, task.id).await {
+                    spec.task_branch = git_info.task_branch;
+                    spec.base_branch = git_info.base_branch;
+                    spec.repo_path = git_info.repo_path;
+                }
 
                 match TaskPublisher::publish_assignment(js, agent.id, &spec).await {
                     Ok(seq) => {
@@ -301,16 +307,21 @@ impl AssignmentService {
                     .map(|d| d.depends_on_id)
                     .collect();
 
-                let spec = TaskSpec {
-                    task_id: task.id,
-                    short_id: task.short_id.clone(),
-                    title: task.title.clone(),
-                    description: task.description.clone(),
-                    affected_resources: task.resources(),
+                let mut spec = TaskSpec::new(
+                    task.id,
+                    &task.short_id,
+                    &task.title,
+                    &task.description,
+                    task.resources(),
                     depends_on,
-                    idempotency_key: delivery.idempotency_key.clone(),
-                    assigned_at: Utc::now(),
-                };
+                    &delivery.idempotency_key,
+                );
+
+                if let Ok(Some(git_info)) = TaskRepository::find_git_context(pool, task.id).await {
+                    spec.task_branch = git_info.task_branch;
+                    spec.base_branch = git_info.base_branch;
+                    spec.repo_path = git_info.repo_path;
+                }
 
                 match TaskPublisher::publish_assignment(js, delivery.agent_id, &spec).await {
                     Ok(seq) => {
