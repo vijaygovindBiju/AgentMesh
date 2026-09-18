@@ -67,6 +67,7 @@ async fn test_ai_planning_service_full_workflow() {
             capabilities: agent.capabilities_list().into_iter().map(String::from).collect(),
         }],
         existing_tasks: vec![],
+        repo_context: None,
     };
 
     // 3. Configure MockLlmProvider with a valid 2-task plan with overlap
@@ -169,6 +170,7 @@ async fn test_ai_planning_service_rejects_cycle_and_aborts() {
         project_description: project.description.clone(),
         available_agents: vec![],
         existing_tasks: vec![],
+        repo_context: None,
     };
 
     // Configure provider with a cyclic plan (TASK-A depends on B, B depends on A)
@@ -241,6 +243,7 @@ async fn test_ai_planning_service_handles_provider_error_gracefully() {
         project_description: project.description.clone(),
         available_agents: vec![],
         existing_tasks: vec![],
+        repo_context: None,
     };
 
     let provider = MockLlmProvider::new().with_error("Rate limit exceeded / malformed response");

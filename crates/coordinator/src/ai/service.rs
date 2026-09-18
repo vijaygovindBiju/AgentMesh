@@ -1,10 +1,15 @@
 use std::collections::HashMap;
+use std::path::Path;
 use anyhow::{Context, Result};
 use sqlx::PgPool;
 use tracing::info;
 use uuid::Uuid;
 
+use crate::ai::complexity::ComplexityEstimator;
+use crate::ai::matcher::AgentCapabilityMatcher;
 use crate::ai::provider::LlmProvider;
+use crate::ai::replan::ReplanEngine;
+use crate::ai::repo_scanner::RepositoryScanner;
 use crate::ai::schema::PlanningRequest;
 use crate::ai::validator::PlanValidator;
 use crate::db::repositories::{
@@ -17,13 +22,43 @@ use crate::domain::{
 pub struct PlanningService;
 
 impl PlanningService {
+    /// Executes repository-aware plan decomposition by scanning the project's codebase
+    /// and injecting architecture context into the planning prompt.
+    pub async fn generate_repo_aware_plan(
+        pool: &PgPool,
+        provider: &dyn LlmProvider,
+        repo_root: impl AsRef<Path>,
+        mut request: PlanningRequest,
+    ) -> Result<Uuid> {
+        let repo_context = RepositoryScanner::scan(repo_root).await.ok();
+        request.repo_context = repo_context;
+        Self::generate_and_persist_plan(pool, provider, &request).await
+    }
+
+    /// Generates a corrective re-plan when tasks fail, complete, or project state shifts.
+    pub async fn generate_replan(
+        pool: &PgPool,
+        provider: &dyn LlmProvider,
+        project_id: Uuid,
+        repo_root: Option<&Path>,
+    ) -> Result<Uuid> {
+        let repo_context = match repo_root {
+            Some(path) => RepositoryScanner::scan(path).await.ok(),
+            None => None,
+        };
+
+        let replan_req = ReplanEngine::gather_replan_context(pool, project_id, repo_context).await?;
+        ReplanEngine::execute_replan(pool, provider, &replan_req).await
+    }
+
     /// Executes the complete AI proposal workflow:
     /// 1. Calls LlmProvider to generate structured PlanResponse
     /// 2. Runs deterministic validation (cycles, schemas, dependencies, agents, overlaps)
-    /// 3. Persists Proposal in PostgreSQL (status = Pending)
-    /// 4. Persists Tasks (status = Proposed -> HumanReview)
-    /// 5. Persists TaskDependencies
-    /// 6. Persists OverlapWarnings
+    /// 3. Injects capability matching and task complexity estimates
+    /// 4. Persists Proposal in PostgreSQL (status = Pending)
+    /// 5. Persists Tasks (status = Proposed -> HumanReview)
+    /// 6. Persists TaskDependencies
+    /// 7. Persists OverlapWarnings
     ///
     /// DOES NOT assign tasks or publish to NATS. Tasks wait for Human Review.
     pub async fn generate_and_persist_plan(
@@ -35,6 +70,7 @@ impl PlanningService {
             project_id = %request.project_id,
             provider = provider.provider_name(),
             model = provider.model_name(),
+            has_repo_context = request.repo_context.is_some(),
             "Requesting AI plan decomposition"
         );
 
@@ -48,13 +84,38 @@ impl PlanningService {
         let validated = PlanValidator::validate(request, &response)
             .context("Plan failed deterministic coordinator validation")?;
 
+        // 3. Intelligent enrichment: capability matching and complexity estimation
+        let mut enriched_response = validated.response.clone();
+        for pt in &mut enriched_response.proposed_tasks {
+            if pt.suggested_agent_id.is_none() {
+                pt.suggested_agent_id = AgentCapabilityMatcher::suggest_agent(
+                    &request.available_agents,
+                    &pt.title,
+                    &pt.description,
+                    &pt.affected_resources,
+                );
+            }
+
+            if pt.estimated_size.is_none() {
+                let dep_count = enriched_response
+                    .proposed_dependencies
+                    .iter()
+                    .filter(|d| d.dependent_short_id == pt.short_id)
+                    .count();
+                pt.estimated_size = Some(
+                    ComplexityEstimator::estimate(&pt.title, &pt.description, &pt.affected_resources, dep_count)
+                        .estimated_size,
+                );
+            }
+        }
+
         let raw_prompt = format!(
             "Project: {}\nDescription: {}",
             request.project_name, request.project_description
         );
-        let raw_response = serde_json::to_string(&response)?;
+        let raw_response = serde_json::to_string(&enriched_response)?;
 
-        // 3. Persist Proposal record
+        // 4. Persist Proposal record
         let proposal = ProposalRepository::create(
             pool,
             &NewProposal {
@@ -68,10 +129,10 @@ impl PlanningService {
         .await
         .context("Failed to persist proposal record")?;
 
-        // 4. Persist Tasks (starts in Proposed, then advanced to HumanReview)
+        // 5. Persist Tasks (starts in Proposed, then advanced to HumanReview; unassigned until human approves)
         let mut short_id_to_uuid: HashMap<String, Uuid> = HashMap::new();
 
-        for pt in &validated.response.proposed_tasks {
+        for pt in &enriched_response.proposed_tasks {
             let task = TaskRepository::create(
                 pool,
                 &NewTask {

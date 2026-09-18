@@ -312,6 +312,9 @@ async fn handle_tui_action(
                 std::sync::Arc::new(coordinator::ai::MockLlmProvider::new())
             });
 
+            let current_repo = std::env::current_dir().unwrap_or_default();
+            let repo_context = coordinator::ai::RepositoryScanner::scan(&current_repo).await.ok();
+
             let plan_result = PlanningService::generate_and_persist_plan(
                 pool,
                 provider.as_ref(),
@@ -321,6 +324,7 @@ async fn handle_tui_action(
                     project_description: project.description.clone(),
                     available_agents: agent_contexts,
                     existing_tasks: vec![],
+                    repo_context,
                 },
             )
             .await;

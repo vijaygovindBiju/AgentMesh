@@ -209,6 +209,7 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
                 },
             ],
             existing_tasks: vec![],
+            repo_context: None,
         },
     )
     .await

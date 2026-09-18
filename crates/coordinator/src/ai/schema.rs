@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::ai::repo_scanner::RepositoryContext;
+
 /// Read-only context provided to the LLM for plan decomposition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlanningRequest {
@@ -11,6 +13,33 @@ pub struct PlanningRequest {
     pub available_agents: Vec<AvailableAgentContext>,
     /// Existing tasks in the project (for incremental planning or dependency resolution).
     pub existing_tasks: Vec<ExistingTaskContext>,
+    /// Repository architecture, modules, language, and file tree summary.
+    #[serde(default)]
+    pub repo_context: Option<RepositoryContext>,
+}
+
+impl PlanningRequest {
+    pub fn new(
+        project_id: Uuid,
+        project_name: impl Into<String>,
+        project_description: impl Into<String>,
+        available_agents: Vec<AvailableAgentContext>,
+        existing_tasks: Vec<ExistingTaskContext>,
+    ) -> Self {
+        Self {
+            project_id,
+            project_name: project_name.into(),
+            project_description: project_description.into(),
+            available_agents,
+            existing_tasks,
+            repo_context: None,
+        }
+    }
+
+    pub fn with_repo_context(mut self, repo_context: RepositoryContext) -> Self {
+        self.repo_context = Some(repo_context);
+        self
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,6 +57,41 @@ pub struct ExistingTaskContext {
     pub title: String,
     pub status: String,
     pub affected_resources: Vec<String>,
+}
+
+/// Context passed to LLM for re-planning after task completion, failure, or project state change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplanRequest {
+    pub project_id: Uuid,
+    pub project_name: String,
+    pub project_description: String,
+    pub available_agents: Vec<AvailableAgentContext>,
+    pub completed_tasks: Vec<CompletedTaskContext>,
+    pub failed_tasks: Vec<FailedTaskContext>,
+    pub active_or_pending_tasks: Vec<ExistingTaskContext>,
+    #[serde(default)]
+    pub unexpected_changes: Vec<String>,
+    #[serde(default)]
+    pub cross_agent_conflicts: Vec<String>,
+    #[serde(default)]
+    pub repo_context: Option<RepositoryContext>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompletedTaskContext {
+    pub task_id: Uuid,
+    pub short_id: String,
+    pub title: String,
+    pub actual_modified_resources: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FailedTaskContext {
+    pub task_id: Uuid,
+    pub short_id: String,
+    pub title: String,
+    pub error: String,
+    pub blocker_reason: Option<String>,
 }
 
 /// The structured output produced by the LLM.

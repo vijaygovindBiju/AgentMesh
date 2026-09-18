@@ -75,7 +75,9 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 
 - [x] v0.1 — Core Coordination System (DONE)
 - [x] Phase 8 — Real agy Integration (DONE)
-- [ ] Phase 9 — Real Repository / Git Coordination (NEXT)
+- [x] Phase 9 — Real Repository / Git Coordination (DONE)
+- [x] Phase 10 — Intelligent Planning v1 (DONE)
+- [ ] Phase 11 — Agent Capability System (NEXT)
 - [ ] v1.0 Remaining Phases (PLANNED)
 
 ---
@@ -332,23 +334,23 @@ Two real agents can work on separate tasks in the same project without silently 
 
 ---
 
-## Phase 10 — Intelligent Planning v1
+## Phase 10 — Intelligent Planning v1 [x] DONE
 
 **Goal:** Improve the planner for real software projects.
 
-- [ ] 10.1 Improve project understanding
-- [ ] 10.2 Repository-aware planning
-- [ ] 10.3 Detect existing architecture
-- [ ] 10.4 Detect affected files/modules
-- [ ] 10.5 Detect task dependencies
-- [ ] 10.6 Detect resource overlap
-- [ ] 10.7 Suggest agent based on capabilities
-- [ ] 10.8 Estimate task complexity
-- [ ] 10.9 Re-plan after task completion/failure
-- [ ] 10.10 Re-plan when project state changes
+- [x] 10.1 Improve project understanding (`RepositoryScanner` extracts ecosystems, languages, sample file tree, and README summaries)
+- [x] 10.2 Repository-aware planning (`PlanningService::generate_repo_aware_plan` injects architecture into prompts)
+- [x] 10.3 Detect existing architecture (Detects Cargo/Rust, npm/Node/TypeScript, Python, Go ecosystems and workspace crates)
+- [x] 10.4 Detect affected files/modules (Tasks grounded in real repository paths with validation)
+- [x] 10.5 Detect task dependencies (Enforces DAG dependencies, prevents cycles, persists task relationships)
+- [x] 10.6 Detect resource overlap (Detects overlapping file modifications and generates `OverlapWarning` records)
+- [x] 10.7 Suggest agent based on capabilities (`AgentCapabilityMatcher` matches agent tags with task descriptions and file extensions)
+- [x] 10.8 Estimate task complexity (`ComplexityEstimator` sizes tasks XS/S/M/L/XL and analyzes architectural risk factors)
+- [x] 10.9 Re-plan after task completion/failure (`ReplanEngine::gather_replan_context` and `execute_replan` preserve completed work and remediate failed tasks)
+- [x] 10.10 Re-plan when project state changes (Incorporates unexpected resource modifications and cross-agent merge conflicts into corrective re-planning)
 
 ### Acceptance Criteria — Phase 10
-Given a real repository + project requirements, AgentMesh produces a useful dependency-aware execution plan.
+Given a real repository + project requirements, AgentMesh produces a useful dependency-aware execution plan. ✓ Verified in `phase10_intelligent_planning.rs` and full workspace suite (129 passing tests).
 
 ---
 

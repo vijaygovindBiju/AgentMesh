@@ -2,9 +2,13 @@
 //! deterministic plan validation, and PostgreSQL proposal persistence.
 
 pub mod anthropic;
+pub mod complexity;
+pub mod matcher;
 pub mod mock;
 pub mod prompts;
 pub mod provider;
+pub mod replan;
+pub mod repo_scanner;
 pub mod schema;
 pub mod service;
 pub mod validator;
@@ -13,12 +17,16 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 
 pub use anthropic::AnthropicProvider;
+pub use complexity::{ComplexityEstimate, ComplexityEstimator};
+pub use matcher::AgentCapabilityMatcher;
 pub use mock::MockLlmProvider;
-pub use prompts::PlanningPrompt;
+pub use prompts::{PlanningPrompt, ReplanPrompt};
 pub use provider::LlmProvider;
+pub use replan::ReplanEngine;
+pub use repo_scanner::{RepositoryContext, RepositoryScanner};
 pub use schema::{
-    AvailableAgentContext, ExistingTaskContext, PlanningRequest, PlanningResponse,
-    ProposedDependency, ProposedTask,
+    AvailableAgentContext, CompletedTaskContext, ExistingTaskContext, FailedTaskContext,
+    PlanningRequest, PlanningResponse, ProposedDependency, ProposedTask, ReplanRequest,
 };
 pub use service::PlanningService;
 pub use validator::{DetectedOverlap, PlanValidator, ValidatedPlan, ValidationError};

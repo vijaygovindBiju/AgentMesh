@@ -322,6 +322,7 @@ mod tests {
                 status: "completed".to_string(),
                 affected_resources: vec!["Cargo.toml".to_string()],
             }],
+            repo_context: None,
         }
     }
 
