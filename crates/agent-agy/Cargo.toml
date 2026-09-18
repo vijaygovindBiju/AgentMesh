@@ -9,6 +9,10 @@ description = "AgentMesh agy Adapter — bridges the agent protocol to the Antig
 name = "agent-agy"
 path = "src/main.rs"
 
+[lib]
+name = "agent_agy"
+path = "src/lib.rs"
+
 [dependencies]
 # Workspace shared
 tokio = { workspace = true }
@@ -22,3 +26,5 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 async-nats = { workspace = true }
 agent-protocol = { workspace = true }
+futures = "0.3"
+

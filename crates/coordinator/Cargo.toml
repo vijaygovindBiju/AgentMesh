@@ -53,3 +53,5 @@ dotenvy = "0.15"
 
 [dev-dependencies]
 agent-mock = { path = "../agent-mock" }
+agent-agy = { path = "../agent-agy" }
+
