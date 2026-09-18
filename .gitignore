@@ -50,7 +50,7 @@ book/
 *.docx
 
 # Todo lists and task tracking
-TODO.md
+!TODO.md
 todo.md
 TODO
 todo

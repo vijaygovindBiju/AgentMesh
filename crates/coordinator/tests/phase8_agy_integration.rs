@@ -28,6 +28,8 @@ impl TempScript {
         let path = std::env::temp_dir().join(format!("agy_test_subproc_{}.sh", Uuid::new_v4()));
         let mut file = std::fs::File::create(&path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
+        file.sync_all().unwrap();
+        drop(file);
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

@@ -73,9 +73,21 @@ impl AgyProcess {
             "Spawning agy CLI subprocess"
         );
 
-        let mut child = cmd
-            .spawn()
-            .with_context(|| format!("Failed to spawn agy process: {}", agent.agy_path.display()))?;
+        let mut child = {
+            let mut attempts = 0;
+            loop {
+                match cmd.spawn() {
+                    Ok(c) => break c,
+                    Err(e) if e.raw_os_error() == Some(26) && attempts < 10 => {
+                        attempts += 1;
+                        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                    }
+                    Err(e) => {
+                        return Err(anyhow::Error::from(e).context(format!("Failed to spawn agy process: {}", agent.agy_path.display())));
+                    }
+                }
+            }
+        };
 
         let stdout = child
             .stdout
@@ -212,6 +224,8 @@ mod tests {
             let path = std::env::temp_dir().join(format!("mock_agy_test_{}.sh", Uuid::new_v4()));
             let mut file = std::fs::File::create(&path).unwrap();
             file.write_all(content.as_bytes()).unwrap();
+            file.sync_all().unwrap();
+            drop(file);
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
