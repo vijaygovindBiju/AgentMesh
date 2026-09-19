@@ -17,18 +17,18 @@ AgentMesh is a central AI coordinator for multiple human-controlled AI coding ag
 │  │                      │    │                                │  │
 │  │  ● Project input     │    │  ● Project state machine       │  │
 │  │  ● Plan review       │    │  ● Task decomposer (LLM)       │  │
-│  │    Y/N/E/↑↓/Enter    │    │  ● Dependency graph            │  │
+│  │    Y/N/E/A/↑↓/Enter  │    │  ● Dependency graph            │  │
 │  │  ● Live dashboard    │    │  ● Assignment logic            │  │
-│  │  ● Overlap warnings  │    │  ● Overlap detector            │  │
-│  └──────────────────────┘    │  ● Event processor             │  │
-│                              └──────────────┬──────────────────┘  │
+│  │  ● Diagnostics       │    │  ● Overlap detector            │  │
+│  │  ● Overlap warnings  │    │  ● Event processor             │  │
+│  └──────────────────────┘    └──────────────┬──────────────────┘  │
 │                                             │                    │
 │                              ┌──────────────▼──────────────────┐  │
 │                              │        LlmProvider Layer         │  │
 │                              │  (trait, not coupled to vendor)  │  │
-│                              │  ├── AnthropicProvider           │  │
-│                              │  ├── OpenAiProvider              │  │
-│                              │  └── GeminiProvider              │  │
+│                              │  ├── MockLlmProvider (default)   │  │
+│                              │  └── AnthropicProvider           │  │
+│                              │  (OpenAI/Gemini: not implemented)│  │
 │                              └─────────────────────────────────┘  │
 └────────────────────────┬─────────────────────────────────────────┘
                          │
@@ -90,40 +90,42 @@ Task delivery is not a generic queue. `TaskDelivery` records in PostgreSQL track
 
 ## v1.0 Architecture Additions
 
-The v1.0 architecture expands beyond the initial prototype to provide an enterprise-grade coordination platform:
+v1.0 (Phases 8–15) adds the following modules to the v0.1 core. Each is implemented in `crates/coordinator/src/` and covered by the corresponding `tests/phaseN_*.rs` suite. Modules marked *library* are exercised by tests and available as APIs but are not yet invoked automatically by the interactive `coordinator` binary (see the README "Current Status" section).
 
-1. **Intelligent Planning & Dynamic Re-planning (Phases 3 & 10):**
-   - AST / crate discovery via `RepositoryScanner`.
-   - Dynamic replanning engine (`ReplanEngine`) responding to completed/failed tasks.
-2. **Real Agent Integration (`agy`) & Worktree Isolation (Phases 8 & 9):**
-   - Headless CLI subprocess management via `AgyAgent` and `AgyProcess`.
-   - Isolated Git worktrees (`AgentWorkspace`) per task preventing index locking and cross-agent code contamination.
-3. **Agent Capability Matching & Health Gating (Phase 11):**
-   - Deterministic capability scoring (`AgentCapabilityMatcher`) and operational health tracking (`Healthy`, `Degraded`, `Unhealthy`).
-4. **Security, Authentication & Audit Logging (Phase 12):**
-   - SHA-256 API key authentication, constant-time verification, path-based `PermissionBoundary`, secret redaction, and immutable `audit_logs`.
-5. **Observability, Timelines & Diagnostics (Phase 13):**
-   - Structured JSON logging, real-time metrics, end-to-end task/agent timelines (`TimelineService`), automated failure root-cause analysis (`FailureDiagnostics`), and TUI Diagnostics screen.
-6. **Production Reliability & Self-Healing (Phase 14):**
-   - Startup recovery (`CoordinatorRecoveryService`), stale task sweeper (`StaleTaskSweeper`), TTL event deduplication (`EventDeduplicator`), and exponential backoff retry (`ResilientConnection`).
+1. **Intelligent Planning & Dynamic Re-planning (Phases 3 & 10)** — `ai/`
+   - Repository discovery via `RepositoryScanner` (ecosystems, languages, crates, file tree) feeding repository-aware prompts. *Wired: the binary scans its working directory at planning time.*
+   - `ReplanEngine` builds a corrective proposal from completed/failed/blocked tasks, unexpected resource changes and Git conflicts. *Library.*
+2. **Real Agent Integration (`agy`) & Worktree Isolation (Phases 8 & 9)** — `crates/agent-agy`, `git/`
+   - `AgyAgent` / `AgyProcess` / `AgyStreamEvent` manage the `agy` CLI subprocess and translate its NDJSON stream into protocol events. *Wired (separate binary).*
+   - `AgentWorkspace` creates one Git worktree per task on an `agentmesh/<short-id>` branch; `ResourceTracker`, `ConflictDetector` and `CompletionManager` audit and finalize the result. *Library; `AssignmentService` forwards branch/path info when present.*
+3. **Agent Capability Matching & Health Gating (Phase 11)** — `agent-protocol/capabilities.rs`, `ai/matcher.rs`
+   - `AgentCapabilityMatcher` scores candidates on languages, tools, OS and tags; `HealthStatus` and availability gate assignment. *Wired: suggestions at planning time; availability/health filters in the assignment query.*
+4. **Security, Authentication & Audit Logging (Phase 12)** — `security/`
+   - SHA-256 `am_ak_` API keys with constant-time verification, `AgentRole`, path-based `PermissionBoundary`, `TaskAuthorizer`, `SecretRedactor`, `audit_logs`. *Wired in registration, assignment and event ingestion. TLS/mTLS via `connect_secure` is library-only.*
+5. **Observability, Timelines & Diagnostics (Phase 13)** — `observability/`
+   - `TimelineService`, `DeliveryDiagnostics`, `FailureDiagnostics`, `MetricsCollector`, `coordinator_events`, and the Diagnostics TUI screen. *Screen wired; metric/timeline feeds are library.*
+6. **Reliability (Phase 14)** — `reliability/`
+   - `CoordinatorRecoveryService` (startup), `StaleTaskSweeper`, `EventDeduplicator`, `ResilientConnection`. *Deduplication wired; recovery and sweeper are library (exposed via `CoordinatorCore`).*
 
 ---
 
 ## Related Documents
 
-- [`docs/domain-model.md`](domain-model.md) — Domain types, task state machine, and invariants
-- [`docs/protocol.md`](protocol.md) — Agent protocol specification, JetStream streams, and message schemas
-- [`docs/v1-validation.md`](v1-validation.md) — End-to-end v1.0 multi-agent validation report and test matrix
-- [`docs/decisions/`](decisions/) — Architecture Decision Records:
-  - [`ADR 001 — Rust Implementation Language`](decisions/001-language-rust.md)
-  - [`ADR 002 — NATS JetStream Message Transport`](decisions/002-message-queue-nats-jetstream.md)
-  - [`ADR 003 — PostgreSQL 16 State Store`](decisions/003-database-postgresql.md)
-  - [`ADR 004 — Ratatui Terminal User Interface`](decisions/004-tui-ratatui.md)
-  - [`ADR 005 — Transport-Independent Agent Protocol`](decisions/005-agent-protocol-design.md)
-  - [`ADR 006 — LLM Provider Abstraction`](decisions/006-llm-provider-abstraction.md)
-  - [`ADR 007 — NATS Delivery Semantics & Idempotency`](decisions/007-nats-delivery-semantics.md)
-  - [`ADR 008 — Human Approval Boundary`](decisions/008-human-approval-boundary.md)
-  - [`ADR 009 — Agent Capability System & Health Gating`](decisions/009-agent-capability-system.md)
-  - [`ADR 010 — Security Architecture & Audit Boundaries`](decisions/010-security-and-audit-boundaries.md)
-  - [`ADR 011 — Observability, Timelines & Diagnostics`](decisions/011-observability-and-diagnostics.md)
-  - [`ADR 012 — Production Reliability & Stale Task Recovery`](decisions/012-resilience-and-stale-task-recovery.md)
+- [`README.md`](../../README.md) — installation, quick start, agent setup, multi-machine deployment, troubleshooting, current status
+- [`domain-model.md`](domain-model.md) — Domain types, task state machine, and invariants
+- [`../protocols/agent-protocol.md`](../protocols/agent-protocol.md) — Agent protocol specification, JetStream streams, and message schemas
+- [`../deployment/multi-machine.md`](../deployment/multi-machine.md) — Running agents on other machines
+- [`../development/v1-validation.md`](../development/v1-validation.md) — End-to-end v1.0 multi-agent validation report and test matrix
+- [`../decisions/`](../decisions/) — Architecture Decision Records:
+  - [`ADR 001 — Rust Implementation Language`](../decisions/001-language-rust.md)
+  - [`ADR 002 — NATS JetStream Message Transport`](../decisions/002-message-queue-nats-jetstream.md)
+  - [`ADR 003 — PostgreSQL 16 State Store`](../decisions/003-database-postgresql.md)
+  - [`ADR 004 — Ratatui Terminal User Interface`](../decisions/004-tui-ratatui.md)
+  - [`ADR 005 — Transport-Independent Agent Protocol`](../decisions/005-agent-protocol-design.md)
+  - [`ADR 006 — LLM Provider Abstraction`](../decisions/006-llm-provider-abstraction.md)
+  - [`ADR 007 — NATS Delivery Semantics & Idempotency`](../decisions/007-nats-delivery-semantics.md)
+  - [`ADR 008 — Human Approval Boundary`](../decisions/008-human-approval-boundary.md)
+  - [`ADR 009 — Agent Capability System & Health Gating`](../decisions/009-agent-capability-system.md)
+  - [`ADR 010 — Security Architecture & Audit Boundaries`](../decisions/010-security-and-audit-boundaries.md)
+  - [`ADR 011 — Observability, Timelines & Diagnostics`](../decisions/011-observability-and-diagnostics.md)
+  - [`ADR 012 — Production Reliability & Stale Task Recovery`](../decisions/012-resilience-and-stale-task-recovery.md)

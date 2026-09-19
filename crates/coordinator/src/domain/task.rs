@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 /// Task lifecycle status.
 ///
-/// The state machine is defined in `docs/domain-model.md`.
+/// The state machine is defined in `docs/architecture/domain-model.md`.
 /// Only `Proposed` can be created by LLM output.
 /// Only human action in the TUI advances from `HumanReview`.
 /// The coordinator's deterministic logic handles `Approved → Assigned`.
@@ -43,7 +43,7 @@ pub enum TaskStatus {
 
 impl TaskStatus {
     /// Returns `true` if transitioning from `self` to `next` is permitted
-    /// by the domain state machine in `docs/domain-model.md`.
+    /// by the domain state machine in `docs/architecture/domain-model.md`.
     ///
     /// This is the canonical definition of allowed transitions.
     /// Coordinator logic MUST call this before persisting any status change.

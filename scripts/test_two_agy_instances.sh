@@ -141,6 +141,6 @@ fi
 echo -e "\n${GREEN}${BOLD}================================================================${NC}"
 echo -e "${GREEN}${BOLD}  Phase 8.16 Acceptance Passed: Both agy instances active!       ${NC}"
 echo -e "${GREEN}${BOLD}================================================================${NC}"
-echo -e "Instance 1 PID: $PID_ALICE (listening on agents.$AGENT_ID_1.tasks)"
-echo -e "Instance 2 PID: $PID_BOB (listening on agents.$AGENT_ID_2.tasks)"
+echo -e "Instance 1 PID: $PID_ALICE (consumer on coordinator.tasks.assign.$AGENT_ID_1)"
+echo -e "Instance 2 PID: $PID_BOB (consumer on coordinator.tasks.assign.$AGENT_ID_2)"
 echo -e "\nBoth agents are actively sending heartbeats and ready for parallel task execution."

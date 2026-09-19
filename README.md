@@ -1,1154 +1,843 @@
 # AgentMesh
 
-> AI suggests → Humans decide → Agents execute
+> **AI suggests → Humans decide → Agents execute**
 
-AgentMesh is an AI project coordinator for parallel coding agents. It sits above your repository workflow to decompose software projects, detect resource overlaps, propose dependency-ordered task plans across multiple AI coding agents, and enforce a strict human approval gate before any code executes.
+AgentMesh is an AI project coordinator for parallel coding agents. A human describes a project, an LLM proposes a dependency-ordered task plan, the human reviews and approves each task, and the coordinator dispatches approved tasks over NATS JetStream to coding agents (a mock agent for testing, or real [`agy`](#7-real-agy-setup) CLI instances) running on one or many machines. PostgreSQL is the single source of truth; NATS only transports work.
 
----
-
-> ### 📑 Navigation & Quick Index
->
-> | 🚀 Getting Started | 📦 Installation & Setup | 🎮 How to Use | ⚡ Command Cheat Sheet | 🏗️ Architecture & Internals |
-> | :--- | :--- | :--- | :--- | :--- |
-> | • [Overview](#agentmesh)<br>• [Problem Solved](#the-problem-agentmesh-solves)<br>• [What You Need](#what-you-need-prerequisites--system-checklist)<br>• [Quick Start](#quick-start)<br>• [Features](#features) | • [**How to Install**](#how-to-install)<br>&nbsp;&nbsp;▫ [Automated Install (`install.sh`)](#option-a-automated-installation-recommended)<br>&nbsp;&nbsp;▫ [Manual Installation](#option-b-manual-step-by-step-installation)<br>&nbsp;&nbsp;▫ [Clone Repository](#2-clone-repository)<br>&nbsp;&nbsp;▫ [Environment Config](#3-environment-configuration)<br>&nbsp;&nbsp;▫ [Start Infrastructure](#4-start-infrastructure-services)<br>&nbsp;&nbsp;▫ [Build from Source](#5-build-binaries-from-source)<br>&nbsp;&nbsp;▫ [Verify Installation](#6-verify-installation) | • [**How to Use**](#how-to-use)<br>&nbsp;&nbsp;▫ [Operating Modes](#operating-modes)<br>&nbsp;&nbsp;▫ [Launch Coordinator](#step-1-launch-the-coordinator)<br>&nbsp;&nbsp;▫ [Launch Mock Agents](#step-2-launch-mock-agent-workers)<br>&nbsp;&nbsp;▫ [TUI Walkthrough](#step-3-step-by-step-tui-walkthrough)<br>&nbsp;&nbsp;▫ [4-Terminal Walkthrough](#step-4-complete-local-test-walkthrough)<br>&nbsp;&nbsp;▫ [TUI Keybindings](#step-5-tui-keyboard-controls)<br>&nbsp;&nbsp;▫ [AI Provider Setup](#step-6-ai-provider-configuration) | • [**Complete Command Reference**](#complete-command-reference--cheat-sheet)<br>&nbsp;&nbsp;▫ [Setup & Install Commands](#1-setup--installation-commands)<br>&nbsp;&nbsp;▫ [Docker & Service Commands](#2-infrastructure--docker-commands)<br>&nbsp;&nbsp;▫ [Coordinator Commands](#3-coordinator-execution-commands)<br>&nbsp;&nbsp;▫ [Agent Worker Commands](#4-agent-worker-execution-commands)<br>&nbsp;&nbsp;▫ [Inspection Commands](#5-inspection--health-check-commands)<br>&nbsp;&nbsp;▫ [Testing Commands](#6-testing--verification-commands) | • [Architecture](#architecture)<br>• [Core Workflow](#core-workflow)<br>• [Project Structure](#project-structure)<br>• [Task State Machine](#task-state-machine)<br>• [DAG Validation](#dependencies--dag-validation)<br>• [Overlap Detection](#overlap-detection--gating)<br>• [Agent Protocol](#agent-registration--protocol)<br>• [Remote Deployment](#multi-device--remote-agent-setup)<br>• [Troubleshooting](#troubleshooting) |
+This README documents **AgentMesh v1.0** as it is actually implemented in this repository. Where a capability exists as a library module but is not yet wired into the interactive binary, that is stated explicitly (see [Current Status](#20-current-status)).
 
 ---
 
-## The Problem AgentMesh Solves
+## Table of Contents
 
-When multiple developers deploy AI coding agents on the same codebase simultaneously, coordination breaks down:
-
-- **Resource Conflicts:** Multiple agents modify shared models, schema migrations, or interfaces concurrently, leading to merge collisions and architectural drift.
-- **Dependency Inversion:** Downstream tasks are executed before prerequisite schema migrations or core libraries are completed.
-- **Lack of Verification:** Unchecked AI agents make autonomous code modifications without human sign-off.
-- **Fragmented Visibility:** Human leads have no single pane of glass to observe fleet health, task progress, and blocking issues across remote agent runtimes.
-
-AgentMesh solves this by treating the AI as an advisor rather than an autonomous actor. Authoritative state is locked in PostgreSQL, task delivery is guaranteed via NATS JetStream, and execution is gated behind human review.
-
----
-
-## What You Need (Prerequisites & System Checklist)
-
-> 💡 **Core Concepts in 30 Seconds:**
-> - **Coordinator:** The central control center. It takes your project ideas, asks AI to break them into tasks, checks for file conflicts, and renders the interactive terminal UI.
-> - **Human Approval Gate:** The safety shield. AI proposes tasks, but **you** approve, edit, or reject them. No agent can run code without your explicit sign-off.
-> - **Agent Workers:** The worker programs (e.g., Alice and Bob) that receive approved tasks and simulate or execute code.
-> - **NATS JetStream:** A super-fast messaging system that delivers tasks to agents reliably, even across multiple machines or during network reconnections.
-> - **PostgreSQL 16:** The database that stores all projects, tasks, approval records, and execution logs permanently on disk.
-
-Before installing and running AgentMesh, verify that you have the following requirements:
-
-### 1. System Requirements & Software
-| Component | Minimum Version | Required For | How to Install / Verify |
-| :--- | :--- | :--- | :--- |
-| **Operating System** | Linux, macOS, or Windows WSL2 | All components | Standard ANSI / UTF-8 compatible terminal |
-| **Rust & Cargo** | Stable **1.75+** (2021 edition) | Building Coordinator & Agents | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
-| **Docker Engine** | **v20.10+** | Running PostgreSQL 16 & NATS | Verify with `docker --version` |
-| **Docker Compose** | **v2.0+** (Plugin or Standalone) | Starting backing services | Verify with `docker compose version` |
-| **Git** | Any modern version | Cloning and tracking codebase | Verify with `git --version` |
-| **Curl** | Any modern version | Downloading toolchains & health checks | Verify with `curl --version` |
-
-### 2. Network Ports
-AgentMesh uses the following local ports (configurable via `.env`):
-- **`5432`**: PostgreSQL 16 database (relational state, transactional locks).
-- **`4222`**: NATS client protocol (pub/sub, request-reply registration).
-- **`8222`**: NATS HTTP monitoring and healthcheck endpoint (`/healthz`).
-
-### 3. API Keys & Credentials
-- **Local Testing / Mock Mode (Default):** **No API keys or internet connection required!** AgentMesh defaults to `AI_PROVIDER=mock`, which uses an internal deterministic task planning and DAG generation engine. You can run and test everything completely free.
-- **Anthropic Claude (Optional):** If you want real AI planning with Claude 3.5 Sonnet, provide an Anthropic API key (`ANTHROPIC_API_KEY=sk-ant-...`) with `AI_PROVIDER=anthropic` in your `.env`.
+1. [What is AgentMesh?](#1-what-is-agentmesh)
+2. [Architecture](#2-architecture)
+3. [End-to-End Workflow](#3-end-to-end-workflow)
+4. [Installation](#4-installation)
+5. [Quick Start](#5-quick-start)
+6. [Mock Agent Testing](#6-mock-agent-testing)
+7. [Real AGY Setup](#7-real-agy-setup)
+8. [Multi-Machine Setup](#8-multi-machine-setup)
+9. [Agent Protocol](#9-agent-protocol)
+10. [Agent Capability System](#10-agent-capability-system)
+11. [Git / Worktree System](#11-git--worktree-system)
+12. [Dependencies and Overlaps](#12-dependencies-and-overlaps)
+13. [Failure Recovery](#13-failure-recovery)
+14. [Dynamic Replanning](#14-dynamic-replanning)
+15. [Security](#15-security)
+16. [Observability](#16-observability)
+17. [Testing](#17-testing)
+18. [Project Structure](#18-project-structure)
+19. [Troubleshooting](#19-troubleshooting)
+20. [Current Status](#20-current-status)
+21. [Documentation](#21-documentation)
 
 ---
 
-## Quick Start
+## 1. What is AgentMesh?
 
-For developers who want to get the stack running immediately:
+When several AI coding agents work on the same codebase at the same time, coordination breaks down:
 
-```bash
-# ------------------------------------------------------------------------------
-# 1. Clone repository and navigate into the project directory
-# ------------------------------------------------------------------------------
-git clone https://github.com/vijaygovindBiju/AgentMesh.git
-cd AgentMesh
+| Problem | What goes wrong without a coordinator |
+| :--- | :--- |
+| **Task overlap** | Two agents edit the same file or schema and silently overwrite each other. |
+| **Dependency ordering** | A downstream task starts before the migration or interface it depends on exists. |
+| **Agent coordination** | Nobody knows which agent is doing what, or whether it is still alive. |
+| **Remote agents** | Agents on other machines need a reliable, authenticated way to receive work and report back. |
+| **Failure recovery** | A crashed agent leaves a task stuck; a crashed coordinator loses in-flight assignments. |
+| **Human control** | Autonomous agents change code with no explicit human sign-off. |
 
-# ------------------------------------------------------------------------------
-# 2. Copy the example configuration to create your local .env
-#    (Default settings work out-of-the-box with free local mock AI planning)
-# ------------------------------------------------------------------------------
-cp .env.example .env
+AgentMesh addresses these by treating the LLM strictly as an advisor:
 
-# ------------------------------------------------------------------------------
-# 3. Start PostgreSQL 16 and NATS 2.10 JetStream in the background
-#    (-d runs containers in detached mode)
-# ------------------------------------------------------------------------------
-docker compose up -d
+- **AI suggests** — the planner decomposes the project into tasks, dependencies, affected resources, and suggested agents. It can only ever create `Proposed` tasks.
+- **Humans decide** — every task must be approved (`y`), edited-and-approved (`e`), or rejected (`n`) in the terminal UI. Unacknowledged critical resource overlaps block approval.
+- **Agents execute** — approved, unblocked tasks are delivered over NATS JetStream to registered agents, which report `TaskStarted`, `ProgressUpdate`, `Blocked`, `Completed`, or `Failed`.
 
-# ------------------------------------------------------------------------------
-# 4. Launch the Coordinator TUI
-#    (Automatically creates database tables and starts background listeners)
-# ------------------------------------------------------------------------------
-cargo run --bin coordinator
+---
 
-# ------------------------------------------------------------------------------
-# 5. In separate terminal windows, start worker agents:
-#    Terminal 2 (Backend specialist):
-# ------------------------------------------------------------------------------
-MOCK_AGENT_OWNER="Alice (Backend Lead)" cargo run --bin agent-mock
+## 2. Architecture
 
-#    Terminal 3 (Infrastructure specialist):
-MOCK_AGENT_OWNER="Bob (Infra Lead)" cargo run --bin agent-mock
+```text
+                         HUMAN
+                           │  keyboard (y / n / e / a / Tab / 1-4)
+                           ▼
+                    ┌─────────────┐
+                    │   Ratatui   │  4 screens: Project Input, Plan Review,
+                    │     TUI     │  Dashboard, Diagnostics
+                    └──────┬──────┘
+                           │  TuiAction
+                           ▼
+                  ┌─────────────────┐
+                  │   COORDINATOR   │  crates/coordinator
+                  │                 │
+                  │ AI Planning     │  LlmProvider (mock | anthropic) + RepositoryScanner
+                  │ Task Graph      │  PlanValidator (DAG, cycles, references)
+                  │ Validation      │  OverlapDetector (resource reachability)
+                  │ Human Gate      │  task_approvals row required before assignment
+                  │ Assignment      │  FOR UPDATE SKIP LOCKED + TaskDelivery outbox
+                  └───────┬─────────┘
+                          │
+             ┌────────────┴────────────┐
+             ▼                         ▼
+       PostgreSQL 16              NATS 2.10 JetStream
+       Source of Truth            Transport only
+       projects, tasks,           TASK_ASSIGNMENTS (WorkQueue)
+       approvals, deliveries,     AGENT_EVENTS (Limits)
+       agents, events,            coordinator.agents.register (req/reply)
+       audit_logs, git_conflicts  coordinator.agents.heartbeat.* (core NATS)
+                                        │
+                         ┌──────────────┼──────────────┐
+                         ▼              ▼              ▼
+                      Agent A        Agent B        Agent C
+                    agent-agy      agent-agy      agent-mock
+                         │              │              │
+                       agy CLI        agy CLI      simulated work
 ```
 
+### Components
+
+| Component | Location | Responsibility |
+| :--- | :--- | :--- |
+| **Ratatui TUI** | `crates/coordinator/src/tui/` | Renders screens, emits `TuiAction`s. No DB or network access of its own. |
+| **Coordinator core** | `crates/coordinator/src/coordinator/` | State machine (`Idle → ProjectInput → Planning → HumanReview → Assigning → Executing → Done`), approval gate, assignment cycle, overlap detection. |
+| **AI planning** | `crates/coordinator/src/ai/` | `LlmProvider` trait, `MockLlmProvider`, `AnthropicProvider`, `PlanValidator`, `RepositoryScanner`, `AgentCapabilityMatcher`, `ComplexityEstimator`, `ReplanEngine`. |
+| **Persistence** | `crates/coordinator/src/db/`, `migrations/` | sqlx repositories with compile-time checked SQL; 5 migrations applied automatically at startup. |
+| **Messaging** | `crates/coordinator/src/messaging/` | NATS connection, stream provisioning, registration handler, heartbeat monitor, task publisher, event subscriber. |
+| **Git coordination** | `crates/coordinator/src/git/` | Repository identity, `agentmesh/<short-id>` branches, per-task worktrees, resource tracking, merge-conflict detection. |
+| **Security** | `crates/coordinator/src/security/`, `agent-protocol/src/security.rs` | API key hashing, roles, permission boundaries, task authorization, NATS subject authorization, secret redaction, audit log. |
+| **Observability** | `crates/coordinator/src/observability/` | Task/agent timelines, delivery visibility, failure diagnostics, system metrics, coordinator events. |
+| **Reliability** | `crates/coordinator/src/reliability/` | Startup recovery, stale task sweeper, event deduplication, reconnect/retry helpers. |
+| **Agent protocol** | `crates/agent-protocol/` | Pure serde message types shared by coordinator and every adapter. Zero I/O dependencies. |
+| **Mock agent** | `crates/agent-mock/` | Full protocol implementation with simulated work; used for local demos and tests. |
+| **agy adapter** | `crates/agent-agy/` | Spawns the `agy` CLI as a subprocess, parses its NDJSON stream, translates it into protocol events. |
+
 ---
 
-## How to Install
+## 3. End-to-End Workflow
 
-You can install and set up AgentMesh either automatically using the included setup script or manually step-by-step.
+The following steps are implemented and exercised in the integration tests. Steps marked **(TUI)** happen in the interactive coordinator binary; steps marked **(library)** are implemented and tested but are not yet triggered automatically by the binary.
 
-### Option A: Automated Installation (Recommended)
+```text
+Project                    (TUI)   Screen 1: name + description, Enter
+   ↓
+Repository Discovery       (TUI)   RepositoryScanner scans the coordinator's working directory
+   ↓                               (ecosystems, languages, crates, file tree, README summary)
+AI Planning                (TUI)   LlmProvider returns tasks, dependencies, affected resources,
+   ↓                               suggested agents (AgentCapabilityMatcher), complexity (XS–XL)
+DAG Validation             (TUI)   PlanValidator rejects cycles, self-deps, unknown refs, dup IDs
+   ↓
+Human Review               (TUI)   Screen 2: y approve / n reject / e edit+approve / a acknowledge
+   ↓
+Overlap / Dependency Checks(TUI)   Critical overlap blocks approval until acknowledged;
+   ↓                               blocked tasks are not claimable until blockers are Completed
+Capability Matching        (TUI)   Suggested agent preferred if idle+healthy, else any eligible agent
+   ↓
+Task Assignment            (TUI)   Transaction: task→Assigned, agent→Busy, TaskDelivery(Pending),
+   ↓                               then publish TaskAssignment to coordinator.tasks.assign.{agent_id}
+Git Worktree               (library) GitCoordinator creates agentmesh/<short-id> branch + worktree
+   ↓
+Agent Execution            agent   agent-mock simulates; agent-agy runs `agy -p <prompt>`
+   ↓
+Progress / Events          agent   TaskStarted, ProgressUpdate, Blocked, Completed, Failed → agents.{id}.events
+   ↓
+Completion / Failure       (TUI)   EventSubscriber persists events, updates task + agent state
+   ↓
+Metrics / Timeline / Diagnostics (library) TimelineService, MetricsCollector, FailureDiagnostics
+   ↓
+Replanning                 (library) ReplanEngine builds a new proposal → back to Human Review
+```
 
-AgentMesh includes an automated installation script [`install.sh`](install.sh) that handles the entire setup in one go:
-1. Validates system dependencies (Git, Curl, Rust, Cargo, Docker).
-2. Generates your local `.env` configuration file if missing.
-3. Starts the PostgreSQL 16 and NATS JetStream Docker containers.
-4. Waits for container health checks to report healthy.
-5. Compiles the workspace binaries (`coordinator` and `agent-mock`).
+> **Important:** in v1.0 the assignment cycle runs when a human approves or edits a task in the TUI. When a task completes, its dependents become *claimable* in PostgreSQL immediately, but they are dispatched on the next assignment cycle (i.e. the next approve/edit action). There is no background assignment timer in the binary yet.
+
+---
+
+## 4. Installation
+
+### Requirements
+
+| Requirement | Version used in this repo | Purpose |
+| :--- | :--- | :--- |
+| **Rust toolchain** | stable, edition 2021 (developed and tested with rustc 1.97) | Build `coordinator`, `agent-mock`, `agent-agy` |
+| **Docker Engine + Compose v2** | any recent (`docker compose` plugin) | Run PostgreSQL and NATS via `docker-compose.yml` |
+| **PostgreSQL** | 16 (`postgres:16-alpine`) | Source of truth. Provided by Compose, or use your own instance via `DATABASE_URL` |
+| **NATS** | 2.10 with JetStream (`nats:2.10-alpine`) | Task delivery and events. Provided by Compose, or your own via `NATS_URL` |
+| **Git** | any modern version | Repository scanning, worktrees, conflict detection (`git worktree`, `git merge-tree`) |
+| **`agy` CLI** | must support `-p`, `--output-format stream-json`, `--dangerously-skip-permissions`, `--model`, `--effort`, `--add-dir` | Only for `agent-agy`. Not needed for mock agents or tests. |
+| **Anthropic API key** | optional | Only when `AI_PROVIDER=anthropic`. Default `mock` planner needs no key. |
+
+Linux and macOS are supported. Windows via WSL2 should work but has not been validated.
+
+### Ports (Docker Compose defaults)
+
+| Port | Service |
+| :--- | :--- |
+| `5432` | PostgreSQL |
+| `4222` | NATS client connections (agents and coordinator connect here) |
+| `8222` | NATS HTTP monitoring (`/healthz`, `/varz`) |
+
+### Option A — `install.sh`
 
 ```bash
-# Step 1: Make the script executable
 chmod +x install.sh
-
-# Step 2: Run the automated setup
-./install.sh
-```
-
-#### Automated Script Options:
-```bash
-# Build optimized release binaries for faster execution:
-./install.sh --release
-
-# Build binaries only (skip starting Docker containers if already running):
+./install.sh              # checks tools, creates .env, starts Docker, builds debug binaries
+./install.sh --release    # build optimized binaries
 ./install.sh --skip-docker
-
-# Verify prerequisites and start Docker services without compiling Rust code:
 ./install.sh --skip-build
-
-# Non-interactive mode (automatically accepts all prompts with defaults):
-./install.sh -y
-
-# Display all available options and help:
-./install.sh --help
+./install.sh -y           # non-interactive
 ```
 
----
+### Option B — Manual
 
-### Option B: Manual Step-by-Step Installation
-
-If you prefer to configure your environment step-by-step, follow these instructions:
-
-#### 1. Install System Dependencies
-
-<details>
-<summary><b>Click to expand instructions for your operating system</b></summary>
-
-##### Ubuntu / Debian
 ```bash
-# 1. Update package repository index
-sudo apt update
+# Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
 
-# 2. Install essential build tools, git, curl, and OpenSSL libraries
+# Debian/Ubuntu build deps (macOS: brew install git curl; Arch: pacman -S base-devel rustup docker docker-compose)
 sudo apt install -y curl git build-essential pkg-config libssl-dev
 
-# 3. Install the Rust compiler and Cargo toolchain via Rustup
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-
-# 4. Configure your current shell to load Cargo into PATH
-source "$HOME/.cargo/env"
-```
-
-##### macOS (Homebrew)
-```bash
-# 1. Install git and curl using Homebrew
-brew install curl git
-
-# 2. Install Rust toolchain via Rustup
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-
-# 3. Configure your current shell
-source "$HOME/.cargo/env"
-```
-
-##### Arch Linux
-```bash
-# 1. Install base build packages, curl, git, rustup, and docker
-sudo pacman -S --needed base-devel curl git rustup docker docker-compose
-
-# 2. Set default Rust toolchain to stable
-rustup default stable
-```
-
-##### Windows (WSL2 Ubuntu)
-Inside your WSL2 terminal, follow the Ubuntu instructions above. Ensure Docker Desktop for Windows has WSL2 integration enabled (*Settings → Resources → WSL Integration*).
-
-</details>
-
-#### 2. Clone Repository
-
-```bash
-# Clone the repository from GitHub
 git clone https://github.com/vijaygovindBiju/AgentMesh.git
-
-# Enter the project folder
 cd AgentMesh
-```
-
-#### 3. Environment Configuration
-
-Copy the template environment file to create your local `.env`:
-
-```bash
-# Copy template to .env
 cp .env.example .env
-```
-
-> [!TIP]
-> **No changes required for local testing!** The default `.env` is already configured to use the local PostgreSQL database, local NATS server, and the built-in deterministic AI mock planner.
-
-##### Environment Variables Reference
-
-If you want to customize your setup, edit `.env`:
-
-| Variable | Default Value | Description / Purpose |
-| :--- | :--- | :--- |
-| `DATABASE_URL` | `postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh` | PostgreSQL connection string for coordinator state |
-| `POSTGRES_PASSWORD` | `agentmesh_dev` | Superuser password used by Docker Compose |
-| `NATS_URL` | `nats://localhost:4222` | NATS message broker connection URL |
-| `NATS_AUTH_TOKEN` | `agentmesh_dev_token` | Client authentication token for NATS connections |
-| `AI_PROVIDER` | `mock` | Active planning provider: `mock` (deterministic, free) or `anthropic` |
-| `AI_MODEL` | `claude-3-5-sonnet-20241022` | Model identifier when `AI_PROVIDER=anthropic` |
-| `ANTHROPIC_API_KEY` | *(empty)* | Anthropic API key required only when `AI_PROVIDER=anthropic` |
-| `RUST_LOG` | `agentmesh=debug,coordinator=debug,info` | Tracing log filter directive (written to stderr) |
-| `MOCK_TASK_DELAY_MS` | `1000` | Delay in ms between progress stages in `agent-mock` |
-| `MOCK_AGENT_OWNER` | `MockDev` | Default human owner label for mock agent worker |
-| `MOCK_AGENT_ID` | *(auto-generated UUID)* | Explicit UUID to assign to the mock agent |
-| `MOCK_AGENT_API_KEY` | `agentmesh_mock_key` | Secret key sent by mock agent during registration |
-
-> [!IMPORTANT]
-> The `.env` file is excluded from version control via [`.gitignore`](.gitignore). Never commit secret API keys or production database passwords.
-
-#### 4. Start Infrastructure Services
-
-Start the PostgreSQL 16 database and NATS 2.10 JetStream message broker containers:
-
-```bash
-# Start background services (-d = detached / background mode)
 docker compose up -d
+docker compose ps           # both services should be "Up (healthy)"
+cargo build --workspace     # produces target/debug/{coordinator,agent-mock,agent-agy}
 ```
 
-##### Verify Service Health
-Confirm that both containers are running and report healthy status:
+### Environment variables
 
-```bash
-# Check container status
-docker compose ps
-```
+The **coordinator** loads `.env` via `dotenvy`. The **agents (`agent-mock`, `agent-agy`) read only the process environment** — export variables or prefix them on the command line.
 
-Expected output:
-```text
-NAME                   IMAGE                COMMAND                  SERVICE    STATUS
-agentmesh-nats-1       nats:2.10-alpine     "/nats-server -js -a…"   nats       Up (healthy)
-agentmesh-postgres-1   postgres:16-alpine   "docker-entrypoint.s…"   postgres   Up (healthy)
-```
+| Variable | Default | Used by | Purpose |
+| :--- | :--- | :--- | :--- |
+| `DATABASE_URL` | `postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh` | coordinator, tests | PostgreSQL connection |
+| `POSTGRES_PASSWORD` | `agentmesh_dev` | docker-compose | Password for the Postgres container (must match `DATABASE_URL`) |
+| `NATS_URL` | `nats://localhost:4222` | all | NATS server |
+| `NATS_AUTH_TOKEN` | `agentmesh_dev_token` | all | NATS token; must match the `-auth` value passed to the NATS container |
+| `AI_PROVIDER` | `mock` | coordinator | `mock` or `anthropic` (only these two are implemented) |
+| `AI_MODEL` | `claude-3-5-sonnet-20241022` | coordinator | Model name for the Anthropic provider |
+| `ANTHROPIC_API_KEY` | *(empty)* | coordinator | Required only if `AI_PROVIDER=anthropic` |
+| `RUST_LOG` | `info` | all | Tracing filter (coordinator logs to stderr) |
+| `MOCK_AGENT_OWNER` | `MockDev` | agent-mock | Human owner label |
+| `MOCK_AGENT_ID` | random UUID | agent-mock | Fixed UUID (must be a valid UUID, otherwise ignored) |
+| `MOCK_AGENT_API_KEY` | `agentmesh_mock_key` | agent-mock | Key presented at registration |
+| `MOCK_TASK_DELAY_MS` | `1000` | agent-mock | Simulated work delay per stage |
+| `AGY_AGENT_OWNER` | `AgyDev` | agent-agy | Human owner label |
+| `AGY_AGENT_ID` | random UUID | agent-agy | Fixed UUID (must be valid, otherwise ignored) |
+| `AGY_AGENT_API_KEY` | `agentmesh_agy_key` | agent-agy | Key presented at registration |
+| `AGY_BIN_PATH` | `~/.local/bin/agy` if it exists, else `agy` on `PATH` | agent-agy | Path to the `agy` binary |
+| `AGY_MODEL` | *(agy default)* | agent-agy | Passed as `--model` |
+| `AGY_EFFORT` | `medium` | agent-agy | Passed as `--effort` (`low`, `medium`, `high`) |
+| `AGY_WORKSPACE_DIR` | *(none)* | agent-agy | Default working directory; overridden per task by `TaskSpec.repo_path` |
+| `AGY_TIMEOUT_SECS` | `600` | agent-agy | Kill the `agy` subprocess after this many seconds |
 
-You can test connectivity to the endpoints directly:
-```bash
-# Check NATS HTTP monitoring server (should return HTTP 200 OK)
-curl -i http://localhost:8222/healthz
-
-# Check PostgreSQL port (should report Connection to localhost 5432 port succeeded)
-nc -zv localhost 5432
-```
-
-> [!TIP]
-> If you already run PostgreSQL and NATS natively on your machine, you do not need Docker. Simply update `DATABASE_URL` and `NATS_URL` in `.env` to point to your existing instances.
-
-#### 5. Build Binaries from Source
-
-Compile the Rust workspace crates:
-
-```bash
-# Fast debug build (ideal for development and testing)
-cargo build --workspace
-
-# Optimized release build (faster execution for production or benchmarking)
-cargo build --release --workspace
-```
-
-Binaries will be placed in `target/debug/` (or `target/release/`):
-- `coordinator`: Primary coordination daemon and interactive Ratatui TUI.
-- `agent-mock`: Standalone simulated agent worker for local demonstrations and testing.
-
-*(Optional)* Install binaries into your `$HOME/.cargo/bin` path to run them from any directory:
-```bash
-cargo install --path crates/coordinator
-cargo install --path crates/agent-mock
-```
-
-#### 6. Verify Installation
-
-Run the complete test suite to verify that all components compile and pass all domain invariants:
-
-```bash
-# Run all unit, repository, and phase integration tests
-cargo test --workspace
-```
-
-All 119 tests across `agent-protocol`, `agent-mock`, `coordinator`, and all phase integration suites will execute and pass.
+> If `AI_PROVIDER=anthropic` is set but `ANTHROPIC_API_KEY` is **unset**, provider creation fails and the coordinator silently falls back to the mock planner (see `handle_tui_action` in `crates/coordinator/src/main.rs`). If the key is set but empty or invalid, the Anthropic call fails and `AI Planning error: …` is shown in the status bar.
 
 ---
 
-## How to Use
-
-AgentMesh provides a keyboard-driven terminal user interface (TUI) backed by an asynchronous coordination engine. This section guides you through operating modes, launching the fleet, reviewing AI plans, and observing real-time task execution.
-
-### Operating Modes
-
-The Coordinator binary automatically adapts to the environment it detects:
-
-1. **Full-Stack Mode (Default & Recommended):**
-   - Active when PostgreSQL and NATS JetStream are running (`docker compose up -d`).
-   - Automatically executes database migrations (`migrations/`).
-   - Automatically provisions JetStream streams (`TASK_ASSIGNMENTS`, `AGENT_EVENTS`).
-   - Launches background registration listeners, heartbeat monitors (with 30s offline detection), and telemetry ingestion loops.
-   - Saves all project definitions, task plans, approvals, and execution logs persistently in PostgreSQL.
-
-2. **Standalone Demo / Sandbox Mode (Zero-Infrastructure):**
-   - Automatically triggered if PostgreSQL or NATS are offline or unreachable.
-   - Loads a self-contained in-memory demo dataset.
-   - Allows immediate exploration of the Ratatui TUI, screen navigation, keybindings, and task review workflow without running Docker or databases.
-
----
-
-### Step 1: Launch the Coordinator
-
-In your primary terminal, launch the Coordinator:
+## 5. Quick Start
 
 ```bash
-# Launch interactive TUI coordinator
-cargo run --bin coordinator
+git clone https://github.com/vijaygovindBiju/AgentMesh.git
+cd AgentMesh
 
-# Or if you built with --release:
-./target/release/coordinator
+cp .env.example .env          # defaults work out of the box (mock planner, local Docker services)
+
+docker compose up -d          # PostgreSQL 16 + NATS 2.10 JetStream
+
+cargo test --workspace        # see "Testing" for what requires the Docker services
+
+cargo run --bin coordinator   # opens the TUI; runs migrations and creates JetStream streams on startup
 ```
 
-On startup in an interactive terminal, the Ratatui TUI opens immediately on **Screen 1: Project Input**.
-
-> [!NOTE]
-> Database migrations and stream creation run automatically on startup. There is no need to run separate database migration commands.
-
----
-
-### Step 2: Launch Mock Agent Workers
-
-To execute tasks and stream telemetry, launch one or more agent worker instances in separate terminal windows. Each agent acts as an independent developer worker in your fleet:
+In two more terminals:
 
 ```bash
-# ------------------------------------------------------------------------------
-# Terminal 2: Start Mock Agent Alice (Backend specialist)
-# ------------------------------------------------------------------------------
 MOCK_AGENT_OWNER="Alice (Backend Lead)" cargo run --bin agent-mock
-
-# ------------------------------------------------------------------------------
-# Terminal 3: Start Mock Agent Bob (Infrastructure specialist)
-# ------------------------------------------------------------------------------
-MOCK_AGENT_OWNER="Bob (Infra Lead)" cargo run --bin agent-mock
+MOCK_AGENT_OWNER="Bob (Infra Lead)"    cargo run --bin agent-mock
 ```
 
-#### What Happens When an Agent Starts:
-1. **Registration:** Connects to NATS on `coordinator.agents.register` and registers its ID, human owner, capabilities, and adapter type.
-2. **Heartbeat Loop:** Spawns a background task publishing a heartbeat to `coordinator.agents.heartbeat.{agent_id}` every 5 seconds.
-3. **Consumer Creation:** Sets up a durable pull consumer on JetStream listening for task assignments on `tasks.{agent_id}.assigned`.
-4. **Execution Simulation:** Upon receiving an assignment, the agent sends transport ACKs, publishes `TaskStarted`, emits periodic `ProgressUpdate` (50%), and reports `Completed` when finished.
+Then in the TUI:
+
+1. Press `i`, type a project name, `Tab`, type a description, `Enter`.
+2. On **Plan Review**, use `↑/↓`, `Enter` for details, `a` to acknowledge a critical overlap, `y` to approve. The approved task is dispatched immediately if an eligible agent is idle.
+3. `Tab` or `3` for the **Dashboard** (agents, tasks, overlaps); `4` for **Diagnostics**; `r` to refresh from PostgreSQL; `q` to quit.
+
+If PostgreSQL or NATS are unreachable, the coordinator starts in **standalone demo mode** with in-memory sample data so you can explore the TUI. When stdout is not a TTY (e.g. `cargo run --bin coordinator > coordinator.log`), it runs as a headless daemon that only serves registration, heartbeats, and event ingestion.
+
+### TUI keys
+
+| Key | Where | Action |
+| :--- | :--- | :--- |
+| `Tab` | global | Cycle screens: Project Input → Plan Review → Dashboard → Diagnostics |
+| `1` `2` `3` `4` | global | Jump to a screen |
+| `r` | global | Reload agents, tasks and overlaps from PostgreSQL |
+| `q`, `Ctrl+C` | global | Quit |
+| `i` / `Enter`, `Tab`, `Enter`, `Esc` | Project Input | Start editing, switch field, submit, cancel |
+| `↑/↓` or `k/j` | Plan Review | Move between tasks |
+| `Enter` | Plan Review | Toggle details pane (description, dependencies, overlap warnings) |
+| `y` / `n` | Plan Review | Approve / Reject selected task |
+| `e` then `Enter` / `Esc` | Plan Review | Edit description inline; `Enter` saves **and approves** |
+| `a` | Plan Review / Dashboard | Acknowledge the selected overlap warning |
+| `↑/↓` | Diagnostics | Scroll the event list |
 
 ---
 
-### Step 3: Step-by-Step TUI Walkthrough
+## 6. Mock Agent Testing
 
-The Ratatui TUI consists of three primary screens:
+`agent-mock` is a real protocol implementation with simulated work. It registers, heartbeats every 5 s, consumes assignments from a durable JetStream consumer (`agent-<id>`, ack wait 60 s, max 5 deliveries), and publishes `TaskStarted → ProgressUpdate(50%) → Completed` with `MOCK_TASK_DELAY_MS` between stages.
 
-#### Screen 1: Project Initiation (`ProjectInput`)
-*Where you describe what software feature or project you want built.*
-
-1. Press `[ i ]` or `[ Enter ]` to enter text input mode (`EnteringProject`).
-2. Type a **Project Name** (e.g., `Order Ingress Engine`).
-3. Press `[ Tab ]` to navigate to the **Project Description** field.
-4. Type a natural language project description, for example:
-   ```text
-   Build order ingestion pipeline, database schema migration for orders and items, Stripe payment webhooks, and idempotent delivery tracking.
-   ```
-5. Press `[ Enter ]` to submit the project for AI planning.
-6. The coordinator submits the request to the configured `LlmProvider` (`mock` or `anthropic`), stores the generated DAG in PostgreSQL, computes resource overlap reachability, and automatically transitions to **Screen 2**.
-
-#### Screen 2: Interactive Plan Review (`PlanReview`)
-*Where the Human Approval Gate enforces developer oversight before code executes.*
-
-AI plans cannot execute until a human operator inspects and approves them.
-1. Use `[ ↑ ]` / `[ ↓ ]` (or `[ k ]` / `[ j ]`) to navigate through proposed tasks.
-2. Press `[ Enter ]` to toggle the detailed task panel, viewing:
-   - **Target Assignee & Required Capabilities** (e.g., Alice for backend, Bob for infra)
-   - **Affected File & API Resources** (e.g., `src/db/orders.rs`)
-   - **Dependency Relationships** (`Blocks`, `RelatesTo`)
-3. **Edit Task Descriptions:** Press `[ e ]` to open an inline editor buffer. Modify the instructions, then press `[ Enter ]` to confirm and approve, or `[ Esc ]` to cancel.
-4. **Resolve Overlap Warnings:** If tasks concurrently touch the same resource, an `OverlapWarning` banner appears.
-   - Attempting to approve a task with an unacknowledged critical overlap displays:
-     ```text
-     APPROVAL BLOCKED: Critical conflict on [src/db/orders.rs]. Press [a] to acknowledge first.
-     ```
-   - Press `[ a ]` to acknowledge the conflict and unblock approval.
-5. **Approve or Reject Tasks:**
-   - Press `[ y ]` to **Approve** the selected task.
-   - Press `[ n ]` to **Reject** the task (marks it Rejected and stops execution).
-6. As soon as a task is approved and its blocking dependencies are satisfied, the coordinator assignment engine immediately assigns it to an available agent over NATS JetStream!
-
-#### Screen 3: Live Fleet Dashboard (`Dashboard`)
-*Where you monitor real-time agent execution, telemetry, and progress.*
-
-Press `[ Tab ]` or `[ 3 ]` to switch to the Live Dashboard:
-1. **Fleet Status Table:** View all registered agents, their human owners, current status (`Idle`, `Busy`, `Offline`), and currently executing task.
-2. **Active Overlap Warnings:** Scroll through system-wide overlap warnings with `[ ↑ ]` / `[ ↓ ]` and acknowledge them with `[ a ]` or `[ Enter ]`.
-3. **Execution Telemetry Stream:** Monitor live progress percentages (0% → 50% → 100%) and state transitions emitted by agents.
-4. **Automatic Dependency Resolution:** When Agent A completes Task 1, the dependency engine unblocks dependent downstream tasks (e.g., Task 3) and automatically dispatches them to the next idle agent.
-5. **Completion:** When all approved tasks finish, the coordinator status advances to `Done`.
-
----
-
-### Step 4: Complete Local Test Walkthrough
-
-To experience the full lifecycle, open 4 terminal windows side-by-side:
-
-```text
-┌─────────────────────────────┐  ┌─────────────────────────────┐
-│         TERMINAL 1          │  │         TERMINAL 2          │
-│      docker compose up      │  │   cargo run coordinator     │
-│   (PostgreSQL 16 + NATS)    │  │       (Ratatui TUI)         │
-└─────────────────────────────┘  └─────────────────────────────┘
-┌─────────────────────────────┐  ┌─────────────────────────────┐
-│         TERMINAL 3          │  │         TERMINAL 4          │
-│    Mock Agent A (Alice)     │  │     Mock Agent B (Bob)      │
-│  MOCK_AGENT_OWNER="Alice"   │  │   MOCK_AGENT_OWNER="Bob"    │
-└─────────────────────────────┘  └─────────────────────────────┘
-```
-
-1. **Terminal 1:** Run `docker compose up -d`. Ensure `docker compose ps` shows both services healthy.
-2. **Terminal 3 & 4:** Start Alice and Bob in separate terminals using the commands in Step 2. Watch their registration logs confirming connection.
-3. **Terminal 2:** Run `cargo run --bin coordinator`.
-4. **Input Project:** Press `[ i ]`, type `Order Ingress Engine`, press `[ Tab ]`, type `Build order processing pipeline`, and press `[ Enter ]`.
-5. **Inspect & Acknowledge Conflicts:** In Screen 2, inspect Task 1 and Task 2. If a critical conflict is flagged on a shared file, press `[ a ]` to acknowledge.
-6. **Approve Plan:** Press `[ y ]` on Task 1. Watch Alice immediately pick up Task 1 in Terminal 3!
-7. **Observe Execution:** Watch the live progress update to 50% in the TUI, then complete.
-8. **Observe Dependency Cascading:** As soon as Task 1 finishes, dependent tasks automatically dispatch to Bob in Terminal 4.
-9. **Review Dashboard:** Press `[ Tab ]` to switch to Screen 3 and view the completed fleet summary.
-
----
-
-### Step 5: TUI Keyboard Controls
-
-#### Global Navigation
-| Key | Action |
-| :--- | :--- |
-| `Tab` | Cycle screens forward: Project Input → Plan Review → Dashboard |
-| `1` | Jump directly to Screen 1: Project Input |
-| `2` | Jump directly to Screen 2: Plan Review |
-| `3` | Jump directly to Screen 3: Live Dashboard |
-| `r` / `R` | Refresh current state from PostgreSQL |
-| `q` / `Q` | Quit AgentMesh Coordinator |
-
-#### Screen 1: Project Input
-| Key | Action |
-| :--- | :--- |
-| `Enter` or `i` | Enter text editing mode (`EnteringProject`) |
-| `Tab` / `BackTab` | Switch focus between Project Name and Description fields |
-| `Enter` | Submit project for AI planning and decomposition |
-| `Esc` | Cancel editing mode and revert input |
-
-#### Screen 2: Plan Review
-| Key | Action |
-| :--- | :--- |
-| `↑` / `k` | Navigate up through proposed tasks |
-| `↓` / `j` | Navigate down through proposed tasks |
-| `Enter` | Toggle task details and dependency panel |
-| `y` / `Y` | **Approve Task** (blocked if unacknowledged critical overlap exists) |
-| `n` / `N` | **Reject Task** (marks task Rejected) |
-| `e` / `E` | **Edit Description** (opens inline buffer; `Enter` confirms & approves, `Esc` cancels) |
-| `a` / `A` | **Acknowledge Overlap** on the selected task (unblocks approval) |
-
-#### Screen 3: Live Dashboard
-| Key | Action |
-| :--- | :--- |
-| `↑` / `k` | Navigate up through active overlap warnings |
-| `↓` / `j` | Navigate down through active overlap warnings |
-| `a` / `A` / `Enter` | Acknowledge selected overlap warning |
-
----
-
-### Step 6: AI Provider Configuration
-
-AgentMesh supports multiple AI task decomposition backends via the `LlmProvider` trait:
-
-#### 1. Local Mock Planner (Default, Zero API Keys)
-In `.env`:
 ```bash
-# Uses built-in deterministic planning engine (no external API calls or keys required)
-AI_PROVIDER=mock
-```
-Generates realistic, deterministic task graphs with dependency relationships and resource estimations. Ideal for development, testing, and offline demonstrations.
+# Local, two agents on the same machine as the coordinator
+MOCK_AGENT_OWNER="Alice" cargo run --bin agent-mock
+MOCK_AGENT_OWNER="Bob"   MOCK_TASK_DELAY_MS=500 cargo run --bin agent-mock
 
-#### 2. Anthropic Claude 3.5 Sonnet
-In `.env`:
-```bash
-# Use Anthropic Claude 3.5 Sonnet for real task decomposition
-AI_PROVIDER=anthropic
-AI_MODEL=claude-3-5-sonnet-20241022
-ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
-```
-Uses Claude 3.5 Sonnet to decompose real-world software specifications into task graphs, capability assignments, and file paths. Prompts enforce strict JSON adherence validated before saving.
+# Pin a stable identity so the agent keeps the same DB record across restarts
+MOCK_AGENT_ID=11111111-1111-4111-8111-111111111111 MOCK_AGENT_OWNER="Alice" cargo run --bin agent-mock
 
----
-
-## Complete Command Reference / Cheat Sheet
-
-Here is a quick reference of every command you may need while working with AgentMesh:
-
-### 1. Setup & Installation Commands
-```bash
-# Make automated installer executable and run full setup
-chmod +x install.sh
-./install.sh                     # Full setup (checks tools, creates .env, starts Docker, builds debug)
-./install.sh --release           # Build optimized release binaries for faster execution
-./install.sh --skip-docker       # Build binaries only (if native DB/NATS are already running)
-./install.sh --help              # View all script options
-
-# Manual setup commands
-cp .env.example .env             # Create environment configuration file from template
-cargo build --workspace          # Compile all crates in debug mode (fast compilation)
-cargo build --release --workspace# Compile all crates in release mode (optimized)
-cargo install --path crates/coordinator # Install coordinator globally to ~/.cargo/bin
-cargo install --path crates/agent-mock  # Install mock agent globally to ~/.cargo/bin
-```
-
-### 2. Infrastructure & Docker Commands
-```bash
-# Docker service lifecycle commands
-docker compose up -d             # Start PostgreSQL and NATS in the background
-docker compose ps                # Check container health and running status
-docker compose logs -f           # Follow combined logs of all backing services
-docker compose logs -f postgres  # Follow PostgreSQL logs specifically
-docker compose logs -f nats      # Follow NATS JetStream logs specifically
-docker compose restart           # Restart backing services
-docker compose down              # Stop containers (preserves database volumes)
-docker compose down -v           # Stop containers and WIPE all database & JetStream volumes
-```
-
-### 3. Coordinator Execution Commands
-```bash
-# Standard interactive TUI mode (auto-runs migrations and provisions streams)
-cargo run --bin coordinator
-
-# Run using the compiled release binary
-./target/release/coordinator
-
-# Run with debug tracing redirected to a log file (prevents TUI screen distortion)
-RUST_LOG=agentmesh=debug,coordinator=debug cargo run --bin coordinator 2> coordinator_debug.log
-
-# View the debug log stream in real time in another terminal window
-tail -f coordinator_debug.log
-```
-
-### 4. Agent Worker Execution Commands
-```bash
-# Start standard mock agents with custom human owner labels
-MOCK_AGENT_OWNER="Alice (Backend Lead)" cargo run --bin agent-mock
-MOCK_AGENT_OWNER="Bob (Infra Lead)" cargo run --bin agent-mock
-
-# Tune execution delay (e.g. 500ms for fast tests or 5000ms for realistic pacing)
-MOCK_TASK_DELAY_MS=500 MOCK_AGENT_OWNER="Fast Worker" cargo run --bin agent-mock
-
-# Connect agent to a remote coordinator / NATS server across LAN, VPN, or Tailscale
-NATS_URL="nats://192.168.1.50:4222" NATS_AUTH_TOKEN="agentmesh_dev_token" MOCK_AGENT_OWNER="Remote Dev" cargo run --bin agent-mock
-
-# Start pre-compiled release agent binary
+# Release binary
 MOCK_AGENT_OWNER="Alice" ./target/release/agent-mock
 ```
 
-### 5. Inspection & Health Check Commands
-```bash
-# Verify NATS HTTP monitoring server (returns OK)
-curl -i http://localhost:8222/healthz
+A mock agent on another machine only needs to reach NATS:
 
-# Inspect NATS server health status and JetStream memory metrics in JSON format
-curl -s http://localhost:8222/varz | grep -o '"jetstream":{[^}]*}'
+```text
+Machine A
+├── Coordinator
+├── PostgreSQL
+└── NATS  (port 4222)
 
-# Connect to PostgreSQL directly via psql inside the Docker container
-docker compose exec postgres psql -U agentmesh -d agentmesh
+Machine A
+└── agent-mock                 NATS_URL=nats://localhost:4222
 
-# Useful SQL inspection queries to run inside psql:
-# \dt                            # List all tables (projects, tasks, task_deliveries, agents, etc.)
-# SELECT id, name, status FROM projects;
-# SELECT short_id, title, status, assignee_id FROM tasks;
-# SELECT id, human_owner, status, capabilities FROM agents;
-# SELECT id, task_id, agent_id, status, attempt FROM task_deliveries;
+Machine B
+└── agent-mock                 NATS_URL=nats://<Machine A IP>:4222
+       │                       NATS_AUTH_TOKEN=<same token as Machine A>
+       └── NATS → Machine A
 ```
 
-### 6. Testing & Verification Commands
 ```bash
-# Run the entire test suite across all crates (119 total tests)
-cargo test --workspace
+# On Machine B
+NATS_URL="nats://192.168.1.50:4222" NATS_AUTH_TOKEN="agentmesh_dev_token" \
+MOCK_AGENT_OWNER="Remote Dev" cargo run --bin agent-mock
+```
 
-# Run tests for a specific crate
-cargo test -p coordinator        # Coordinator core, state machine, repositories, and TUI tests
-cargo test -p agent-protocol     # Protocol serialization and specification tests
-cargo test -p agent-mock         # Mock agent worker tests
+Any network that carries TCP to port 4222 works: LAN, a WireGuard/Tailscale VPN IP, or an SSH tunnel. Nothing in the agent is network-specific; it only uses `NATS_URL`. See [Multi-Machine Setup](#8-multi-machine-setup).
 
-# Run end-to-end multi-agent integration test specifically
-cargo test --test phase7_e2e_demo
+> On first start with an empty `agents` table, the coordinator seeds two placeholder `Mock` agents ("Alice (Backend Lead)", "Bob (Infra Lead)") so the planner has assignees. They are DB rows only — no process is listening for them. Real `agent-mock`/`agent-agy` processes register their own rows. If a task is assigned to a seeded placeholder, nothing will execute it; delete those rows (`DELETE FROM agents WHERE api_key_hash IN ('seed_alice','seed_bob');`) before real use.
 
-# Run code style formatting and linter checks
+---
+
+## 7. Real AGY Setup
+
+```text
+AgentMesh coordinator
+    ↓  TaskAssignment (JetStream: coordinator.tasks.assign.{agent_id})
+NATS
+    ↓
+agent-agy  (crates/agent-agy)
+    ↓  spawns: agy -p "<prompt>" --output-format stream-json [--dangerously-skip-permissions] [--model M] [--effort E] [--add-dir DIR]
+agy CLI
+    ↓  NDJSON on stdout: {"event":"init"...} {"event":"step_update"...} {"event":"result"...}
+Coding task executed in the task's working directory
+```
+
+### Installing / locating `agy`
+
+`agent-agy` does not install `agy`. It looks for the binary in this order:
+
+1. `AGY_BIN_PATH` if set;
+2. `$HOME/.local/bin/agy` if it exists;
+3. `agy` on `PATH`.
+
+Verify with `which agy` or `ls -l ~/.local/bin/agy`. The `agy` install must already be authenticated/configured on the agent machine; AgentMesh does not manage `agy` credentials.
+
+### Running an agy agent
+
+```bash
+cargo build --bin agent-agy
+
+NATS_URL="nats://localhost:4222" \
+NATS_AUTH_TOKEN="agentmesh_dev_token" \
+AGY_AGENT_OWNER="Alice (Backend Lead)" \
+AGY_AGENT_API_KEY="choose-a-secret" \
+AGY_EFFORT="low" \
+AGY_TIMEOUT_SECS=900 \
+./target/debug/agent-agy
+```
+
+Optional: `AGY_AGENT_ID=<uuid>` for a stable identity, `AGY_MODEL=<model>`, `AGY_BIN_PATH=/path/to/agy`, `AGY_WORKSPACE_DIR=/path/to/repo`.
+
+### What the adapter does
+
+1. **Capability detection** — `CapabilityDetector::detect_all` inspects the host (OS, CPU arch, cores; Rust/Python/Node/Go/Dart/C toolchains; tools such as `git`, `docker`, `cargo`, `agy`). Tags always include `agy` and `general-coding`.
+2. **Registration** — sends `AgentMessage::Register { adapter_type: "Agy", capabilities, profile, api_key }` as a NATS request to `coordinator.agents.register` and expects `RegisterResponse { status: "ok", nats_subject }`.
+3. **Heartbeat** — publishes `Heartbeat { status: Idle }` to `coordinator.agents.heartbeat.{agent_id}` every 5 s. (The heartbeat loop always reports `Idle`; the coordinator learns `Busy` from `TaskStarted`.)
+4. **Receiving tasks** — creates a durable pull consumer `agent-agy-<id>` on `TASK_ASSIGNMENTS` filtered to `coordinator.tasks.assign.{agent_id}`, ack wait 600 s, max 5 deliveries. Each message is transport-ACKed on receipt.
+5. **Execution** — builds a prompt from the `TaskSpec` (identifier, title, description, affected resources, task/base branch, repository path) and spawns `agy`. If `TaskSpec.repo_path` is set, that directory becomes both `--add-dir` and the working directory.
+6. **Progress reporting**
+   - `init` or first `step_update` → `TaskStarted { idempotency_key }`
+   - `step_update` → `ProgressUpdate { message: "Step N: …", percent: min(10 + 15·N, 90) }`
+   - `step_update` indicating a blocker → `Blocked { reason }`
+   - `result` with `status == "SUCCESS"` → `Completed { summary }`; any other status → `Failed`
+   - exit code ≠ 0, spawn failure, or timeout (`AGY_TIMEOUT_SECS`, process killed) → `Failed { error }`
+   - process ends without a result → `Failed("Subprocess exited prematurely…")`
+7. **Timeout / crash** — handled by `AgyProcess`; the subprocess is killed on timeout.
+
+### Limits
+
+- `--dangerously-skip-permissions` is passed by default (`dangerously_skip_permissions: true`); there is no environment variable to disable it. Treat the agent host as a sandbox.
+- `TaskCancelled` and `WaitForDependency` messages are logged but not acted upon.
+- The agent does not commit or push Git changes; it leaves the working tree modified. Commit/merge handling lives in the coordinator's `CompletionManager` (library, see §11).
+- Tasks are processed sequentially per agent process (`max_concurrency` = 1 at registration).
+
+`scripts/test_two_agy_instances.sh` starts a coordinator (if none is running) and two `agent-agy` processes with fixed IDs, then checks both registered. Use `--nats-url` / `--auth-token` to point it at a remote coordinator.
+
+---
+
+## 8. Multi-Machine Setup
+
+```text
+                 NETWORK (LAN / WireGuard / Tailscale)
+                    │
+        ┌───────────┴───────────┐
+        │                       │
+        ▼                       ▼
+   YOUR COMPUTER           FRIEND COMPUTER
+   ─────────────           ────────────────
+   Coordinator             agent-agy   (NATS_URL=nats://<your IP>:4222)
+   PostgreSQL   :5432
+   NATS         :4222
+   agent-agy
+```
+
+1. **Coordinator host** — one machine runs `docker compose up -d` and `cargo run --bin coordinator`. PostgreSQL never needs to be reachable from other machines; only the coordinator talks to it.
+2. **NATS port** — `4222/tcp`. Open it on the host firewall for the remote machine (or VPN subnet) only. `8222` (monitoring) should stay local.
+3. **Address** — the remote machine uses the coordinator host's LAN IP (`ip addr`, `hostname -I`) or its Tailscale/WireGuard IP (`tailscale ip -4`). Nothing else is exchanged; there is no discovery protocol.
+4. **Authentication** — NATS is started with `-auth ${NATS_AUTH_TOKEN}`; every client must present the same `NATS_AUTH_TOKEN`. Separately, each agent presents its own `*_AGENT_API_KEY` at registration (see [Security](#15-security)). Change `NATS_AUTH_TOKEN` in `.env` from the default before exposing the port, then `docker compose up -d` again to recreate the NATS container.
+5. **Remote registration** — the remote agent sends `Register` to `coordinator.agents.register`; the coordinator creates (or re-authenticates) the `agents` row and replies with the agent's event subject.
+6. **Verify** — on the coordinator host:
+   ```bash
+   docker compose exec postgres psql -U agentmesh -d agentmesh \
+     -c "SELECT id, human_owner, adapter_type, status, last_seen FROM agents ORDER BY last_seen DESC;"
+   ```
+   `status` should be `idle` and `last_seen` should advance every ~5 s. The Dashboard screen (`3`) shows the same fleet table; press `r` to refresh. Agents with no heartbeat for 30 s are marked `offline`.
+7. **Task delivery** — `TaskAssignment` is published to `coordinator.tasks.assign.{agent_id}` on the `TASK_ASSIGNMENTS` WorkQueue stream; only that agent's durable consumer receives it. Messages persist in JetStream (file storage) until ACKed, so an agent that starts late still receives its assignment.
+8. **Events back** — the agent publishes to `agents.{agent_id}.events`, captured by the `AGENT_EVENTS` stream and consumed by the coordinator's durable `coordinator-events` consumer, which updates PostgreSQL and the TUI.
+
+```bash
+# Friend computer
+NATS_URL="nats://100.101.102.103:4222" NATS_AUTH_TOKEN="<shared token>" \
+AGY_AGENT_OWNER="Friend" AGY_AGENT_API_KEY="<friend's key>" ./target/debug/agent-agy
+```
+
+**Security requirements for anything beyond a trusted LAN:** the Compose stack speaks plain TCP with a static token. Do not expose 4222 to the public internet. Use a VPN (WireGuard/Tailscale) or SSH tunnel. The coordinator library supports TLS/mTLS and user/password NATS auth via `NatsSecurityConfig` + `connect_secure`, but the shipped binaries only use `NATS_URL` + `NATS_AUTH_TOKEN`; enabling TLS today requires code changes and a TLS-configured NATS server. A detailed walkthrough is in [`docs/deployment/multi-machine.md`](docs/deployment/multi-machine.md).
+
+---
+
+## 9. Agent Protocol
+
+Defined in `crates/agent-protocol` (`messages.rs`, `spec.rs`, `status.rs`, `capabilities.rs`, `security.rs`). The protocol exists independently of `agy` so that any runtime — mock, `agy`, or a future adapter — is interchangeable from the coordinator's point of view. Messages are JSON with a `"type"` tag. Full schema: [`docs/protocols/agent-protocol.md`](docs/protocols/agent-protocol.md).
+
+### NATS subjects
+
+| Subject | Direction | Transport |
+| :--- | :--- | :--- |
+| `coordinator.agents.register` | Agent → Coordinator | core NATS request/reply |
+| `coordinator.agents.heartbeat.{agent_id}` | Agent → Coordinator | core NATS publish |
+| `coordinator.tasks.assign.{agent_id}` | Coordinator → Agent | JetStream `TASK_ASSIGNMENTS` (WorkQueue, file) |
+| `agents.{agent_id}.events` | Agent → Coordinator | JetStream `AGENT_EVENTS` (Limits: 100k msgs / 24 h, file) |
+
+### Coordinator → Agent (`CoordinatorMessage`)
+
+| Message | Fields | Implemented behaviour |
+| :--- | :--- | :--- |
+| `TaskAssignment` | flattened `TaskSpec`: `task_id`, `short_id`, `title`, `description`, `affected_resources[]`, `depends_on[]`, `idempotency_key` (`{task_id}:{attempt}`), `assigned_at`, optional `task_branch`, `base_branch`, `repo_path` | Published by `AssignmentService`; consumed and executed by both adapters |
+| `RegisterResponse` | `status` (`"ok"`/`"error"`), `nats_subject?`, `error?` | Reply to `Register` |
+| `TaskCancelled` | `task_id`, `reason`, `timestamp` | Type defined; adapters log it but do not act; coordinator does not currently publish it |
+| `WaitForDependency` | `task_id`, `blocking_task_id`, `message`, `timestamp` | Type defined; adapters log it; coordinator does not currently publish it |
+
+### Agent → Coordinator (`AgentMessage`)
+
+| Message | Fields | Coordinator effect |
+| :--- | :--- | :--- |
+| `Register` | `agent_id`, `human_owner`, `adapter_type` (`"Mock"`/`"Agy"`), `capabilities[]`, `profile?` (`AgentCapabilities`), `api_key` | Create agent row or verify key; audit-logged |
+| `UpdateCapabilities` | `agent_id`, `profile`, `timestamp` | Updates `agents.capability_profile` |
+| `TaskStarted` | `agent_id`, `task_id`, `idempotency_key`, `timestamp` | Delivery → `Acknowledged`, task → `Executing`, agent → `Busy` |
+| `ProgressUpdate` | `agent_id`, `task_id`, `message`, `percent`, `timestamp` | Recorded in `agent_events` |
+| `Blocked` | `agent_id`, `task_id`, `reason`, `blocking_task_id?`, `timestamp` | Task → `Blocked`, agent → `Blocked` |
+| `Completed` | `agent_id`, `task_id`, `summary`, `timestamp` | Task → `Completed`, agent → `Idle`, completion metrics |
+| `Failed` | `agent_id`, `task_id`, `error`, `timestamp` | Task → `Failed`, agent → `Error`, failure metrics |
+| `Heartbeat` | `agent_id`, `status`, `current_task_id?`, `health?` (`AgentHealth`), `timestamp` | Updates `last_seen`, status, latency and health |
+
+Lifecycle events are authorized (`TaskAuthorizer`: the reporting agent must be the task's assignee) and deduplicated (`EventDeduplicator`, keyed by agent/task/type/percent) before they change state.
+
+---
+
+## 10. Agent Capability System
+
+**Capabilities** (`AgentCapabilities` in `agent-protocol/src/capabilities.rs`):
+
+- `runtime` — OS, architecture, adapter type, CPU count, optional memory and `agy` version
+- `languages[]` — name, version, frameworks (detected: Rust, Python, Node/TypeScript, Go, Dart/Flutter, C/C++)
+- `tools[]` — name, version, path (detected from `PATH`: git, docker, cargo, sqlx, agy, …)
+- `tags[]` — free-form skill tags (`rust`, `backend`, `frontend`, …)
+
+`agent-agy` detects its profile automatically at startup. `agent-mock` registers a flat tag list. Profiles are stored in `agents.capability_profile` (JSONB) and can be refreshed with `UpdateCapabilities`.
+
+**Health** (`HealthStatus`: `Healthy | Degraded | Unhealthy | Offline`) is tracked per agent from heartbeat latency, consecutive task failures and reported `AgentHealth`. **Availability** combines `status = idle`, `is_draining = false`, `is_revoked = false`, non-expired API key, and `active_tasks_count < max_concurrency`.
+
+**Task requirements** (`TaskRequirements`) are inferred by `AgentCapabilityMatcher::infer_task_requirements` from the task title, description and affected file extensions (e.g. `.rs` → language `rust`, tool `cargo`; `.dart` → `dart`/`flutter`).
+
+**Matching** (`rank_candidates`): unavailable or `Unhealthy`/`Offline` agents are ineligible; required OS (+15), required languages (+40 each), required tools (+25 each) and required tags (+20 each) are hard requirements; preferred tags add +15; healthy agents get +10. The top eligible candidate with a positive score becomes the task's `suggested_agent_id`.
+
+**Assignment decision** (`AssignmentService::assign_ready_tasks`): if the task has a suggested agent and that agent is idle, healthy/degraded, not draining/revoked and under its concurrency limit, it is chosen; otherwise the most recently seen eligible agent that has no other active task is chosen. Role and `PermissionBoundary` checks run before the delivery is created.
+
+```text
+Task:      Implement Rust backend authentication
+Required:  rust (from ".rs" files / text), backend, security
+
+Agent A:   rust, backend, linux       → eligible, score > 0
+Agent B:   flutter, dart, frontend    → missing required language "rust" → ineligible
+
+Coordinator → Agent A
+```
+
+Matching happens at planning time (and during replanning); it is not re-run at dispatch. If the suggested agent is busy, any eligible agent may take the task.
+
+---
+
+## 11. Git / Worktree System
+
+Module: `crates/coordinator/src/git/`. Schema: `migrations/002_git_coordination.sql`.
+
+| Concept | Implementation |
+| :--- | :--- |
+| **Repository identity** | `RepositoryIdentity` discovers the repo root, base branch, HEAD SHA and remote URL, and checks for a clean tree. |
+| **Task branches** | `BranchStrategy::task_branch_name("TASK-001")` → `agentmesh/task-001` (sanitized, lower-case). Stored in `tasks.task_branch`. |
+| **Worktrees** | `AgentWorkspace::create` runs `git worktree add -B <branch> <path> <base>`; default path `<repo>/.agentmesh/worktrees/<short-id>`. `base_commit_sha` is recorded on the task. |
+| **Isolation** | Each task has its own index, HEAD and working directory; agents cannot collide on the index lock or overwrite each other's checkouts. `TaskSpec.repo_path` points the agent at its worktree. |
+| **Parallel execution** | Verified in `phase9_git_integration.rs` and `phase15` (two tasks, two worktrees, simultaneous JetStream delivery). |
+| **Resource tracking** | `ResourceTracker` diffs untracked/uncommitted/committed changes against the base commit and records files not in `affected_resources` in `unexpected_resource_changes`. |
+| **Conflict detection** | `ConflictDetector::detect_cross_agent_conflicts` runs a 3-way `git merge-tree` between task branches; results go to `git_conflicts`. `check_concurrency_safety` flags overlapping resource footprints before execution. |
+| **Completion** | `CompletionManager::finalize_task_git_state` commits uncommitted agent work on the task branch, records `completion_commit_sha`, checks mergeability to the base branch and removes the worktree. |
+| **Diagnostics** | `FailureDiagnostics` surfaces merge collisions and unexpected resources with `RemediationAdvice`. |
+
+Why worktrees: they share one object store while giving each agent a private checkout, so N agents can work on N branches of the same clone without cloning N times or fighting over `.git/index`.
+
+**Wiring status:** `AssignmentService` already forwards `task_branch`/`base_branch`/`repo_path` to agents when present in the database, and `agent-agy` executes in that directory. However, the interactive coordinator binary does not yet call `GitCoordinator::prepare_task_workspace` or `finalize_task_git_state` automatically; these are invoked from the integration tests and are available as library APIs.
+
+---
+
+## 12. Dependencies and Overlaps
+
+- **Dependency kinds:** `Blocks` (gates assignment) and `RelatesTo` (informational). Stored in `task_dependencies`.
+- **DAG validation:** `PlanValidator` rejects cycles (direct and transitive), self-dependencies, references to unknown tasks, and duplicate short IDs before anything is written to PostgreSQL.
+- **Blocker enforcement:** the assignment query only claims `approved` tasks with an approval row and *no* `blocks` dependency whose blocker is not `completed`.
+- **Resource overlap:** `OverlapDetector` computes reachability over `Blocks` edges. Two tasks touching the same resource with a path between them → `Info`; with no ordering between them → `Critical`.
+- **Human approval:** `CommandHandler::execute_approve_task` refuses to approve a task with an unacknowledged `Critical` overlap (`ApprovalGateError::BlockedByCriticalOverlap`). Press `a` to acknowledge, then `y`.
+- **Automatic unblocking:** when the blocker reports `Completed`, dependents satisfy the claim query immediately. They are dispatched on the next assignment cycle (triggered by the next approve/edit action in v1.0).
+
+---
+
+## 13. Failure Recovery
+
+| Scenario | v1.0 behaviour | Wired in binary? |
+| :--- | :--- | :--- |
+| **Agent heartbeat failure** | `HeartbeatMonitor::check_timeouts` marks agents with no heartbeat for 30 s as `offline` (checked every 5 s). | Yes |
+| **Stale tasks** | `StaleTaskSweeper::sweep` finds `assigned`/`executing` tasks whose agent is offline or stale, unassigns them, reverts to `Approved` (or `HumanReview` after 3 delivery attempts), increments the agent's failure count, records a `task.reclaimed` event, and marks expired unacknowledged deliveries. | Library / tests (`CoordinatorCore::run_stale_sweep`) |
+| **Reassignment** | A reclaimed `Approved` task is picked up by the next assignment cycle with `attempt + 1` and a new idempotency key. `CommandHandler::execute_reassign_task` lets a human move a `Failed` task back to `Approved` for a specific agent. | Assignment: yes. Reassign: library (no TUI key) |
+| **Duplicate events** | `EventDeduplicator` (in-memory TTL) drops repeated lifecycle events; delivery ACKs are idempotent by `idempotency_key`. | Yes |
+| **Coordinator restart** | `CoordinatorRecoveryService::recover_on_startup` republishes `pending` deliveries, sweeps stale tasks, and reports orphans. `AssignmentService::reconcile_pending_deliveries` republishes deliveries stuck in `pending` > 5 s (terminal after 3 attempts). | Library / tests |
+| **NATS publish failure** | In-band compensation: delivery → `terminal`, task → `Approved`, agent → `Idle`. | Yes |
+| **NATS/DB reconnect** | `ResilientConnection` provides reconnect callbacks and exponential-backoff retry helpers. | Library |
+| **Execution failure** | `Failed` → task `Failed`, agent `Error`, failure metrics; **requires a human** to reassign (no automatic retry storms). | Yes |
+| **Blocked** | `Blocked` → task `Blocked`, agent `Blocked`; the agent may later resume and report `Completed`. | Yes |
+
+Automatic recovery is limited to what is marked "Yes" above. Anything else needs either a human action in the TUI or a caller of the library APIs.
+
+---
+
+## 14. Dynamic Replanning
+
+`ReplanEngine` (`crates/coordinator/src/ai/replan.rs`), exercised by `phase10_intelligent_planning.rs`:
+
+```text
+Current project state      TaskRepository (all tasks + statuses)
+        +
+Completed tasks            preserved; never re-proposed
+        +
+Failed tasks               error text fed to the planner for remediation
+        +
+Blocked tasks              blocker reasons included
+        +
+Resource changes           unexpected_resource_changes
+        +
+Git conflicts              git_conflicts
+        ↓
+ReplanEngine::gather_replan_context → ReplanRequest → LlmProvider (ReplanPrompt)
+        ↓
+ReplanEngine::execute_replan → validated → new Proposal + Proposed tasks (suggested agents re-matched)
+        ↓
+Human review               tasks enter HumanReview exactly like an initial plan
+```
+
+Replanning never bypasses the approval gate: it only creates `Proposed` tasks, which a human must approve. It is available through `PlanningService::generate_replan`; the TUI does not yet have a key to trigger it.
+
+---
+
+## 15. Security
+
+Implemented in `crates/coordinator/src/security/` and `agent-protocol/src/security.rs`, schema in `migrations/004_security_and_audit.sql`.
+
+- **Agent authentication.** `ApiKeyManager` generates keys as `am_ak_<64 hex>` and stores SHA-256 hashes; verification is constant-time (`subtle`). On **first** registration of an unknown `agent_id`, the presented key is accepted and stored — hashed if it starts with `am_ak_`, otherwise stored as-is (legacy/test path). On **re**-registration the presented key must match. Revoked (`is_revoked`) or expired (`api_key_expires_at`) agents are refused. Rotation/revocation: `AgentRepository::rotate_api_key`, `revoke_agent`.
+- **Authorization.** `AgentRole` (`Worker`, `Reviewer`, `ReadOnly`, `Admin`) and `PermissionBoundary` (allowed/denied path globs, `allow_code_modification`, `allow_command_execution`) are enforced by `PermissionEnforcer::validate_task_assignment` before delivery. New agents get role `worker` and a default boundary.
+- **Task authorization.** `TaskAuthorizer` rejects lifecycle events from an agent that is not the task's assignee (impersonation) and logs them.
+- **NATS.** Token auth (`-auth`) in Compose. `NatsSubjectAuthorizer` validates that an agent only publishes/subscribes to its own subjects (library). `NatsSecurityConfig` supports user/password, `require_tls`, root CA and client certificates via `connect_secure` (library; binaries use token only).
+- **Audit logging.** `AuditLogger` writes to `audit_logs`: registrations (success/denied), auth failures, impersonation attempts, revoked-agent actions.
+- **Secret handling.** `.env` is git-ignored; `SecretRedactor` masks API keys, passwords and private keys in text/JSON; `SecretScoper::sanitize_env_for_agent` filters environment variables handed to agents. Raw keys are never written to the database.
+- **Remote deployment.** See §8. Rotate `NATS_AUTH_TOKEN`, use a VPN, and give each agent its own `am_ak_` key.
+
+**Not production-ready as shipped:**
+
+- Registration is open: any process that can reach NATS with the token can register a *new* agent ID with any key. There is no allow-list or admin approval step.
+- Default `.env`/Compose credentials are well-known; TLS is off; `agent-agy` runs `agy --dangerously-skip-permissions`.
+- Keys are sent in the registration payload in clear text over NATS; without TLS this is visible on the network.
+- Subject authorization is enforced in the coordinator library, not via NATS server accounts/permissions — a malicious client can still publish to another agent's subject at the broker level.
+
+---
+
+## 16. Observability
+
+Module: `crates/coordinator/src/observability/`; schema `migrations/005_observability_and_events.sql`.
+
+| Capability | API | Where visible |
+| :--- | :--- | :--- |
+| **Task timeline** | `TimelineService::build_task_timeline` — milestones (proposed, approved, assigned, started, progress, completed/failed), elapsed durations | Library / tests |
+| **Agent timeline** | `TimelineService::build_agent_timeline` — registration, deliveries, events | Library / tests |
+| **Agent events** | `agent_events` table (every lifecycle message) | SQL; Dashboard reflects state changes live |
+| **Coordinator events** | `coordinator_events` table (`task.reclaimed`, …) via `CoordinatorEventRepository` | SQL; Diagnostics screen list (populated by library callers / demo mode) |
+| **Delivery visibility** | `DeliveryDiagnostics::inspect` — attempts, ACK state, expiry, redelivery | Library |
+| **Failure diagnostics** | `FailureDiagnostics::diagnose_task` — merge collisions, unexpected resources, `RemediationAdvice` | Library |
+| **System metrics** | `MetricsCollector::collect` → `SystemMetrics` (task/agent counts, delivery success, throughput) | Diagnostics screen (`4`) — shown when metrics are pushed to the TUI; the live binary does not yet push them |
+| **Structured logs** | `TraceContext` spans with task/agent/project IDs; `RUST_LOG` filter, stderr | `RUST_LOG=debug cargo run --bin coordinator 2> coordinator_debug.log` |
+| **Audit** | `audit_logs` table | SQL |
+| **Execution integrity** | verified in `phase15_v1_validation.rs` (`test_phase15_9_…`) | Tests |
+
+Useful SQL (inside `docker compose exec postgres psql -U agentmesh -d agentmesh`):
+
+```sql
+SELECT short_id, status, assigned_agent_id, task_branch FROM tasks ORDER BY created_at;
+SELECT id, human_owner, adapter_type, status, health_status, last_seen FROM agents;
+SELECT task_id, agent_id, attempt, status, idempotency_key FROM task_deliveries ORDER BY delivered_at DESC;
+SELECT received_at, event_type, message FROM agent_events ORDER BY received_at DESC LIMIT 20;
+SELECT timestamp, actor_id, action, status, details FROM audit_logs ORDER BY timestamp DESC LIMIT 20;
+```
+
+---
+
+## 17. Testing
+
+```bash
+cargo test --workspace                     # everything
+cargo test -p agent-protocol               # pure serde/logic tests, no services needed
+cargo test -p agent-agy                    # subprocess/parser tests (uses temp shell scripts as fake agy)
+cargo test -p coordinator --lib            # unit + repository tests
+cargo test -p coordinator --test phase7_e2e_demo
+cargo test -p coordinator --test phase15_v1_validation
+cargo test --workspace --no-fail-fast      # keep going after a failing test binary
+```
+
+**Services:** most coordinator tests need the Docker Compose PostgreSQL and NATS (`docker compose up -d`). Tests that cannot reach them print `Skipping test: …` and return successfully, so a run without Docker passes but exercises far less. Tests read `DATABASE_URL`, `NATS_URL`, `NATS_AUTH_TOKEN` from `.env`/environment.
+
+**Suite composition (verified on 2026-09-19 against this repository):**
+
+| Binary | Tests |
+| :--- | ---: |
+| `agent-protocol` lib | 10 |
+| `agent-agy` lib | 9 |
+| `agent-mock` lib | 0 (covered via coordinator integration tests) |
+| `coordinator` lib | 101 |
+| `phase2_integration` … `phase7_e2e_demo` | 3, 3, 2, 6, 5, 1 |
+| `phase8_agy_integration` | 6 |
+| `phase9_git_integration` | 6 |
+| `phase10` … `phase15` | 6, 6, 8, 7, 8, 10 |
+| **Total** | **197** |
+
+One test is environment-dependent: `phase8_agy_integration::test_one_real_agy_binary_instance` runs the **real** `agy` binary at the hard-coded path `/home/pirate/.local/bin/agy`. It is skipped if the file is absent; if present it needs a working, authenticated `agy` with network access and takes ~2–3 minutes. All other tests use deterministic fake-`agy` shell scripts and pass without external services beyond Docker. See the run results in [Current Status](#20-current-status).
+
+Lint/format:
+
+```bash
 cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets
 ```
 
 ---
 
-## Architecture
-
-AgentMesh strictly separates presentation, orchestration, transport, and authoritative persistence:
-
-```text
-                     HUMAN OPERATOR
-                           │
-                           ▼
-                      RATATUI TUI
-              (Presentation & Intent Layer)
-                           │
-                           ▼
-                    COORDINATOR CORE
-       ┌───────────────────┼───────────────────┐
-       ▼                   ▼                   ▼
-  AI Planning         Validation &        Assignment &
-  (LlmProvider)     Overlap Detection     Gating Logic
-       │                   │                   │
-       └───────────────────┼───────────────────┘
-                           │
-            ┌──────────────┴──────────────┐
-            ▼                             ▼
-       POSTGRESQL 16                NATS 2.10 + JETSTREAM
-   (Authoritative State)             (Transport Layer)
-   • Projects & Tasks                • coordinator.tasks.assign.*
-   • TaskApprovals (Hard Gate)       • agents.*.events
-   • TaskDeliveries                  • coordinator.agents.register
-   • OverlapWarnings                 • coordinator.agents.heartbeat.*
-                                          │
-                      ┌───────────────────┴───────────────────┐
-                      ▼                                       ▼
-                 AGENT ADAPTER                           AGENT ADAPTER
-                  (agent-mock)                            (agent-mock)
-                 Alice (Backend)                          Bob (Infra)
-```
-
-### Component Responsibilities
-
-- **Human Operator:** Final authority over task approval, rejection, inline description editing, and critical overlap resolution. No task executes without recorded human sign-off.
-- **Ratatui TUI:** Terminal user interface. Renders screens and emits `TuiAction` events. Completely decoupled from database queries, network I/O, or business logic.
-- **Coordinator Core:** Central state machine engine. Dispatches operator commands, runs assignment cycles with dependency checks, performs concurrency locking (`FOR UPDATE SKIP LOCKED`), and reconciles deliveries.
-- **AI Planner:** Decomposes natural language project descriptions into structured tasks, suggested agent mappings, affected resource paths, and directed dependencies (`Blocks`, `RelatesTo`).
-- **PostgreSQL 16:** The authoritative source of truth. Stores all projects, tasks, dependency DAGs, human approval audits, delivery records, agent registries, and overlap warnings.
-- **NATS 2.10 + JetStream:** Low-latency distributed message broker. Handles request-reply registration, pub/sub heartbeats, durable WorkQueue task delivery, and ordered agent lifecycle telemetry.
-- **Agent Protocol:** Transport-agnostic serde message contract shared by the coordinator and all agent adapters.
-- **Agent Adapters:** Worker bridges that translate coordinator task specifications into agent actions, and report lifecycle events (`TaskStarted`, `ProgressUpdate`, `Blocked`, `Completed`, `Failed`, `Heartbeat`) back to the coordinator.
-
----
-
-## Core Workflow
-
-The end-to-end execution lifecycle follows a deterministic, human-gated pipeline:
-
-```text
-1. Human enters project description in TUI (Screen 1)
-   │
-2. Coordinator submits PlanningRequest to configured LlmProvider
-   │
-3. LLM returns ProposedTasks, Affected Resources, and ProposedDependencies
-   │
-4. PlanValidator checks proposal deterministically (acyclicity, unique IDs, agent existence)
-   │
-5. Proposal and Proposed tasks are persisted in PostgreSQL
-   │
-6. OverlapDetector runs Floyd-Warshall reachability on affected resources:
-   - Concurrent tasks sharing a resource -> Critical overlap warning
-   - Sequential tasks sharing a resource -> Info overlap warning
-   │
-7. TUI switches to Plan Review (Screen 2). Human reviews tasks one-by-one:
-   - [Y] Approve: Permitted only if no unacknowledged critical overlaps exist
-   - [A] Acknowledge: Clears critical conflict blocking condition
-   - [E] Edit: Modifies task description inline, confirms, and approves
-   - [N] Reject: Transitions task to terminal Rejected state
-   │
-8. Coordinator Assignment Cycle executes:
-   - Queries Approved tasks whose blocking dependencies are all Completed
-   - Locks task and available agent via SELECT FOR UPDATE SKIP LOCKED
-   - Inserts TaskDelivery record in PostgreSQL (status = Pending)
-   │
-9. Coordinator publishes TaskAssignment to NATS JetStream (tasks.{agent_id}.assigned)
-   - On publish success, TaskDelivery status -> Delivered
-   │
-10. Agent consumes assignment from JetStream and sends transport ACK
-    │
-11. Agent reports TaskStarted { idempotency_key, timestamp }
-    - Coordinator sets TaskDelivery -> Acknowledged, Task -> Executing, Agent -> Busy
-    │
-12. Agent publishes periodic ProgressUpdate and Heartbeat events
-    │
-13. Agent reports completion:
-    - If successful: AgentMessage::Completed -> Task status becomes Completed, Agent becomes Idle
-    - If blocked: AgentMessage::Blocked -> Task status becomes Blocked
-    - If failed: AgentMessage::Failed -> Task status becomes Failed
-    │
-14. Dependency DAG unblocks: Completed tasks trigger the next assignment cycle,
-    allowing downstream dependent tasks to become ready for assignment
-    │
-15. TUI Live Dashboard (Screen 3) projects real-time state; Coordinator reaches Done
-```
-
-> **Architectural Guarantee:** The LLM only proposes plans. It cannot transition tasks to `Assigned`, cannot publish directly to agents, and cannot bypass the human approval boundary.
-
----
-
-## Features
-
-- **AI Task Planning:** Generates dependency-aware task graphs with suggested agent mappings and resource estimations using Anthropic Claude 3.5 Sonnet or a deterministic local mock planner.
-- **Deterministic DAG Validation:** Validates plans for graph acyclicity (cycle detection), task ID uniqueness, self-referential blocks, and valid agent references before database persistence.
-- **Human Approval Gate:** Enforces that no task can advance from `Proposed` to `Assigned` without an explicit human approval record in PostgreSQL.
-- **Per-Task Review & Inline Editing:** Terminal review interface supporting single-key approval (`y`), rejection (`n`), description editing (`e`), and detail pane expansion (`Enter`).
-- **Critical Resource Overlap Detection:** Computes transitive reachability across tasks sharing files or API resources. Concurrent access raises a `Critical` overlap warning that strictly blocks task approval until explicitly acknowledged (`a`).
-- **Transactional Assignment & Concurrency Locking:** Uses PostgreSQL `FOR UPDATE SKIP LOCKED` to guarantee that concurrent coordinator workers cannot double-assign a task or claim the same agent simultaneously.
-- **NATS JetStream Task Delivery:** Publishes assignments over durable `WorkQueue` streams with idempotency keys (`{task_id}:{attempt}`) and ACK tracking.
-- **Agent Lifecycle Monitoring:** Ingests `TaskStarted`, `ProgressUpdate`, `Blocked`, `Completed`, `Failed`, and `Heartbeat` messages to update database and dashboard state in real time.
-- **Heartbeat Timeout Detection:** Background monitor automatically marks agents `Offline` if no heartbeat is received within 30 seconds.
-- **Delivery Reconciliation & Crash Safety:** Out-of-band reconciliation detects stale `Pending` or unacknowledged `Delivered` messages and handles reassignment safely.
-- **Ratatui Terminal Dashboard:** 3-screen terminal UI featuring project initiation, interactive plan review, and a fleet overview with real-time telemetry streaming.
-- **Docker Compose Stack:** Pre-configured, health-checked PostgreSQL 16 and NATS 2.10 JetStream services.
-- **Comprehensive Test Suite:** 119 verified tests covering domain invariants, repository CRUD, JetStream delivery, AI planning validation, TUI action emission, and full end-to-end integration.
-
----
-
-## Project Structure
+## 18. Project Structure
 
 ```text
 AgentMesh/
-├── Cargo.toml                  # Workspace definition (resolver v2, shared pins)
-├── docker-compose.yml          # PostgreSQL 16 + NATS 2.10 JetStream configuration
-├── .env.example                # Documented template for all environment variables
-├── .gitignore                  # Excludes target, secrets, logs, and build artifacts
-├── TODO.md                     # Authoritative implementation task list
-├── README.md                   # System documentation and developer guide
-│
-├── docs/                       # Architectural specifications
-│   ├── architecture.md         # System architecture and success criteria
-│   ├── domain-model.md         # Canonical state machines and relational models
-│   ├── protocol.md             # Agent protocol and NATS topic specifications
-│   ├── v1-validation.md        # v1.0 End-to-end multi-agent validation report
-│   └── decisions/              # Architecture Decision Records (ADRs 001–012)
-│
-├── migrations/                 # SQL migrations applied automatically by coordinator (001–005)
-│
+├── Cargo.toml                  # workspace (crates below), shared dependency pins
+├── docker-compose.yml          # postgres:16-alpine + nats:2.10-alpine (JetStream, token auth)
+├── .env.example                # documented environment variables (copy to .env)
+├── install.sh                  # optional bootstrap: checks tools, writes .env, starts Docker, builds
+├── README.md
+├── migrations/                 # applied automatically by the coordinator at startup
+│   ├── 001_initial_schema.sql
+│   ├── 002_git_coordination.sql
+│   ├── 003_agent_capabilities_and_health.sql
+│   ├── 004_security_and_audit.sql
+│   └── 005_observability_and_events.sql
+├── scripts/
+│   └── test_two_agy_instances.sh   # starts two agent-agy processes and checks registration
+├── docs/                       # see §21
 └── crates/
-    ├── coordinator/            # Primary coordinator binary and core library
-    │   ├── src/
-    │   │   ├── ai/             # LLM provider trait, mock/Anthropic clients, schema & DAG validator
-    │   │   ├── coordinator/    # Coordinator engine, assignment service, overlap detector, command handler
-    │   │   ├── db/             # PostgreSQL connection pool and repositories (sqlx)
-    │   │   ├── domain/         # Pure domain entities, enums, and state machine invariants
-    │   │   ├── messaging/      # NATS JetStream client, publisher, subscriber, registration & heartbeat
-    │   │   ├── tui/            # Ratatui application, screens (ProjectInput, PlanReview, Dashboard)
-    │   │   ├── lib.rs          # Library root
-    │   │   └── main.rs         # Binary entry point, background service wiring, TUI event loop
-    │   └── tests/              # Phase integration tests (phase2 through phase7_e2e_demo)
-    │
-    ├── agent-protocol/         # Pure serde message types and TaskSpec (zero I/O dependencies)
-    │   └── src/
-    │       ├── adapter.rs      # AgentAdapter trait definition
-    │       ├── messages.rs     # AgentMessage and CoordinatorMessage enums
-    │       ├── spec.rs         # TaskSpec data contract
-    │       └── status.rs       # AgentStatus, DeliveryAck, AckKind
-    │
-    ├── agent-mock/             # Simulated agent runner for tests and local demonstrations
-    │   └── src/
-    │       ├── adapter.rs      # MockAgent struct with configurable delay, blocker, and failure simulation
-    │       ├── runner.rs       # NATS registration, heartbeat loop, JetStream task execution
-    │       └── main.rs         # Executable mock agent binary
-    │
-    └── agent-agy/              # Scaffold for Google Antigravity (agy) CLI adapter
-        └── src/
-            └── main.rs         # Subprocess adapter scaffold (planned for future phases)
+    ├── agent-protocol/         # shared message types (messages, spec, status, capabilities, security, discovery, adapter trait)
+    ├── agent-mock/             # simulated agent: adapter.rs, runner.rs, main.rs
+    ├── agent-agy/              # agy adapter: adapter.rs, process.rs (subprocess), parser.rs (NDJSON), runner.rs, main.rs
+    └── coordinator/
+        ├── src/
+        │   ├── main.rs         # binary: env, DB+NATS connect, migrations, streams, listeners, TUI loop
+        │   ├── ai/             # provider, anthropic, mock, prompts, schema, validator, service, repo_scanner, matcher, complexity, replan
+        │   ├── coordinator/    # engine (CoordinatorCore), state, commands, assignment, overlap
+        │   ├── db/             # pool + repositories (projects, tasks, agents, proposals, deliveries, events, overlaps, audit, git_conflicts, unexpected_resources)
+        │   ├── domain/         # entities, enums, state machines
+        │   ├── git/            # identity, branch, workspace, changes, conflict, completion, coordinator
+        │   ├── messaging/      # client, streams, publisher, subscriber, registration, heartbeat
+        │   ├── observability/  # logging, timeline, delivery_visibility, diagnostics, metrics, events
+        │   ├── reliability/    # recovery, stale_sweeper, deduplication, reconnect
+        │   ├── security/       # auth, permissions, task_auth, nats_security, secrets, audit
+        │   └── tui/            # state, ui, screens/{project_input,plan_review,dashboard,diagnostics}, widgets
+        └── tests/              # phase2 … phase15 integration suites
 ```
+
+Workspace crate version is `0.1.0` (the coordinator logs `v0.1.0` at startup); "v1.0" refers to the completed roadmap milestone, not the Cargo version.
 
 ---
 
-## Multi-Device / Remote Agent Setup
+## 19. Troubleshooting
 
-AgentMesh supports distributed setups where coding agents run on remote developer workstations or cloud VMs while connecting to a central coordinator:
+**PostgreSQL connection problems**
+- Symptom: coordinator logs `PostgreSQL or NATS JetStream not reachable. Falling back to Standalone Mock Mode.`
+- Check: `docker compose ps`, `docker compose logs postgres`, `nc -zv localhost 5432`.
+- `DATABASE_URL` must match the Compose credentials (`agentmesh` / `POSTGRES_PASSWORD`). If you changed the password after the first start, the volume still holds the old one: `docker compose down -v` (destroys data) and `up -d` again.
+- Port in use: `sudo lsof -i :5432` — stop a host PostgreSQL or change the published port in `docker-compose.yml` and `DATABASE_URL`.
+
+**NATS connection problems**
+- Check: `curl -i http://localhost:8222/healthz` (expect `200`), `docker compose logs nats`, `nc -zv <host> 4222`.
+- `Authorization Violation` in agent/coordinator logs → `NATS_AUTH_TOKEN` differs from the token the container was started with. Remember agents do not read `.env`.
+- `TASK_ASSIGNMENTS stream not found` on an agent → the coordinator has never connected to this NATS server; start the coordinator first (it creates the streams).
+
+**Agent registration failures**
+- `Registration request failed` / timeout → no coordinator is listening on `coordinator.agents.register`. Start `cargo run --bin coordinator` (it also works headless with stdout redirected).
+- `Registration rejected: Invalid API key` → the `agent_id` already exists with a different key. Use the original key, use a new `*_AGENT_ID`, or rotate/delete the row.
+- `Agent key is revoked` / `has expired` → `is_revoked` or `api_key_expires_at` on the `agents` row.
+- `Unsupported adapter type` → only `mock` and `agy` are accepted.
+
+**Authentication failures (events ignored)**
+- Coordinator logs `Rejected unauthorized task event: task is assigned to another agent` → the reporting agent is not the assignee (`TaskAuthorizer`). Check `tasks.assigned_agent_id`.
+
+**`agy` not found / `agy` fails**
+- `Failed to spawn agy process: …` → set `AGY_BIN_PATH=/full/path/to/agy` or put `agy` on `PATH`. Confirm with `"$AGY_BIN_PATH" --help`.
+- Task goes `Failed` with an **empty** error and progress steps of type `error_message` → `agy` itself returned `{"event":"result","result":{"status":"ERROR","response":"","error":"…"}}`. The adapter forwards `response` (empty here), not `error`, so run `agy` manually to read the message, e.g. `agy -p "Reply OK" --output-format stream-json --effort low`. A common cause is `RESOURCE_EXHAUSTED (code 429): Individual quota reached` on the `agy` account. `RUST_LOG=debug` on the agent also prints every stdout line.
+
+**Agent heartbeat problems**
+- Agent shows `offline` in the Dashboard → no heartbeat for 30 s. Check the agent process is alive and can reach NATS; check clock skew (heartbeat latency is derived from timestamps).
+- Agent stuck `busy` after a crash → run a stale sweep from code/tests (`CoordinatorCore::run_stale_sweep`) or reset via SQL: `UPDATE agents SET status='idle', current_task_id=NULL WHERE id='…';`.
+
+**Task stuck in a state**
+- `approved` but never `assigned`: a `blocks` dependency is not `completed`; no agent is `idle` + healthy + under concurrency; the task's suggested agent is a seeded placeholder with no process; or you have not triggered an assignment cycle since the blocker completed (approve/edit any task, or restart and approve).
+- `assigned` but agent never starts: check the agent's consumer exists (`curl -s localhost:8222/jsz?consumers=true`), that `agent_id` matches, and the agent log for `Received task assignment`.
+- `executing` forever: the agent died mid-task; see heartbeat above. Deliveries expire after 60 s without `TaskStarted` (`task_deliveries.expires_at`) and are reclaimed by the sweeper.
+- `failed`: needs human action — `CommandHandler::execute_reassign_task` (library) or SQL to set `approved` again; there is no TUI key yet.
+
+**Git / worktree problems**
+- `fatal: '<path>' already exists` or leftover `.agentmesh/worktrees/<id>` → `git worktree prune` and remove the directory; `AgentWorkspace::create` also force-removes stale worktrees on retry.
+- Branch already exists: worktrees are created with `-B`, which resets the branch to the base commit — do not reuse `agentmesh/*` branches for manual work.
+- Conflict detection uses `git merge-tree --write-tree` (Git ≥ 2.38) and falls back to the classic `git merge-tree <base> <a> <b>` on older Git.
+
+**Remote machine connection problems**
+- `nc -zv <coordinator-ip> 4222` from the remote machine. If it fails: firewall on the coordinator host, wrong IP, or Docker publishing only on a specific interface. Compose publishes `4222:4222` on all interfaces by default.
+- Over Tailscale/WireGuard use the VPN IP, not the LAN IP.
+
+**LLM / API configuration problems**
+- Status bar `AI Planning error: …` with `AI_PROVIDER=anthropic` → check `ANTHROPIC_API_KEY`, network, and `AI_MODEL`. Malformed model output is rejected by `PlanValidator` and shown in the status bar; the coordinator does not crash.
+- Plans always look generic → you are on the mock planner (`AI_PROVIDER` unset/`mock`, or missing key fallback).
+- `Unsupported AI_PROVIDER` → only `mock` and `anthropic` exist; `openai`/`gemini` are not implemented.
+
+---
+
+## 20. Current Status
+
+### Implemented (in this repository)
+
+- Human-gated planning loop: project input → LLM plan (mock/Anthropic) → DAG validation → per-task approve/edit/reject → overlap acknowledgement.
+- Transactional assignment with `FOR UPDATE SKIP LOCKED`, `TaskDelivery` outbox, idempotency keys, JetStream WorkQueue delivery, in-band rollback on publish failure.
+- Full agent protocol with two adapters (`agent-mock`, `agent-agy`), registration with key verification, heartbeats, 30 s offline detection, event ingestion with authorization and deduplication.
+- Repository-aware planning (`RepositoryScanner`), capability matching, complexity estimation, replanning engine.
+- Git identity/branch/worktree/resource-tracking/merge-conflict/completion modules.
+- Security: hashed `am_ak_` keys, roles, permission boundaries, task authorization, audit log, secret redaction, TLS-capable NATS client.
+- Observability: timelines, delivery diagnostics, failure diagnostics, metrics, coordinator events, Diagnostics TUI screen.
+- Reliability: startup recovery, stale task sweeper, delivery reconciliation, deduplication, reconnect helpers.
+- 5 SQL migrations applied automatically; Docker Compose stack; 4-screen Ratatui TUI; headless daemon mode; standalone demo mode.
+
+### Tested (automated)
+
+- 197 tests across the workspace (see §17). On the maintainer machine on 2026-09-19 with Docker services running: **196 passed**, and `test_one_real_agy_binary_instance` (the only test that invokes the real `agy` binary) **failed**. Running `agy` by hand showed the cause: `result.status = "ERROR"` with `error: "API error … RESOURCE_EXHAUSTED (code 429): Individual quota reached"` — an `agy` account quota limit, not a coordinator defect. Earlier runs recorded by the maintainer (`docs/development/v1-validation.md`) report the full suite passing. Treat this test as environment-dependent.
+- Integration suites cover: JetStream redelivery on NAK; approval gating; dependency gating; concurrency locking; overlap gating; worktree isolation with parallel delivery; capability matching and health gating; authentication, revocation, impersonation, permission boundaries, audit; timelines, diagnostics, metrics; restart recovery, stale reclamation, deduplication, crash/reassign cycles; a full lifecycle demo with two mock agents.
+
+### Real-world validated
+
+- One real `agy` instance executing a trivial task end-to-end through NATS (the `phase8` real-binary test, when it passes) and two `agent-agy` processes registering concurrently (`scripts/test_two_agy_instances.sh`), both on a single machine.
+- Interactive TUI flow with two `agent-mock` processes on one machine.
+
+### Experimental (not independently validated by the automated suite)
+
+- Two physically separate machines: the code path is just `NATS_URL`, and `phase15_4` registers multiple agents with distinct identities, but the automated tests run on one host. Follow §8 and verify with the SQL query there.
+- Real `agy` on non-trivial coding tasks inside coordinator-created worktrees.
+- Anthropic planning quality on real repositories (mock planner is the default and the only provider used in tests).
+- TLS/mTLS NATS, user/password auth (library only).
+
+### Future / not implemented
+
+- Background assignment/sweeper/recovery loops in the coordinator binary (today: assignment on approve; sweeper/recovery via library).
+- Automatic worktree creation and completion handling from the interactive binary.
+- TUI actions for reassign, cancel, replan, and live metrics streaming into the Diagnostics screen.
+- Coordinator publishing `TaskCancelled` / `WaitForDependency`; adapters acting on them.
+- OpenAI / Gemini providers; NATS server-side account permissions; admin approval of new agent registrations; a `coordinator` Docker image.
+
+AgentMesh v1.0 is a complete, tested coordination core and a working `agy` adapter. It is **not** production-ready as shipped — see §15.
+
+---
+
+## 21. Documentation
 
 ```text
-                            LAN / PRIVATE VPN / TAILSCALE
-                                          │
-                                          ▼
-                             ┌─────────────────────────┐
-                             │     AGENTMESH HOST      │
-                             │                         │
-                             │  Coordinator Binary     │
-                             │  PostgreSQL 16 (:5432)  │
-                             │  NATS JetStream (:4222) │
-                             └────────────┬────────────┘
-                                          │
-                        NATS Connection (Token / TLS)
-                                          │
-                    ┌─────────────────────┴─────────────────────┐
-                    ▼                                           ▼
-          DEVELOPER WORKSTATION                       DEVELOPER WORKSTATION
-          Agent A (Host IP:4222)                      Agent B (Host IP:4222)
-          MOCK_AGENT_OWNER="Alice"                    MOCK_AGENT_OWNER="Bob"
+docs/
+├── README.md                          # index
+├── architecture/
+│   ├── architecture.md                # system overview, design principles, v1.0 additions
+│   └── domain-model.md                # entities, task/agent/delivery state machines, invariants
+├── protocols/
+│   └── agent-protocol.md              # NATS subjects, streams, message schemas, registration, idempotency
+├── deployment/
+│   └── multi-machine.md               # LAN / VPN deployment walkthrough and verification
+├── development/
+│   └── v1-validation.md               # Phase 15 validation report and test matrix
+└── decisions/                         # ADR 001–012
 ```
 
-### Network Configurations Supported in v0.1
-
-1. **Same-Machine Setup (Default):**
-   - Coordinator, PostgreSQL, NATS, and mock agents run on `localhost`.
-   - Communication over `127.0.0.1:4222` and `127.0.0.1:5432`.
-
-2. **LAN / Private Network / VPN (e.g., WireGuard, Tailscale):**
-   - Coordinator and Docker stack run on a central workstation (e.g., IP `192.168.1.50` or Tailscale IP `100.x.y.z`).
-   - Remote agents configure their environment:
-     ```bash
-     NATS_URL=nats://192.168.1.50:4222 NATS_AUTH_TOKEN=agentmesh_dev_token cargo run --bin agent-mock
-     ```
-   - No code modifications required; NATS handles socket connectivity across the subnet.
-
-3. **Public Internet Setup:**
-   - **Current Limitation:** The v0.1 Docker Compose configuration uses basic static token authentication (`agentmesh_dev_token`) over plain TCP.
-   - **Do NOT expose port 4222 directly to the public internet without a TLS termination proxy or VPN.** Production multi-device deployment requires NATS NKey credentials and TLS encryption (see [ADR 002](docs/decisions/002-message-queue-nats-jetstream.md)).
+- [`docs/README.md`](docs/README.md)
+- [`docs/architecture/architecture.md`](docs/architecture/architecture.md)
+- [`docs/architecture/domain-model.md`](docs/architecture/domain-model.md)
+- [`docs/protocols/agent-protocol.md`](docs/protocols/agent-protocol.md)
+- [`docs/deployment/multi-machine.md`](docs/deployment/multi-machine.md)
+- [`docs/development/v1-validation.md`](docs/development/v1-validation.md)
+- [`docs/decisions/`](docs/decisions/)
 
 ---
-
-## NATS Configuration
-
-AgentMesh uses NATS 2.10 with JetStream enabled for message persistence and pub/sub messaging.
-
-- **Client Port:** `4222` (TCP)
-- **HTTP Monitoring Port:** `8222` (Web dashboard at `http://localhost:8222`)
-- **Authentication:** Token-based via `NATS_AUTH_TOKEN` (configured via `-auth` flag in `docker-compose.yml`)
-
-### JetStream Streams
-
-| Stream Name | Storage | Retention Policy | Subject Filter | Purpose |
-|---|---|---|---|---|
-| `TASK_ASSIGNMENTS` | File | `WorkQueue` | `coordinator.tasks.assign.*` | Reliable, at-least-once task assignment delivery to agents |
-| `AGENT_EVENTS` | File | `Limits` (Max 100k, 24h) | `agents.*.events` | Ingesting agent lifecycle telemetry into coordinator |
-
-### Core Subjects
-
-- `coordinator.agents.register`: Core NATS request-reply subject for agent registration.
-- `coordinator.agents.heartbeat.{agent_id}`: Subject where agents publish 5-second heartbeats.
-- `tasks.{agent_id}.assigned`: JetStream subject where the coordinator publishes task specs for a specific agent.
-- `agents.{agent_id}.events`: JetStream subject where an agent publishes lifecycle events (`TaskStarted`, `ProgressUpdate`, `Blocked`, `Completed`, `Failed`).
-
----
-
-## Agent Registration & Protocol
-
-### How an Agent Identifies Itself
-When an agent starts, it issues a registration request containing:
-- `agent_id`: Unique UUID representing the agent.
-- `human_owner`: Human developer responsible for this agent (e.g., `Alice (Backend Lead)`).
-- `adapter_type`: Adapter identifier (`mock`, `agy`).
-- `capabilities`: Array of capability tags (e.g., `["backend", "rust", "sql"]`).
-- `api_key`: Shared authentication key.
-
-The coordinator validates the registration, records or updates the agent in PostgreSQL, and replies with a `RegisterResponse`.
-
-### Agent Protocol Messages (`crates/agent-protocol`)
-
-#### Agent → Coordinator (`AgentMessage`)
-```rust
-pub enum AgentMessage {
-    Register { agent_id, human_owner, adapter_type, capabilities, api_key },
-    TaskStarted { agent_id, task_id, idempotency_key, timestamp },
-    ProgressUpdate { agent_id, task_id, message, percent, timestamp },
-    Blocked { agent_id, task_id, reason, blocking_task_id, timestamp },
-    Completed { agent_id, task_id, summary, timestamp },
-    Failed { agent_id, task_id, error, timestamp },
-    Heartbeat { agent_id, status, current_task_id, timestamp },
-}
-```
-
-#### Coordinator → Agent (`CoordinatorMessage`)
-```rust
-pub enum CoordinatorMessage {
-    TaskAssignment { spec: TaskSpec },
-    TaskCancelled { task_id, reason, timestamp },
-    WaitForDependency { task_id, blocking_task_id, message, timestamp },
-    RegisterResponse { status, nats_subject, error },
-}
-```
-
----
-
-## Agent Adapters
-
-AgentMesh decouples coordination logic from agent execution via adapters:
-
-- **`agent-mock` (Implemented & Verified):** A standalone worker that speaks the complete Agent Protocol over NATS JetStream, sends heartbeats, tracks idempotency keys, and simulates configurable execution delays, blockers, and failures.
-- **`agent-agy` (Phase 0 Scaffold):** Designed to interface with the Google Antigravity (`agy`) CLI by wrapping `agy` in a subprocess, parsing stdout/JSON streams, and translating them into `AgentMessage` events. *Current Status: Crate structure scaffolded; live subprocess execution is not yet implemented.*
-
----
-
-## AI Providers
-
-The coordinator integrates LLMs through the `LlmProvider` trait:
-
-```rust
-#[async_trait]
-pub trait LlmProvider: Send + Sync {
-    async fn plan(&self, request: &PlanningRequest) -> Result<PlanningResponse>;
-    fn model_name(&self) -> &str;
-}
-```
-
-### Supported Providers
-1. **Mock Provider (`AI_PROVIDER=mock`):** Built-in deterministic planning provider. Decomposes any project into realistic tasks, assignees, affected file paths, and dependencies without network calls or API keys. Default for all automated tests and local demos.
-2. **Anthropic (`AI_PROVIDER=anthropic`):** Uses Claude 3.5 Sonnet (`claude-3-5-sonnet-20241022`) via raw REST API requests. Requires `ANTHROPIC_API_KEY`. Prompts enforce strict JSON output adhering to `PlanningResponse`.
-
----
-
-## Task State Machine
-
-The task lifecycle is strictly enforced by the domain model (`crates/coordinator/src/domain/task.rs`):
-
-```text
-                     ┌──────────────┐
-                     │   Proposed   │
-                     └──────┬───────┘
-                            │ (Coordinator persists AI plan)
-                            ▼
-                     ┌──────────────┐
-       ┌────────────►│ HumanReview  │◄────────────┐
-       │             └──────┬───────┘             │ (Human reassigns failed task)
-       │                    │                     │
-       │       ┌────────────┴────────────┐        │
-       │       ▼                         ▼        │
-┌──────────────┐                  ┌──────────────┐│
-│   Rejected   │ (Terminal)       │   Approved   ││
-└──────────────┘                  └──────┬───────┘│
-                                         │ (Dependencies Completed & Agent Idle)
-                                         ▼        │
-                                  ┌──────────────┐│
-                                  │   Assigned   ││
-                                  └──────┬───────┘│
-                                         │ (Agent reports TaskStarted)
-                                         ▼        │
-                                  ┌──────────────┐│
-                 ┌───────────────►│  Executing   ││
-                 │                └──────┬───────┘│
-  (Agent unblocked)                      │        │
-                 │    ┌──────────────────┼────────┴───────┐
-                 │    ▼                  ▼                ▼
-          ┌──────────────┐        ┌──────────────┐ ┌──────────────┐
-          │   Blocked    │        │  Completed   │ │    Failed    │
-          └──────────────┘        └──────────────┘ └──────────────┘
-                                     (Terminal)
-```
-
-### Legal Transitions
-- `Proposed` → `HumanReview`
-- `HumanReview` → `Approved` | `Rejected`
-- `Approved` → `Assigned` | `Cancelled`
-- `Assigned` → `Executing` | `Failed` | `Cancelled`
-- `Executing` → `Blocked` | `Completed` | `Failed` | `Cancelled`
-- `Blocked` → `Executing` | `Cancelled`
-- `Failed` → `Approved` *(Allows human operator to reassign failed tasks)*
-
-### Terminal States
-`Completed`, `Rejected`, and `Cancelled` admit no further transitions.
-
----
-
-## Dependencies & DAG Validation
-
-AgentMesh supports two dependency relationships:
-- **`Blocks`:** Downstream task cannot be assigned until the prerequisite task reaches `Completed`.
-- **`RelatesTo`:** Informational link; does not gate assignment.
-
-### Cycle & Graph Validation
-Before any plan is accepted into PostgreSQL, [`PlanValidator`](crates/coordinator/src/ai/validator.rs) performs deterministic checks:
-- **Acyclicity:** DFS-based topological sorting rejects direct cycles (`A → B → A`) and indirect transitive cycles (`A → B → C → A`).
-- **Self-Dependencies:** Tasks cannot depend on themselves.
-- **Reference Integrity:** Dependencies must reference tasks that exist in the proposal or project.
-- **Short ID Uniqueness:** Duplicate task short identifiers within a plan are rejected.
-
----
-
-## Overlap Detection & Gating
-
-When tasks share resources (source files, database tables, or API contracts), uncoordinated execution leads to collisions:
-
-```text
-Task 1 (Agent A) touches "src/models/order.rs"
-Task 2 (Agent B) touches "src/models/order.rs"
-```
-
-[`OverlapDetector`](crates/coordinator/src/coordinator/overlap.rs) evaluates these conflicts using Floyd-Warshall reachability:
-- **Sequential Overlap (`Info`):** If a directed `Blocks` path exists between Task 1 and Task 2, one must finish before the other starts. Severity is marked `Info`.
-- **Concurrent Overlap (`Critical`):** If no directed blocking relationship exists, both tasks could execute simultaneously. Severity is marked `Critical`.
-
-> **Deterministic Approval Rule:** Any task associated with an unacknowledged `Critical` overlap is strictly blocked from approval (`ApprovalGateError::BlockedByCriticalOverlap`). The human operator must press `a` in the TUI to acknowledge the risk before the task can be approved.
-
----
-
-## Reliability & Failure Handling
-
-- **Authoritative PostgreSQL Ownership:** Task assignment state is owned by PostgreSQL `TaskDelivery` records, not NATS in-memory queues. If NATS restarts, PostgreSQL retains the authoritative delivery history.
-- **Idempotency Guarantees:** Deliveries carry an idempotency key (`{task_id}:{attempt}`). Agents store processed keys and deduplicate re-delivered messages on reconnect.
-- **Transport ACKs vs Lifecycle Events:** JetStream message ACKs acknowledge receipt of bytes. Execution tracking requires a separate `AgentMessage::TaskStarted` event.
-- **Heartbeat Timeout Detection:** If an agent becomes unresponsive for 30 seconds, `HeartbeatMonitor` automatically marks the agent `Offline`.
-- **Stale Delivery Recovery:** If a coordinator crashes after inserting a `Pending` delivery record, the reconciliation service (`AssignmentService::reconcile_pending_deliveries`) redelivers or fails expired deliveries.
-- **No Automatic Retry Storms:** Failed tasks transition to `Failed` and require human review. The operator can reassign the task via the coordinator, which creates a new `TaskDelivery` with an incremented `attempt` counter.
-
----
-
-## Testing
-
-The workspace includes comprehensive unit, repository, integration, and end-to-end tests.
-
-Run all tests across the workspace:
-
-```bash
-cargo test --workspace
-```
-
-### Verified Test Suite Breakdown (119 Total Tests)
-- `agent-protocol`: 17 passed (serialization round-trips, spec validation)
-- `agent-mock`: 13 passed (lifecycle states, simulated work runner)
-- `coordinator` library: 69 passed (state machines, sqlx repositories, DAG validator, overlap detection, TUI state)
-- `phase2_integration.rs`: 3 passed (JetStream redelivery on NAK, agent lifecycle over NATS)
-- `phase3_planning.rs`: 3 passed (AI planning validation, cycle rejection, proposal persistence)
-- `phase4_tui.rs`: 2 passed (TUI headless rendering, keybinding action emission)
-- `phase5_coordinator.rs`: 6 passed (human approval gating, dependency gating, concurrency locking)
-- `phase6_dashboard_overlap.rs`: 5 passed (overlap persistence, dashboard live telemetry streaming)
-- `phase7_e2e_demo.rs`: 1 passed (full end-to-end multi-agent execution lifecycle)
-
----
-
-## Troubleshooting
-
-### PostgreSQL is Not Running / Connection Refused
-- **Symptoms:** Coordinator panics on startup with `Failed to connect to PostgreSQL`.
-- **Remedy:** Check container status with `docker compose ps`. If stopped, restart with `docker compose up -d postgres`. Inspect database logs with `docker compose logs postgres`.
-
-### NATS is Not Running / Port 4222 Refused
-- **Symptoms:** Coordinator logs `NATS not reachable` and falls back to standalone mock mode.
-- **Remedy:** Ensure NATS container is healthy via `docker compose ps`. Verify port 4222 is open: `nc -zv localhost 4222`. Inspect NATS logs with `docker compose logs nats`.
-
-### Port Already in Use (5432 or 4222)
-- **Symptoms:** Docker Compose fails to bind port: `bind: address already in use`.
-- **Remedy:** Identify the occupying process:
-  ```bash
-  sudo lsof -i :5432
-  sudo lsof -i :4222
-  ```
-  Stop local PostgreSQL or NATS services running on the host system (`sudo systemctl stop postgresql`).
-
-### Agent Does Not Register
-- **Symptoms:** `agent-mock` outputs `Failed to register agent with coordinator`.
-- **Remedy:**
-  1. Verify the coordinator is running and listening on `coordinator.agents.register`.
-  2. Check that `NATS_AUTH_TOKEN` in `.env` matches the token configured in `docker-compose.yml` (`agentmesh_dev_token`).
-
-### Task is Not Delivered to Agent
-- **Symptoms:** Task approved in TUI but remains unassigned.
-- **Checklist:**
-  1. **Dependencies:** Check if the task has prerequisite blocking dependencies that are not yet `Completed`.
-  2. **Agent Availability:** Check Screen 3 (Dashboard). If all agents are `Busy` or `Offline`, the coordinator waits until an agent reports `Idle`.
-  3. **Critical Overlaps:** Check if the task has unacknowledged critical overlaps blocking approval.
-
-### LLM Planning Fails
-- **Symptoms:** TUI displays `AI Planning error: ANTHROPIC_API_KEY environment variable must be set`.
-- **Remedy:** If using cloud models, ensure `ANTHROPIC_API_KEY` is set in `.env`. For local development without API keys, set `AI_PROVIDER=mock`.
-
----
-
-## Security Notes
-
-- **Never Commit Secrets:** The `.env` file is excluded in [`.gitignore`](.gitignore). Only commit sanitized templates like [`.env.example`](.env.example).
-- **No Secret Logging:** Coordinator tracing and database logs sanitize sensitive tokens and API keys.
-- **NATS Authentication:** The v0.1 Docker Compose environment uses token-based authentication. In production deployments across untrusted networks, replace this with NKey authentication and TLS encryption (see [ADR 002](docs/decisions/002-message-queue-nats-jetstream.md)).
-- **Database Access:** Database credentials in `docker-compose.yml` are intended for local development. Use managed secrets and restricted PostgreSQL user roles in production.
-
----
-
-## Current Status
-
-| Area | Status | Notes |
-|---|---|---|
-| **Core Architecture (v0.1)** | **Verified** | All 10 v0.1 success criteria met and validated in `phase7_e2e_demo.rs` |
-| **Human Approval Boundary** | **Verified** | Strict domain gate preventing unapproved task assignment |
-| **Overlap Detection** | **Verified** | Transitive reachability analysis; unacknowledged critical overlaps block approval |
-| **PostgreSQL Persistence** | **Verified** | Full schema migrations and sqlx repositories with compile-time query checks |
-| **NATS JetStream Transport** | **Verified** | WorkQueue assignments, Limits telemetry, request-reply registration |
-| **Ratatui TUI** | **Verified** | 3-screen interactive terminal app with decoupled action emission |
-| **Agent Mock Adapter** | **Demo / Mock** | Fully functional simulated agent for local demonstration and integration testing |
-| **AI Planning (Anthropic)** | **Verified** | Structured task generation using Claude 3.5 Sonnet |
-| **Agent Agy Adapter** | **Experimental** | Phase 0 crate scaffold; live subprocess execution planned for subsequent releases |
-| **OpenAI / Gemini Providers** | **Future** | Architecture defined in ADR 006; provider implementations planned for future phases |
-
----
-
-## Development & Contributing
-
-### Build Workspace
-```bash
-cargo build --workspace
-```
-
-### Run Linter & Formatter
-```bash
-cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings
-```
-
-### Inspecting Logs
-To run the coordinator with verbose debug logging directed to a file (preventing TUI screen distortion):
-```bash
-RUST_LOG=debug cargo run --bin coordinator 2> coordinator_debug.log
-```
-
-### Adding a New Agent Adapter
-1. Create a crate in `crates/` and add it to `Cargo.toml` workspace members.
-2. Depend on `agent-protocol = { workspace = true }`.
-3. Implement `AgentAdapter` from `agent_protocol::adapter::AgentAdapter`.
-4. Connect to NATS, issue `AgentMessage::Register`, and subscribe to `tasks.{agent_id}.assigned`.
-5. Report lifecycle events (`TaskStarted`, `ProgressUpdate`, `Completed`, `Failed`) to `agents.{agent_id}.events`.
-
-### Adding a New LLM Provider
-1. Add client dependencies to `crates/coordinator/Cargo.toml`.
-2. Implement the `LlmProvider` trait in `crates/coordinator/src/ai/`.
-3. Handle prompt formatting using `PlanningPrompt::system_prompt()` and parse JSON into `PlanningResponse`.
-4. Register the new provider variant in `crates/coordinator/src/ai/mod.rs` (`create_provider_by_name`).
-
----
-
-## Philosophy
 
 > **AI suggests. Humans decide. Agents execute.**
-
-AI models are exceptional at synthesis, pattern decomposition, and exploring solution spaces. However, production codebases demand deterministic accountability, explicit interface contracts, and unambiguous human intent. 
-
-AgentMesh is built on the principle that the coordination plane must be structurally deterministic. By separating probabilistic AI reasoning from authoritative state management, AgentMesh enables developer teams to harness the speed of parallel coding agents without sacrificing software integrity.
+> AgentMesh coordinates. PostgreSQL is the source of truth. NATS transports the work. The agent protocol keeps runtimes interchangeable.
