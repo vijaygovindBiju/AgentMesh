@@ -64,8 +64,15 @@ target/doc/
 *.numbers
 *.key
 
+# Internal-only documents — not needed for the public repository
+TODO.md
+AGENTS.md
+CLAUDE.md
+.devin/
+.claude/
+.cursor/
+
 # Todo lists and task tracking
-!TODO.md
 todo.md
 TODO
 todo
