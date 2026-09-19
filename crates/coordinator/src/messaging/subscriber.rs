@@ -17,9 +17,15 @@ use crate::security::task_auth::TaskAuthorizer;
 use crate::security::SecurityError;
 use uuid::Uuid;
 
+static DEDUPLICATOR: std::sync::OnceLock<crate::reliability::EventDeduplicator> = std::sync::OnceLock::new();
+
 pub struct EventSubscriber;
 
 impl EventSubscriber {
+    pub fn get_deduplicator() -> &'static crate::reliability::EventDeduplicator {
+        DEDUPLICATOR.get_or_init(crate::reliability::EventDeduplicator::default)
+    }
+
     /// Validates that an agent has authority to act on a task before processing its events.
     async fn check_task_auth(pool: &PgPool, agent_id: Uuid, task_id: Uuid, action: &str) -> Result<bool> {
         match TaskAuthorizer::authorize_agent_for_task(pool, agent_id, task_id, action).await {
@@ -76,6 +82,32 @@ impl EventSubscriber {
 
     /// Handles a single incoming AgentMessage and updates PostgreSQL state accordingly.
     pub async fn handle_agent_message(pool: &PgPool, msg: AgentMessage) -> Result<()> {
+        let dedup_key = match &msg {
+            AgentMessage::TaskStarted { agent_id, task_id, .. } => {
+                Some(crate::reliability::EventDeduplicator::compute_event_key(*agent_id, *task_id, "TaskStarted", None))
+            }
+            AgentMessage::ProgressUpdate { agent_id, task_id, percent, .. } => {
+                Some(crate::reliability::EventDeduplicator::compute_event_key(*agent_id, *task_id, "ProgressUpdate", Some(&percent.to_string())))
+            }
+            AgentMessage::Completed { agent_id, task_id, .. } => {
+                Some(crate::reliability::EventDeduplicator::compute_event_key(*agent_id, *task_id, "Completed", None))
+            }
+            AgentMessage::Failed { agent_id, task_id, .. } => {
+                Some(crate::reliability::EventDeduplicator::compute_event_key(*agent_id, *task_id, "Failed", None))
+            }
+            AgentMessage::Blocked { agent_id, task_id, .. } => {
+                Some(crate::reliability::EventDeduplicator::compute_event_key(*agent_id, *task_id, "Blocked", None))
+            }
+            _ => None,
+        };
+
+        if let Some(key) = dedup_key {
+            if !Self::get_deduplicator().check_or_record(&key) {
+                warn!(key = %key, "Dropping duplicate agent lifecycle message");
+                return Ok(());
+            }
+        }
+
         match msg {
             AgentMessage::TaskStarted {
                 agent_id,

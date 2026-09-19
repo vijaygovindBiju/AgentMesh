@@ -80,7 +80,8 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Phase 11 — Agent Capability System (DONE)
 - [x] Phase 12 — Security (DONE)
 - [x] Phase 13 — Observability (DONE)
-- [ ] Phase 14 — Production-Quality Reliability (NEXT)
+- [x] Phase 14 — Production-Quality Reliability (DONE)
+- [ ] Phase 15 — v1.0 End-to-End Validation (NEXT)
 
 ---
 
@@ -424,16 +425,19 @@ Full observability over tasks, agents, and NATS JetStream messaging. Chronologic
 
 **Goal:** Make the coordinator resilient.
 
-- [ ] 14.1 Coordinator restart recovery
-- [ ] 14.2 Agent reconnect recovery
-- [ ] 14.3 NATS reconnect handling
-- [ ] 14.4 Database reconnect handling
-- [ ] 14.5 Stale task recovery
-- [ ] 14.6 Duplicate event handling
-- [ ] 14.7 Network partition testing
-- [ ] 14.8 Agent crash testing
-- [ ] 14.9 Coordinator crash testing
-- [ ] 14.10 End-to-end recovery tests
+- [x] 14.1 Coordinator restart recovery (`CoordinatorRecoveryService::recover_on_startup` scanning pending deliveries & orphan tasks)
+- [x] 14.2 Agent reconnect recovery (`CoordinatorRecoveryService::handle_agent_reconnect` detecting in-progress tasks on reconnect)
+- [x] 14.3 NATS reconnect handling (`ResilientConnection::nats_options` with connection callback monitoring)
+- [x] 14.4 Database reconnect handling (`ResilientConnection::verify_db` and `with_retry` exponential backoff)
+- [x] 14.5 Stale task recovery (`StaleTaskSweeper::sweep` reclaiming orphan tasks from offline agents back to `Approved`/`HumanReview`)
+- [x] 14.6 Duplicate event handling (`EventDeduplicator` preventing duplicate transitions and DB writes in `EventSubscriber`)
+- [x] 14.7 Network partition testing (`StaleTaskSweeper` detecting expired unacknowledged deliveries and marking them `Terminal`)
+- [x] 14.8 Agent crash testing (simulated silent crash, heartbeat timeout, and safe reassignment to new agent)
+- [x] 14.9 Coordinator crash testing (simulated mid-delivery crash and startup recovery)
+- [x] 14.10 End-to-end recovery tests (multi-agent crash and recovery cycle verified)
+
+### Acceptance Criteria:
+The coordinator survives unexpected crashes and restarts without data corruption. Tasks assigned to dead agents are cleanly reclaimed and reassigned. Duplicate messages are deduplicated idempotently. ✓ Verified in `phase14_reliability.rs` (8/8 passed) and full workspace test suite (172/172 passed).
 
 ---
 

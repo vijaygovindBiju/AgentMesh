@@ -170,6 +170,16 @@ impl CoordinatorCore {
         AssignmentService::reconcile_pending_deliveries(&self.pool, self.jetstream.as_ref()).await
     }
 
+    /// Runs full crash recovery and stale sweep on coordinator startup.
+    pub async fn recover_on_startup(&self) -> Result<crate::reliability::RecoveryReport> {
+        crate::reliability::CoordinatorRecoveryService::recover_on_startup(&self.pool, self.jetstream.as_ref()).await
+    }
+
+    /// Runs periodic stale task sweep and reclamation cycle.
+    pub async fn run_stale_sweep(&self, timeout: chrono::Duration) -> Result<crate::reliability::SweepResult> {
+        crate::reliability::StaleTaskSweeper::sweep(&self.pool, timeout).await
+    }
+
     /// Ingests and processes an incoming agent protocol message.
     pub async fn handle_agent_message(&mut self, msg: AgentMessage) -> Result<()> {
         let task_id = match &msg {
