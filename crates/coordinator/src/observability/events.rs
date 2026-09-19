@@ -104,7 +104,11 @@ impl CoordinatorEventRepository {
     }
 
     /// Fetches events scoped to a specific project.
-    pub async fn find_by_project(pool: &PgPool, project_id: Uuid, limit: i64) -> Result<Vec<CoordinatorEvent>> {
+    pub async fn find_by_project(
+        pool: &PgPool,
+        project_id: Uuid,
+        limit: i64,
+    ) -> Result<Vec<CoordinatorEvent>> {
         let events = sqlx::query_as!(
             CoordinatorEvent,
             r#"
@@ -163,7 +167,11 @@ impl CoordinatorEventRepository {
     }
 
     /// Fetches events matching a specific event_type.
-    pub async fn find_by_type(pool: &PgPool, event_type: &str, limit: i64) -> Result<Vec<CoordinatorEvent>> {
+    pub async fn find_by_type(
+        pool: &PgPool,
+        event_type: &str,
+        limit: i64,
+    ) -> Result<Vec<CoordinatorEvent>> {
         let events = sqlx::query_as!(
             CoordinatorEvent,
             r#"

@@ -1,7 +1,7 @@
-use std::time::Duration;
 use anyhow::{Context, Result};
 use async_nats::jetstream::stream::{Config, RetentionPolicy, StorageType};
 use async_nats::jetstream::Context as JetStreamContext;
+use std::time::Duration;
 
 pub const TASK_ASSIGNMENTS_STREAM: &str = "TASK_ASSIGNMENTS";
 pub const TASK_ASSIGNMENTS_SUBJECT: &str = "coordinator.tasks.assign.*";
@@ -23,7 +23,9 @@ pub async fn ensure_streams(jetstream: &JetStreamContext) -> Result<()> {
     jetstream
         .get_or_create_stream(task_config)
         .await
-        .with_context(|| format!("Failed to create/get JetStream stream {TASK_ASSIGNMENTS_STREAM}"))?;
+        .with_context(|| {
+            format!("Failed to create/get JetStream stream {TASK_ASSIGNMENTS_STREAM}")
+        })?;
 
     // 2. AGENT_EVENTS: Limits retention (24h or 100k messages)
     let events_config = Config {
@@ -52,8 +54,10 @@ mod tests {
     #[tokio::test]
     async fn test_ensure_streams() {
         let _ = dotenvy::dotenv();
-        let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
-        let nats_token = std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
+        let nats_url =
+            std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+        let nats_token =
+            std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
 
         let Ok((_client, jetstream)) = connect(&nats_url, Some(&nats_token)).await else {
             eprintln!("Skipping test: NATS not reachable");

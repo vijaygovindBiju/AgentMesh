@@ -19,7 +19,9 @@ impl DashboardScreen {
             .border_style(Style::default().fg(Color::Cyan))
             .title(Span::styled(
                 " System Overview & Live Dashboard ",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         let inner_area = block.inner(area);
@@ -37,7 +39,11 @@ impl DashboardScreen {
 
         // 1. Project Header Summary
         let (name, desc, status) = if let Some(p) = &state.active_project {
-            (p.name.as_str(), p.description.as_str(), format!("{:?}", p.status))
+            (
+                p.name.as_str(),
+                p.description.as_str(),
+                format!("{:?}", p.status),
+            )
         } else {
             ("None", "No project currently active.", "Idle".to_string())
         };
@@ -45,7 +51,12 @@ impl DashboardScreen {
         let summary_lines = vec![
             Line::from(vec![
                 Span::styled("Active Project: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(name, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    name,
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled("  |  Status: ", Style::default().fg(Color::DarkGray)),
                 Span::styled(status, Style::default().fg(Color::Cyan)),
             ]),
@@ -83,7 +94,9 @@ impl DashboardScreen {
             .border_style(Style::default().fg(Color::DarkGray))
             .title(Span::styled(
                 " Registered Agents (Mesh Fleet) ",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         let rows: Vec<Row> = if state.agents.is_empty() {
@@ -127,13 +140,8 @@ impl DashboardScreen {
                         AgentStatus::Offline => ("OFFLINE", Color::DarkGray),
                     };
 
-                    Row::new(vec![
-                        name,
-                        owner,
-                        current_task,
-                        status_str.to_string(),
-                    ])
-                    .style(Style::default().fg(color))
+                    Row::new(vec![name, owner, current_task, status_str.to_string()])
+                        .style(Style::default().fg(color))
                 })
                 .collect()
         };
@@ -148,8 +156,11 @@ impl DashboardScreen {
             ],
         )
         .header(
-            Row::new(vec!["Agent Name", "Human Owner", "Current Task", "Status"])
-                .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Row::new(vec!["Agent Name", "Human Owner", "Current Task", "Status"]).style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         )
         .block(block);
 
@@ -163,7 +174,9 @@ impl DashboardScreen {
             .border_style(Style::default().fg(Color::DarkGray))
             .title(Span::styled(
                 " All Tasks Overview ",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         let rows: Vec<Row> = if state.review_tasks.is_empty() {
@@ -225,8 +238,11 @@ impl DashboardScreen {
             ],
         )
         .header(
-            Row::new(vec!["Short ID", "Title", "Status", "Assigned Agent"])
-                .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Row::new(vec!["Short ID", "Title", "Status", "Assigned Agent"]).style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         )
         .block(block);
 
@@ -269,21 +285,49 @@ impl DashboardScreen {
         let lines = vec![
             Line::from(vec![
                 Span::styled("Total Tasks: ", Style::default().fg(Color::White)),
-                Span::styled(total.to_string(), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    total.to_string(),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled("  |  Pending Review: ", Style::default().fg(Color::Yellow)),
-                Span::styled(pending.to_string(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    pending.to_string(),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
             ]),
             Line::from(vec![
                 Span::styled("Approved / Queued: ", Style::default().fg(Color::Green)),
-                Span::styled(approved.to_string(), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    approved.to_string(),
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled("  |  Executing: ", Style::default().fg(Color::Cyan)),
-                Span::styled(executing.to_string(), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    executing.to_string(),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
             ]),
             Line::from(vec![
                 Span::styled("Completed: ", Style::default().fg(Color::Green)),
-                Span::styled(completed.to_string(), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    completed.to_string(),
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled("  |  Rejected: ", Style::default().fg(Color::Red)),
-                Span::styled(rejected.to_string(), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    rejected.to_string(),
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
             ]),
         ];
 
@@ -310,7 +354,9 @@ impl DashboardScreen {
             .border_style(Style::default().fg(border_color))
             .title(Span::styled(
                 " Active Overlap Warnings [Press 'A' to acknowledge] ",
-                Style::default().fg(border_color).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(border_color)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         let lines: Vec<Line> = if state.active_overlaps.is_empty() {
@@ -328,9 +374,9 @@ impl DashboardScreen {
                         OverlapSeverity::Critical => {
                             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
                         }
-                        OverlapSeverity::Warning => {
-                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-                        }
+                        OverlapSeverity::Warning => Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
                         OverlapSeverity::Info => Style::default().fg(Color::Blue),
                     };
 
@@ -349,7 +395,7 @@ impl DashboardScreen {
                                 .iter()
                                 .find(|rt| rt.task.id == *tid)
                                 .map(|rt| rt.task.short_id.clone())
-                                .unwrap_or_else(|| format!("{}", &tid.to_string()[..8]))
+                                .unwrap_or_else(|| tid.to_string()[..8].to_string())
                         })
                         .collect();
 
@@ -358,7 +404,9 @@ impl DashboardScreen {
                         Span::styled(format!("[{:?}] ", w.severity), sev_style),
                         Span::styled(
                             format!("'{}' ", w.resource),
-                            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                            Style::default()
+                                .fg(Color::White)
+                                .add_modifier(Modifier::BOLD),
                         ),
                         Span::styled(
                             format!("(Tasks: {})", task_names.join(", ")),

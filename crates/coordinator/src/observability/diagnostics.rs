@@ -55,19 +55,20 @@ impl FailureDiagnostics {
             .unwrap_or_else(|| "No specific failure message reported by agent".to_string());
 
         // 2. Agent diagnostics
-        let (agent_owner, agent_consec, agent_health) = if let Some(agent_id) = task.assigned_agent_id {
-            if let Some(agent) = AgentRepository::find_by_id(pool, agent_id).await? {
-                (
-                    Some(agent.human_owner),
-                    agent.consecutive_failures,
-                    Some(agent.health_status),
-                )
+        let (agent_owner, agent_consec, agent_health) =
+            if let Some(agent_id) = task.assigned_agent_id {
+                if let Some(agent) = AgentRepository::find_by_id(pool, agent_id).await? {
+                    (
+                        Some(agent.human_owner),
+                        agent.consecutive_failures,
+                        Some(agent.health_status),
+                    )
+                } else {
+                    (None, 0, None)
+                }
             } else {
                 (None, 0, None)
-            }
-        } else {
-            (None, 0, None)
-        };
+            };
 
         // 3. Deliveries count
         let deliveries = TaskDeliveryRepository::list_by_task(pool, task_id).await?;
@@ -87,7 +88,10 @@ impl FailureDiagnostics {
         if has_git_conflicts {
             remediation_advice.push(RemediationAdvice {
                 title: "Resolve Cross-Agent Git Merge Conflicts".to_string(),
-                description: format!("Task has {} detected 3-way merge conflict(s) with base branch.", conflicts.len()),
+                description: format!(
+                    "Task has {} detected 3-way merge conflict(s) with base branch.",
+                    conflicts.len()
+                ),
                 suggested_action: "inspect_git_conflict".to_string(),
             });
         }
@@ -103,7 +107,10 @@ impl FailureDiagnostics {
         if agent_health == Some(HealthStatus::Unhealthy) || agent_consec >= 3 {
             remediation_advice.push(RemediationAdvice {
                 title: "Reassign Task to Alternative Agent".to_string(),
-                description: format!("Current agent has {} consecutive failures and degraded health.", agent_consec),
+                description: format!(
+                    "Current agent has {} consecutive failures and degraded health.",
+                    agent_consec
+                ),
                 suggested_action: "reassign_to_other_agent".to_string(),
             });
         }
@@ -111,7 +118,9 @@ impl FailureDiagnostics {
         if delivery_attempts >= 3 {
             remediation_advice.push(RemediationAdvice {
                 title: "Trigger AI Dynamic Re-Planning".to_string(),
-                description: "Task has exceeded retry limit. Re-planning can split into smaller tasks.".to_string(),
+                description:
+                    "Task has exceeded retry limit. Re-planning can split into smaller tasks."
+                        .to_string(),
                 suggested_action: "replan".to_string(),
             });
         }

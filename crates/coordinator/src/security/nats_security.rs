@@ -53,7 +53,8 @@ impl NatsSubjectAuthorizer {
             return Err(SecurityError::UnauthorizedAction {
                 agent_id,
                 action: "nats_subscribe_wildcard".to_string(),
-                reason: "Wildcard subscriptions are strictly prohibited for agent connections".to_string(),
+                reason: "Wildcard subscriptions are strictly prohibited for agent connections"
+                    .to_string(),
             });
         }
 
@@ -87,6 +88,8 @@ mod tests {
 
         // Wildcard attempt
         assert!(NatsSubjectAuthorizer::validate_agent_subscribe(agent_id, "agents.>").is_err());
-        assert!(NatsSubjectAuthorizer::validate_agent_subscribe(agent_id, "coordinator.*").is_err());
+        assert!(
+            NatsSubjectAuthorizer::validate_agent_subscribe(agent_id, "coordinator.*").is_err()
+        );
     }
 }

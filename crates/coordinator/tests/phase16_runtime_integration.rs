@@ -1,6 +1,6 @@
-use std::path::PathBuf;
 use chrono::Utc;
 use sqlx::PgPool;
+use std::path::PathBuf;
 use uuid::Uuid;
 
 use agent_protocol::AgentMessage;
@@ -10,12 +10,11 @@ use coordinator::coordinator::{
 };
 use coordinator::db::pool::{create_pool, run_migrations};
 use coordinator::db::repositories::{
-    AgentRepository, ProjectRepository, ProposalRepository, TaskDeliveryRepository,
-    TaskRepository,
+    AgentRepository, ProjectRepository, ProposalRepository, TaskDeliveryRepository, TaskRepository,
 };
 use coordinator::domain::{
-    AdapterType, AgentStatus, DeliveryStatus, DependencyKind, NewAgent, NewProject,
-    NewProposal, NewTask, NewTaskDelivery, NewTaskDependency, TaskStatus,
+    AdapterType, AgentStatus, DeliveryStatus, DependencyKind, NewAgent, NewProject, NewProposal,
+    NewTask, NewTaskDelivery, NewTaskDependency, TaskStatus,
 };
 use coordinator::git::{AgentWorkspace, RepositoryIdentity};
 use coordinator::messaging::{connect, ensure_streams, EventSubscriber};
@@ -24,10 +23,11 @@ use coordinator::reliability::{CoordinatorRecoveryService, StaleTaskSweeper};
 
 async fn setup_test_env() -> Option<(PgPool, async_nats::Client, async_nats::jetstream::Context)> {
     let _ = dotenvy::dotenv();
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
-    let nats_url = std::env::var("NATS_URL")
-        .unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
 
     let pool = create_pool(&db_url).await.ok()?;
     run_migrations(&pool).await.ok()?;
@@ -109,12 +109,20 @@ async fn test_scenario_a_startup_recovery() {
     .unwrap();
 
     // Mark agent offline and last seen 60s ago
-    AgentRepository::update_status(&pool, agent_id, AgentStatus::Offline).await.unwrap();
+    AgentRepository::update_status(&pool, agent_id, AgentStatus::Offline)
+        .await
+        .unwrap();
 
     // Simulate task assigned to this agent before crash
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent_id)).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent_id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned)
+        .await
+        .unwrap();
 
     // Insert pending delivery that was unconfirmed
     let idempotency_key = format!("{}:1", task.id);
@@ -142,13 +150,19 @@ async fn test_scenario_a_startup_recovery() {
         "Orphan task must be reclaimed on startup"
     );
 
-    let reclaimed_task = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let reclaimed_task = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
         reclaimed_task.status,
         TaskStatus::Approved,
         "Task with attempt 1 must be reverted to Approved"
     );
-    assert_eq!(reclaimed_task.assigned_agent_id, None, "Agent must be unassigned");
+    assert_eq!(
+        reclaimed_task.assigned_agent_id, None,
+        "Agent must be unassigned"
+    );
 
     // 2. Second recovery pass: verify full idempotency
     let report2 = CoordinatorRecoveryService::recover_on_startup(&pool, Some(&jetstream))
@@ -251,9 +265,15 @@ async fn test_scenario_b_stale_task_sweep_and_reclamation() {
     .unwrap();
 
     // Set up T1 with 1 delivery
-    TaskRepository::update_status(&pool, t1.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, t1.id, Some(agent_id)).await.unwrap();
-    TaskRepository::update_status(&pool, t1.id, TaskStatus::Executing).await.unwrap();
+    TaskRepository::update_status(&pool, t1.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, t1.id, Some(agent_id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, t1.id, TaskStatus::Executing)
+        .await
+        .unwrap();
     TaskDeliveryRepository::create(
         &pool,
         &NewTaskDelivery {
@@ -270,9 +290,15 @@ async fn test_scenario_b_stale_task_sweep_and_reclamation() {
     .unwrap();
 
     // Set up T2 with 3 deliveries
-    TaskRepository::update_status(&pool, t2.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, t2.id, Some(agent_id)).await.unwrap();
-    TaskRepository::update_status(&pool, t2.id, TaskStatus::Executing).await.unwrap();
+    TaskRepository::update_status(&pool, t2.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, t2.id, Some(agent_id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, t2.id, TaskStatus::Executing)
+        .await
+        .unwrap();
     for att in 1..=3 {
         TaskDeliveryRepository::create(
             &pool,
@@ -291,15 +317,31 @@ async fn test_scenario_b_stale_task_sweep_and_reclamation() {
     }
 
     // Run stale task sweeper with 30s timeout
-    let sweep_res = StaleTaskSweeper::sweep(&pool, chrono::Duration::seconds(30)).await.unwrap();
+    let sweep_res = StaleTaskSweeper::sweep(&pool, chrono::Duration::seconds(30))
+        .await
+        .unwrap();
     assert!(sweep_res.tasks_reclaimed.contains(&t1.id));
     assert!(sweep_res.tasks_reclaimed.contains(&t2.id));
 
-    let t1_after = TaskRepository::find_by_id(&pool, t1.id).await.unwrap().unwrap();
-    assert_eq!(t1_after.status, TaskStatus::Approved, "Task with < 3 attempts goes to Approved");
+    let t1_after = TaskRepository::find_by_id(&pool, t1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        t1_after.status,
+        TaskStatus::Approved,
+        "Task with < 3 attempts goes to Approved"
+    );
 
-    let t2_after = TaskRepository::find_by_id(&pool, t2.id).await.unwrap().unwrap();
-    assert_eq!(t2_after.status, TaskStatus::HumanReview, "Task with >= 3 attempts goes to HumanReview");
+    let t2_after = TaskRepository::find_by_id(&pool, t2.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        t2_after.status,
+        TaskStatus::HumanReview,
+        "Task with >= 3 attempts goes to HumanReview"
+    );
 }
 
 // ----------------------------------------------------------------------------
@@ -316,7 +358,9 @@ async fn test_scenario_c_git_workspace_preparation_and_finalization() {
     let identity = RepositoryIdentity::init(&repo_dir, "main").await.unwrap();
 
     // Add initial commit so HEAD exists
-    tokio::fs::write(repo_dir.join("README.md"), "# Initial Commit\n").await.unwrap();
+    tokio::fs::write(repo_dir.join("README.md"), "# Initial Commit\n")
+        .await
+        .unwrap();
     let _ = tokio::process::Command::new("git")
         .args(["add", "README.md"])
         .current_dir(&repo_dir)
@@ -407,7 +451,9 @@ async fn test_scenario_c_git_workspace_preparation_and_finalization() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, a1_id, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, a1_id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     let a2_id = Uuid::new_v4();
     AgentRepository::create_with_id(
@@ -424,27 +470,48 @@ async fn test_scenario_c_git_workspace_preparation_and_finalization() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, a2_id, AgentStatus::Idle).await.unwrap();
-
-    // Approve both tasks
-    CommandHandler::execute_approve_task(&pool, task1.id, "Operator").await.unwrap();
-    CommandHandler::execute_approve_task(&pool, task2.id, "Operator").await.unwrap();
-
-    // Run assignment cycle: should automatically prepare isolated worktrees!
-    let assignments = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+    AgentRepository::update_status(&pool, a2_id, AgentStatus::Idle)
         .await
         .unwrap();
+
+    // Approve both tasks
+    CommandHandler::execute_approve_task(&pool, task1.id, "Operator")
+        .await
+        .unwrap();
+    CommandHandler::execute_approve_task(&pool, task2.id, "Operator")
+        .await
+        .unwrap();
+
+    // Run assignment cycle: should automatically prepare isolated worktrees!
+    let assignments =
+        AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+            .await
+            .unwrap();
     assert_eq!(assignments.len(), 2, "Both tasks must be assigned");
 
     let expected_ws1 = AgentWorkspace::expected_worktree_path(&identity.repo_root, "GIT-001");
     let expected_ws2 = AgentWorkspace::expected_worktree_path(&identity.repo_root, "GIT-002");
 
-    assert!(expected_ws1.exists(), "Worktree for GIT-001 must exist on disk");
-    assert!(expected_ws2.exists(), "Worktree for GIT-002 must exist on disk");
-    assert_ne!(expected_ws1, expected_ws2, "Worktrees must be in isolated directories");
+    assert!(
+        expected_ws1.exists(),
+        "Worktree for GIT-001 must exist on disk"
+    );
+    assert!(
+        expected_ws2.exists(),
+        "Worktree for GIT-002 must exist on disk"
+    );
+    assert_ne!(
+        expected_ws1, expected_ws2,
+        "Worktrees must be in isolated directories"
+    );
 
     // Simulate Agent 1 doing work in worktree 1
-    tokio::fs::write(expected_ws1.join("feature1.rs"), "pub fn f1() -> bool { true }\n").await.unwrap();
+    tokio::fs::write(
+        expected_ws1.join("feature1.rs"),
+        "pub fn f1() -> bool { true }\n",
+    )
+    .await
+    .unwrap();
 
     // Report Completed for task 1
     EventSubscriber::handle_agent_message_with_jetstream(
@@ -461,13 +528,25 @@ async fn test_scenario_c_git_workspace_preparation_and_finalization() {
     .unwrap();
 
     // Worktree 1 should now be finalized and cleaned up
-    assert!(!expected_ws1.exists(), "Worktree 1 must be cleaned up on completion");
+    assert!(
+        !expected_ws1.exists(),
+        "Worktree 1 must be cleaned up on completion"
+    );
 
-    let task1_after = TaskRepository::find_by_id(&pool, task1.id).await.unwrap().unwrap();
+    let task1_after = TaskRepository::find_by_id(&pool, task1.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(task1_after.status, TaskStatus::Completed);
 
-    let git_ctx = TaskRepository::find_git_context(&pool, task1.id).await.unwrap().unwrap();
-    assert!(git_ctx.completion_commit_sha.is_some(), "Completion commit SHA must be recorded");
+    let git_ctx = TaskRepository::find_git_context(&pool, task1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        git_ctx.completion_commit_sha.is_some(),
+        "Completion commit SHA must be recorded"
+    );
 
     // Cleanup worktree 2
     let _ = tokio::fs::remove_dir_all(&repo_dir).await;
@@ -548,8 +627,12 @@ async fn test_scenario_d_dependency_waiting_and_automatic_unblocking() {
     .unwrap();
 
     // Approve both tasks
-    CommandHandler::execute_approve_task(&pool, task_a.id, "Operator").await.unwrap();
-    CommandHandler::execute_approve_task(&pool, task_b.id, "Operator").await.unwrap();
+    CommandHandler::execute_approve_task(&pool, task_a.id, "Operator")
+        .await
+        .unwrap();
+    CommandHandler::execute_approve_task(&pool, task_b.id, "Operator")
+        .await
+        .unwrap();
 
     // Register 2 agents
     let a1 = Uuid::new_v4();
@@ -567,7 +650,9 @@ async fn test_scenario_d_dependency_waiting_and_automatic_unblocking() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, a1, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, a1, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     let a2 = Uuid::new_v4();
     AgentRepository::create_with_id(
@@ -584,17 +669,24 @@ async fn test_scenario_d_dependency_waiting_and_automatic_unblocking() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, a2, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, a2, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     // First assignment cycle: only Task A should be assigned, Task B has uncompleted blocker
     let assigned = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
         .await
         .unwrap();
     assert_eq!(assigned.len(), 1);
-    assert_eq!(assigned[0].task_id, task_a.id, "Task A must be assigned first");
+    assert_eq!(
+        assigned[0].task_id, task_a.id,
+        "Task A must be assigned first"
+    );
 
     // Simulate Agent 2 reporting Blocked on Task B
-    TaskRepository::update_status(&pool, task_b.id, TaskStatus::Blocked).await.unwrap();
+    TaskRepository::update_status(&pool, task_b.id, TaskStatus::Blocked)
+        .await
+        .unwrap();
     EventSubscriber::handle_agent_message_with_jetstream(
         &pool,
         AgentMessage::Blocked {
@@ -609,7 +701,10 @@ async fn test_scenario_d_dependency_waiting_and_automatic_unblocking() {
     .await
     .unwrap();
 
-    let task_b_before = TaskRepository::find_by_id(&pool, task_b.id).await.unwrap().unwrap();
+    let task_b_before = TaskRepository::find_by_id(&pool, task_b.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(task_b_before.status, TaskStatus::Blocked);
 
     // Agent 1 reports Task A Completed
@@ -627,7 +722,10 @@ async fn test_scenario_d_dependency_waiting_and_automatic_unblocking() {
     .unwrap();
 
     // Verify Task B was unblocked to Approved automatically!
-    let task_b_after = TaskRepository::find_by_id(&pool, task_b.id).await.unwrap().unwrap();
+    let task_b_after = TaskRepository::find_by_id(&pool, task_b.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
         task_b_after.status,
         TaskStatus::Approved,
@@ -635,12 +733,18 @@ async fn test_scenario_d_dependency_waiting_and_automatic_unblocking() {
     );
 
     // Free agent 2 to idle and run next assignment cycle: Task B is now assigned!
-    AgentRepository::set_current_task(&pool, a2, None, AgentStatus::Idle).await.unwrap();
-    let assigned2 = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+    AgentRepository::set_current_task(&pool, a2, None, AgentStatus::Idle)
         .await
         .unwrap();
+    let assigned2 =
+        AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+            .await
+            .unwrap();
     assert_eq!(assigned2.len(), 1);
-    assert_eq!(assigned2[0].task_id, task_b.id, "Task B must now be assigned");
+    assert_eq!(
+        assigned2[0].task_id, task_b.id,
+        "Task B must now be assigned"
+    );
 }
 
 // ----------------------------------------------------------------------------
@@ -707,8 +811,12 @@ async fn test_scenario_e_task_cancellation_lifecycle() {
     .await
     .unwrap();
 
-    CommandHandler::execute_approve_task(&pool, task.id, "Operator").await.unwrap();
-    AgentRepository::update_status(&pool, agent_id, AgentStatus::Idle).await.unwrap();
+    CommandHandler::execute_approve_task(&pool, task.id, "Operator")
+        .await
+        .unwrap();
+    AgentRepository::update_status(&pool, agent_id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     // Assign task to agent
     let mut coordinator = CoordinatorCore::new(pool.clone(), Some(jetstream.clone()));
@@ -716,9 +824,15 @@ async fn test_scenario_e_task_cancellation_lifecycle() {
     let _ = coordinator.run_assignment_cycle().await.unwrap();
 
     // Verify task is Assigned and agent is Busy
-    let t_assigned = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let t_assigned = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t_assigned.status, TaskStatus::Assigned);
-    let a_busy = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
+    let a_busy = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(a_busy.status, AgentStatus::Busy);
 
     // Operator cancels task via coordinator command
@@ -729,21 +843,34 @@ async fn test_scenario_e_task_cancellation_lifecycle() {
     coordinator.handle_command(cancel_cmd).await.unwrap();
 
     // Verify task is Cancelled
-    let t_cancelled = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let t_cancelled = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t_cancelled.status, TaskStatus::Cancelled);
 
     // Verify agent was freed to Idle
-    let a_idle = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
+    let a_idle = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(a_idle.status, AgentStatus::Idle);
     assert_eq!(a_idle.current_task_id, None);
 
     // Verify deliveries are marked Terminal
-    let deliveries = TaskDeliveryRepository::list_by_task(&pool, task.id).await.unwrap();
-    assert!(deliveries.iter().all(|d| d.status == DeliveryStatus::Terminal));
+    let deliveries = TaskDeliveryRepository::list_by_task(&pool, task.id)
+        .await
+        .unwrap();
+    assert!(deliveries
+        .iter()
+        .all(|d| d.status == DeliveryStatus::Terminal));
 
     // Verify cannot cancel an already cancelled task (terminal status rejection)
     let re_cancel = CommandHandler::execute_cancel_task(&pool, task.id, "Second cancel").await;
-    assert!(re_cancel.is_err(), "Must reject cancellation on terminal task");
+    assert!(
+        re_cancel.is_err(),
+        "Must reject cancellation on terminal task"
+    );
 }
 
 // ----------------------------------------------------------------------------
@@ -793,7 +920,9 @@ async fn test_scenario_f_dynamic_replanning_behind_human_approval_gate() {
     )
     .await
     .unwrap();
-    TaskRepository::update_status(&pool, failed_task.id, TaskStatus::Failed).await.unwrap();
+    TaskRepository::update_status(&pool, failed_task.id, TaskStatus::Failed)
+        .await
+        .unwrap();
 
     let mut coordinator = CoordinatorCore::new(pool.clone(), Some(jetstream.clone()));
     coordinator.set_active_project(project.id);
@@ -813,8 +942,13 @@ async fn test_scenario_f_dynamic_replanning_behind_human_approval_gate() {
     );
 
     // Check all tasks belonging to new proposal
-    let tasks = TaskRepository::list_by_project(&pool, project.id).await.unwrap();
-    let new_tasks: Vec<_> = tasks.into_iter().filter(|t| t.proposal_id == proposal_id).collect();
+    let tasks = TaskRepository::list_by_project(&pool, project.id)
+        .await
+        .unwrap();
+    let new_tasks: Vec<_> = tasks
+        .into_iter()
+        .filter(|t| t.proposal_id == proposal_id)
+        .collect();
 
     assert!(!new_tasks.is_empty(), "Replanning must create new tasks");
     for nt in new_tasks {
@@ -906,8 +1040,12 @@ async fn test_scenario_g_task_reassignment_with_multi_attempt_delivery() {
     .await
     .unwrap();
 
-    CommandHandler::execute_approve_task(&pool, task.id, "Operator").await.unwrap();
-    AgentRepository::update_status(&pool, a1_id, AgentStatus::Idle).await.unwrap();
+    CommandHandler::execute_approve_task(&pool, task.id, "Operator")
+        .await
+        .unwrap();
+    AgentRepository::update_status(&pool, a1_id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     // First assignment to Agent 1 (Attempt 1)
     let as1 = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
@@ -925,11 +1063,15 @@ async fn test_scenario_g_task_reassignment_with_multi_attempt_delivery() {
     .execute(&pool)
     .await
     .unwrap();
-    let sweep = StaleTaskSweeper::sweep(&pool, chrono::Duration::seconds(30)).await.unwrap();
+    let sweep = StaleTaskSweeper::sweep(&pool, chrono::Duration::seconds(30))
+        .await
+        .unwrap();
     assert!(sweep.tasks_reclaimed.contains(&task.id));
 
     // Free Agent 2 to Idle
-    AgentRepository::update_status(&pool, a2_id, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, a2_id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     // Second assignment cycle: assigns to Agent 2 (Attempt 2)
     let as2 = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
@@ -940,8 +1082,14 @@ async fn test_scenario_g_task_reassignment_with_multi_attempt_delivery() {
     assert_eq!(as2[0].idempotency_key, format!("{}:2", task.id));
 
     // Verify both attempts exist in database
-    let deliveries = TaskDeliveryRepository::list_by_task(&pool, task.id).await.unwrap();
-    assert_eq!(deliveries.len(), 2, "Must preserve multi-attempt delivery history");
+    let deliveries = TaskDeliveryRepository::list_by_task(&pool, task.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        deliveries.len(),
+        2,
+        "Must preserve multi-attempt delivery history"
+    );
     assert_eq!(deliveries[0].attempt, 1);
     assert_eq!(deliveries[1].attempt, 2);
 }
@@ -991,7 +1139,9 @@ async fn test_scenario_h_live_diagnostics_and_metrics_collection() {
     .await
     .unwrap();
 
-    let recent = CoordinatorEventRepository::find_by_project(&pool, project.id, 10).await.unwrap();
+    let recent = CoordinatorEventRepository::find_by_project(&pool, project.id, 10)
+        .await
+        .unwrap();
     assert_eq!(recent.len(), 2, "Must retrieve recorded coordinator events");
 
     // Collect system metrics
@@ -1014,7 +1164,8 @@ async fn test_scenario_i_agy_error_propagation_and_secret_redaction() {
     assert!(!redacted_url.contains("super_secret_pw"));
     assert!(redacted_url.contains("[REDACTED]"));
 
-    let sensitive_key = "anthropic_api_key=sk-ant-api03-abcdef123456789012345678901234567890-XYZ123";
+    let sensitive_key =
+        "anthropic_api_key=sk-ant-api03-abcdef123456789012345678901234567890-XYZ123";
     let redacted_key = SecretRedactor::redact(sensitive_key);
     assert!(!redacted_key.contains("abcdef123456789012345678901234567890"));
     assert!(redacted_key.contains("[REDACTED_API_KEY]"));
@@ -1029,7 +1180,8 @@ async fn test_scenario_i_agy_error_propagation_and_secret_redaction() {
     assert!(payload.error.unwrap().contains("Database connection error"));
 
     // B: Error as an object
-    let json_obj = r#"{"status": "ERROR", "error": {"code": 429, "message": "RESOURCE_EXHAUSTED"}}"#;
+    let json_obj =
+        r#"{"status": "ERROR", "error": {"code": 429, "message": "RESOURCE_EXHAUSTED"}}"#;
     let payload_obj: AgyResultPayload = serde_json::from_str(json_obj).unwrap();
     assert_eq!(payload_obj.status, "ERROR");
     assert!(payload_obj.error.unwrap().contains("RESOURCE_EXHAUSTED"));
@@ -1049,8 +1201,12 @@ async fn test_two_agent_runtime_concurrent_worktrees() {
     let identity = RepositoryIdentity::init(&repo_dir, "main").await.unwrap();
 
     // Create initial commit
-    tokio::fs::create_dir_all(repo_dir.join("src")).await.unwrap();
-    tokio::fs::write(repo_dir.join("src/lib.rs"), "// Base lib\n").await.unwrap();
+    tokio::fs::create_dir_all(repo_dir.join("src"))
+        .await
+        .unwrap();
+    tokio::fs::write(repo_dir.join("src/lib.rs"), "// Base lib\n")
+        .await
+        .unwrap();
     let _ = tokio::process::Command::new("git")
         .args(["add", "src/lib.rs"])
         .current_dir(&repo_dir)
@@ -1141,7 +1297,9 @@ async fn test_two_agent_runtime_concurrent_worktrees() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, agent_a, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, agent_a, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     let agent_b = Uuid::new_v4();
     AgentRepository::create_with_id(
@@ -1158,17 +1316,27 @@ async fn test_two_agent_runtime_concurrent_worktrees() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, agent_b, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, agent_b, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     // Approve both tasks
-    CommandHandler::execute_approve_task(&pool, task1.id, "Operator").await.unwrap();
-    CommandHandler::execute_approve_task(&pool, task2.id, "Operator").await.unwrap();
+    CommandHandler::execute_approve_task(&pool, task1.id, "Operator")
+        .await
+        .unwrap();
+    CommandHandler::execute_approve_task(&pool, task2.id, "Operator")
+        .await
+        .unwrap();
 
     // Assignment cycle automatically creates isolated worktrees for both
     let assigned = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
         .await
         .unwrap();
-    assert_eq!(assigned.len(), 2, "Both tasks must be assigned simultaneously");
+    assert_eq!(
+        assigned.len(),
+        2,
+        "Both tasks must be assigned simultaneously"
+    );
 
     let ws1 = AgentWorkspace::expected_worktree_path(&identity.repo_root, "CONC-001");
     let ws2 = AgentWorkspace::expected_worktree_path(&identity.repo_root, "CONC-002");
@@ -1177,8 +1345,18 @@ async fn test_two_agent_runtime_concurrent_worktrees() {
     assert!(ws2.exists(), "Worktree for CONC-002 must exist");
 
     // Both agents work concurrently in their worktrees
-    tokio::fs::write(ws1.join("src/auth.rs"), "pub fn authenticate() -> bool { true }\n").await.unwrap();
-    tokio::fs::write(ws2.join("src/billing.rs"), "pub fn charge() -> bool { true }\n").await.unwrap();
+    tokio::fs::write(
+        ws1.join("src/auth.rs"),
+        "pub fn authenticate() -> bool { true }\n",
+    )
+    .await
+    .unwrap();
+    tokio::fs::write(
+        ws2.join("src/billing.rs"),
+        "pub fn charge() -> bool { true }\n",
+    )
+    .await
+    .unwrap();
 
     // Both agents report completion
     EventSubscriber::handle_agent_message_with_jetstream(
@@ -1211,19 +1389,37 @@ async fn test_two_agent_runtime_concurrent_worktrees() {
     assert!(!ws1.exists(), "Worktree 1 must be cleaned up");
     assert!(!ws2.exists(), "Worktree 2 must be cleaned up");
 
-    let t1_final = TaskRepository::find_by_id(&pool, task1.id).await.unwrap().unwrap();
-    let t2_final = TaskRepository::find_by_id(&pool, task2.id).await.unwrap().unwrap();
+    let t1_final = TaskRepository::find_by_id(&pool, task1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let t2_final = TaskRepository::find_by_id(&pool, task2.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t1_final.status, TaskStatus::Completed);
     assert_eq!(t2_final.status, TaskStatus::Completed);
 
-    let gc1 = TaskRepository::find_git_context(&pool, task1.id).await.unwrap().unwrap();
-    let gc2 = TaskRepository::find_git_context(&pool, task2.id).await.unwrap().unwrap();
+    let gc1 = TaskRepository::find_git_context(&pool, task1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gc2 = TaskRepository::find_git_context(&pool, task2.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(gc1.completion_commit_sha.is_some());
     assert!(gc2.completion_commit_sha.is_some());
 
     // Both agents returned to Idle
-    let ag_a = AgentRepository::find_by_id(&pool, agent_a).await.unwrap().unwrap();
-    let ag_b = AgentRepository::find_by_id(&pool, agent_b).await.unwrap().unwrap();
+    let ag_a = AgentRepository::find_by_id(&pool, agent_a)
+        .await
+        .unwrap()
+        .unwrap();
+    let ag_b = AgentRepository::find_by_id(&pool, agent_b)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(ag_a.status, AgentStatus::Idle);
     assert_eq!(ag_b.status, AgentStatus::Idle);
 

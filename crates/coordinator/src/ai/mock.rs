@@ -55,7 +55,11 @@ impl LlmProvider for MockLlmProvider {
 
         // Default deterministic 2-task plan with 1 dependency
         let task1_agent = request.available_agents.first().map(|a| a.agent_id);
-        let task2_agent = request.available_agents.get(1).map(|a| a.agent_id).or(task1_agent);
+        let task2_agent = request
+            .available_agents
+            .get(1)
+            .map(|a| a.agent_id)
+            .or(task1_agent);
 
         Ok(PlanningResponse {
             reasoning: format!(

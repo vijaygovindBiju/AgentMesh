@@ -25,7 +25,10 @@ pub enum ApprovalStatus {
 impl ApprovalStatus {
     /// Returns `true` if this approval status allows the task to be assigned to an agent.
     pub fn allows_assignment(&self) -> bool {
-        matches!(self, ApprovalStatus::Approved | ApprovalStatus::EditedAndApproved)
+        matches!(
+            self,
+            ApprovalStatus::Approved | ApprovalStatus::EditedAndApproved
+        )
     }
 }
 

@@ -3,7 +3,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::repositories::{
-    AgentRepository, OverlapWarningRepository, ProposalRepository, TaskDeliveryRepository, TaskRepository,
+    AgentRepository, OverlapWarningRepository, ProposalRepository, TaskDeliveryRepository,
+    TaskRepository,
 };
 use crate::domain::{
     AgentStatus, ApprovalStatus, DeliveryStatus, NewTaskApproval, Task, TaskStatus,
@@ -54,14 +55,34 @@ pub enum CoordinatorCommand {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CoordinatorEvent {
     StateChanged(crate::coordinator::state::CoordinatorState),
-    ProjectSubmitted { project_id: Uuid },
-    TaskApproved { task_id: Uuid },
-    TaskApprovalBlocked { task_id: Uuid, reason: String },
-    TaskRejected { task_id: Uuid },
-    TaskAssigned { task_id: Uuid, agent_id: Uuid },
-    TaskStatusChanged { task_id: Uuid, old_status: TaskStatus, new_status: TaskStatus },
-    OverlapAcknowledged { warning_id: Uuid },
-    CommandFailed { message: String },
+    ProjectSubmitted {
+        project_id: Uuid,
+    },
+    TaskApproved {
+        task_id: Uuid,
+    },
+    TaskApprovalBlocked {
+        task_id: Uuid,
+        reason: String,
+    },
+    TaskRejected {
+        task_id: Uuid,
+    },
+    TaskAssigned {
+        task_id: Uuid,
+        agent_id: Uuid,
+    },
+    TaskStatusChanged {
+        task_id: Uuid,
+        old_status: TaskStatus,
+        new_status: TaskStatus,
+    },
+    OverlapAcknowledged {
+        warning_id: Uuid,
+    },
+    CommandFailed {
+        message: String,
+    },
 }
 
 /// Errors specific to human approval gating.
@@ -73,10 +94,7 @@ pub enum ApprovalGateError {
         resources: Vec<String>,
     },
     #[error("Task {task_id} has status {current:?}, expected HumanReview or Failed")]
-    InvalidTaskStatus {
-        task_id: Uuid,
-        current: TaskStatus,
-    },
+    InvalidTaskStatus { task_id: Uuid, current: TaskStatus },
     #[error("Task {0} not found")]
     TaskNotFound(Uuid),
     #[error("Database error: {0}")]
@@ -93,9 +111,10 @@ impl CommandHandler {
         approved_by: &str,
     ) -> Result<Task, ApprovalGateError> {
         // 1. Check for unacknowledged critical overlaps
-        let critical_overlaps = OverlapWarningRepository::list_unacknowledged_critical_for_task(pool, task_id)
-            .await
-            .map_err(ApprovalGateError::Database)?;
+        let critical_overlaps =
+            OverlapWarningRepository::list_unacknowledged_critical_for_task(pool, task_id)
+                .await
+                .map_err(ApprovalGateError::Database)?;
 
         if !critical_overlaps.is_empty() {
             let resources = critical_overlaps.into_iter().map(|w| w.resource).collect();
@@ -157,9 +176,10 @@ impl CommandHandler {
         approved_by: &str,
     ) -> Result<Task, ApprovalGateError> {
         // 1. Check for unacknowledged critical overlaps
-        let critical_overlaps = OverlapWarningRepository::list_unacknowledged_critical_for_task(pool, task_id)
-            .await
-            .map_err(ApprovalGateError::Database)?;
+        let critical_overlaps =
+            OverlapWarningRepository::list_unacknowledged_critical_for_task(pool, task_id)
+                .await
+                .map_err(ApprovalGateError::Database)?;
 
         if !critical_overlaps.is_empty() {
             let resources = critical_overlaps.into_iter().map(|w| w.resource).collect();
@@ -216,7 +236,10 @@ impl CommandHandler {
             Some(task.project_id),
             Some(task.id),
             task.assigned_agent_id,
-            format!("Task {} edited and approved by {}", task.short_id, approved_by),
+            format!(
+                "Task {} edited and approved by {}",
+                task.short_id, approved_by
+            ),
             serde_json::json!({ "task_id": task.id, "approved_by": approved_by, "edited": true }),
         )
         .await;
@@ -265,10 +288,7 @@ impl CommandHandler {
     }
 
     /// Acknowledges a resource overlap warning, unblocking approval for affected tasks.
-    pub async fn execute_acknowledge_overlap(
-        pool: &PgPool,
-        warning_id: Uuid,
-    ) -> Result<bool> {
+    pub async fn execute_acknowledge_overlap(pool: &PgPool, warning_id: Uuid) -> Result<bool> {
         let res = OverlapWarningRepository::acknowledge(pool, warning_id).await?;
         if res {
             let _ = CoordinatorEventRepository::record(
@@ -332,7 +352,10 @@ impl CommandHandler {
             Some(task.project_id),
             Some(task.id),
             Some(new_agent_id),
-            format!("Task {} reassigned to agent {} by {}", task.short_id, new_agent_id, approved_by),
+            format!(
+                "Task {} reassigned to agent {} by {}",
+                task.short_id, new_agent_id, approved_by
+            ),
             serde_json::json!({
                 "task_id": task.id,
                 "new_agent_id": new_agent_id,
@@ -345,11 +368,7 @@ impl CommandHandler {
     }
 
     /// Cancels a task, validating state, freeing agent, and marking deliveries terminal.
-    pub async fn execute_cancel_task(
-        pool: &PgPool,
-        task_id: Uuid,
-        reason: &str,
-    ) -> Result<Task> {
+    pub async fn execute_cancel_task(pool: &PgPool, task_id: Uuid, reason: &str) -> Result<Task> {
         let task = TaskRepository::find_by_id(pool, task_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Task not found"))?;
@@ -366,7 +385,9 @@ impl CommandHandler {
         }
 
         // Mark any non-terminal deliveries as Terminal
-        let deliveries = TaskDeliveryRepository::list_by_task(pool, task_id).await.unwrap_or_default();
+        let deliveries = TaskDeliveryRepository::list_by_task(pool, task_id)
+            .await
+            .unwrap_or_default();
         for del in deliveries {
             if del.status == DeliveryStatus::Pending
                 || del.status == DeliveryStatus::Delivered
@@ -378,14 +399,17 @@ impl CommandHandler {
 
         // Free assigned agent if active
         if let Some(agent_id) = task.assigned_agent_id {
-            let _ = AgentRepository::set_current_task(pool, agent_id, None, AgentStatus::Idle).await;
+            let _ =
+                AgentRepository::set_current_task(pool, agent_id, None, AgentStatus::Idle).await;
         }
 
         // Clean up git worktree if present
         if let Ok(Some(gc)) = TaskRepository::find_git_context(pool, task_id).await {
-            if let (Some(ref repo_path_str), Some(ref task_branch)) = (gc.repo_path, gc.task_branch) {
+            if let (Some(ref repo_path_str), Some(ref task_branch)) = (gc.repo_path, gc.task_branch)
+            {
                 let repo_root = std::path::Path::new(&repo_path_str);
-                let worktree_path = crate::git::AgentWorkspace::expected_worktree_path(repo_root, &task.short_id);
+                let worktree_path =
+                    crate::git::AgentWorkspace::expected_worktree_path(repo_root, &task.short_id);
                 if worktree_path.exists() {
                     let ws = crate::git::AgentWorkspace {
                         task_id,

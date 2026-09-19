@@ -2,9 +2,7 @@ use anyhow::{Context, Result};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::{
-    DependencyKind, NewTask, NewTaskDependency, Task, TaskDependency, TaskStatus,
-};
+use crate::domain::{DependencyKind, NewTask, NewTaskDependency, Task, TaskDependency, TaskStatus};
 
 pub struct TaskRepository;
 
@@ -194,10 +192,7 @@ impl TaskRepository {
     }
 
     /// Adds a dependency edge between two tasks.
-    pub async fn add_dependency(
-        pool: &PgPool,
-        dep: &NewTaskDependency,
-    ) -> Result<TaskDependency> {
+    pub async fn add_dependency(pool: &PgPool, dep: &NewTaskDependency) -> Result<TaskDependency> {
         let dependency = sqlx::query_as!(
             TaskDependency,
             r#"
@@ -218,10 +213,7 @@ impl TaskRepository {
     }
 
     /// Returns the list of tasks that `task_id` depends on.
-    pub async fn list_dependencies(
-        pool: &PgPool,
-        task_id: Uuid,
-    ) -> Result<Vec<TaskDependency>> {
+    pub async fn list_dependencies(pool: &PgPool, task_id: Uuid) -> Result<Vec<TaskDependency>> {
         let deps = sqlx::query_as!(
             TaskDependency,
             r#"
@@ -239,10 +231,7 @@ impl TaskRepository {
     }
 
     /// Returns the list of tasks that depend on `task_id`.
-    pub async fn list_dependents(
-        pool: &PgPool,
-        task_id: Uuid,
-    ) -> Result<Vec<TaskDependency>> {
+    pub async fn list_dependents(pool: &PgPool, task_id: Uuid) -> Result<Vec<TaskDependency>> {
         let deps = sqlx::query_as!(
             TaskDependency,
             r#"
@@ -261,10 +250,7 @@ impl TaskRepository {
 
     /// Checks if all blocking dependencies for a task have reached status 'completed'.
     /// Returns true if there are no blocking dependencies, or all of them are completed.
-    pub async fn are_blocking_dependencies_completed(
-        pool: &PgPool,
-        task_id: Uuid,
-    ) -> Result<bool> {
+    pub async fn are_blocking_dependencies_completed(pool: &PgPool, task_id: Uuid) -> Result<bool> {
         let uncompleted_count: (i64,) = sqlx::query_as(
             r#"
             SELECT COUNT(*)
@@ -273,7 +259,7 @@ impl TaskRepository {
             WHERE td.dependent_id = $1
               AND td.kind = 'blocks'
               AND t.status <> 'completed'
-            "#
+            "#,
         )
         .bind(task_id)
         .fetch_one(pool)
@@ -438,8 +424,9 @@ mod tests {
 
     async fn setup_test_pool() -> Option<PgPool> {
         let _ = dotenvy::dotenv();
-        let db_url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+        let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+        });
         let pool = create_pool(&db_url).await.ok()?;
         run_migrations(&pool).await.ok()?;
         Some(pool)
@@ -528,7 +515,10 @@ mod tests {
         let ready = TaskRepository::are_blocking_dependencies_completed(&pool, t2.id)
             .await
             .expect("Dependency check failed");
-        assert!(!ready, "Task 2 should be blocked because Task 1 is not completed");
+        assert!(
+            !ready,
+            "Task 2 should be blocked because Task 1 is not completed"
+        );
 
         // Complete Task 1
         TaskRepository::update_status(&pool, t1.id, TaskStatus::Completed)
@@ -539,7 +529,10 @@ mod tests {
         let ready_now = TaskRepository::are_blocking_dependencies_completed(&pool, t2.id)
             .await
             .expect("Dependency check failed");
-        assert!(ready_now, "Task 2 should now be ready since Task 1 is completed");
+        assert!(
+            ready_now,
+            "Task 2 should now be ready since Task 1 is completed"
+        );
 
         // 5. Query helpers
         let found_by_short = TaskRepository::find_by_short_id(&pool, project.id, "TASK-002")

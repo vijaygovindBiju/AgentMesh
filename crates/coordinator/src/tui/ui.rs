@@ -3,7 +3,9 @@ use ratatui::{
     Frame,
 };
 
-use crate::tui::screens::{DashboardScreen, DiagnosticsScreen, PlanReviewScreen, ProjectInputScreen};
+use crate::tui::screens::{
+    DashboardScreen, DiagnosticsScreen, PlanReviewScreen, ProjectInputScreen,
+};
 use crate::tui::state::{AppState, CurrentScreen};
 use crate::tui::widgets::{FooterWidget, HeaderWidget};
 

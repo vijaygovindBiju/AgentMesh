@@ -228,7 +228,8 @@ mod tests {
 
         for msg in messages {
             let json = serde_json::to_string(&msg).expect("Serialize failed");
-            let recovered: CoordinatorMessage = serde_json::from_str(&json).expect("Deserialize failed");
+            let recovered: CoordinatorMessage =
+                serde_json::from_str(&json).expect("Deserialize failed");
             assert_eq!(msg, recovered);
         }
     }

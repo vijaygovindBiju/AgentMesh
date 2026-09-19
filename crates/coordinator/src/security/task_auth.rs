@@ -26,7 +26,8 @@ impl TaskAuthorizer {
         }
 
         // 2. Fetch task and check assigned agent
-        let task = TaskRepository::find_by_id(pool, task_id).await?
+        let task = TaskRepository::find_by_id(pool, task_id)
+            .await?
             .ok_or_else(|| SecurityError::UnauthorizedAction {
                 agent_id,
                 action: action.to_string(),

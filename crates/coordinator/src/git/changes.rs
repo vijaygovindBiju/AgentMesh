@@ -1,7 +1,7 @@
-use std::collections::BTreeSet;
-use std::path::Path;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
+use std::path::Path;
 use tokio::process::Command;
 
 /// Represents an unexpected file or directory modification performed by an agent.
@@ -157,7 +157,11 @@ mod tests {
 
     #[test]
     fn test_unexpected_change_detection() {
-        let planned = vec!["src/auth/".to_string(), "Cargo.toml".to_string(), "docs/*.md".to_string()];
+        let planned = vec![
+            "src/auth/".to_string(),
+            "Cargo.toml".to_string(),
+            "docs/*.md".to_string(),
+        ];
 
         let actual = vec![
             "src/auth/login.rs".to_string(),
@@ -169,13 +173,16 @@ mod tests {
 
         let unexpected = ResourceTracker::detect_unexpected_changes(&actual, &planned);
         assert_eq!(unexpected.len(), 2);
-        assert!(unexpected.iter().any(|u| u.resource_path == "src/unexpected.rs"));
+        assert!(unexpected
+            .iter()
+            .any(|u| u.resource_path == "src/unexpected.rs"));
         assert!(unexpected.iter().any(|u| u.resource_path == "secret.key"));
     }
 
     #[tokio::test]
     async fn test_detect_modified_resources_in_workspace() {
-        let temp_dir = std::env::temp_dir().join(format!("agentmesh_changes_test_{}", Uuid::new_v4()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("agentmesh_changes_test_{}", Uuid::new_v4()));
         let id = RepositoryIdentity::init(&temp_dir, "main").await.unwrap();
 
         let ws = AgentWorkspace::create(
@@ -190,16 +197,20 @@ mod tests {
         .unwrap();
 
         // 1. Initially no modified files
-        let initial_mods = ResourceTracker::detect_modified_resources(&ws.worktree_path, &ws.base_commit_sha)
-            .await
-            .unwrap();
+        let initial_mods =
+            ResourceTracker::detect_modified_resources(&ws.worktree_path, &ws.base_commit_sha)
+                .await
+                .unwrap();
         assert!(initial_mods.is_empty());
 
         // 2. Add an untracked file
-        tokio::fs::write(ws.worktree_path.join("untracked.txt"), "data").await.unwrap();
-        let mods_untracked = ResourceTracker::detect_modified_resources(&ws.worktree_path, &ws.base_commit_sha)
+        tokio::fs::write(ws.worktree_path.join("untracked.txt"), "data")
             .await
             .unwrap();
+        let mods_untracked =
+            ResourceTracker::detect_modified_resources(&ws.worktree_path, &ws.base_commit_sha)
+                .await
+                .unwrap();
         assert_eq!(mods_untracked, vec!["untracked.txt"]);
 
         // 3. Commit the file and modify README
@@ -214,11 +225,14 @@ mod tests {
             .output()
             .await;
 
-        tokio::fs::write(ws.worktree_path.join("README.md"), "# Updated Readme\n").await.unwrap();
-
-        let all_mods = ResourceTracker::detect_modified_resources(&ws.worktree_path, &ws.base_commit_sha)
+        tokio::fs::write(ws.worktree_path.join("README.md"), "# Updated Readme\n")
             .await
             .unwrap();
+
+        let all_mods =
+            ResourceTracker::detect_modified_resources(&ws.worktree_path, &ws.base_commit_sha)
+                .await
+                .unwrap();
 
         assert!(all_mods.contains(&"untracked.txt".to_string()));
         assert!(all_mods.contains(&"README.md".to_string()));

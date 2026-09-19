@@ -8,18 +8,19 @@ use coordinator::db::repositories::{
     ProposalRepository, TaskDeliveryRepository, TaskRepository, UnexpectedResourceRepository,
 };
 use coordinator::domain::{
-    AckKind, AdapterType, AgentEventType, DeliveryStatus, NewAgent,
-    NewAgentEvent, NewProject, NewProposal, NewTask, NewTaskDelivery, TaskStatus,
+    AckKind, AdapterType, AgentEventType, DeliveryStatus, NewAgent, NewAgentEvent, NewProject,
+    NewProposal, NewTask, NewTaskDelivery, TaskStatus,
 };
 use coordinator::observability::{
-    CoordinatorEventRepository, DeliveryDiagnostics, FailureDiagnostics,
-    MetricsCollector, TimelineService, TraceContext,
+    CoordinatorEventRepository, DeliveryDiagnostics, FailureDiagnostics, MetricsCollector,
+    TimelineService, TraceContext,
 };
 
 async fn setup_test_env() -> Option<PgPool> {
     let _ = dotenvy::dotenv();
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
 
     let pool = create_pool(&db_url).await.ok()?;
     run_migrations(&pool).await.ok()?;
@@ -279,7 +280,10 @@ async fn test_phase13_2_task_execution_timeline_generation() {
 
     assert_eq!(timeline.task_id, task.id);
     assert_eq!(timeline.status, TaskStatus::Completed);
-    assert_eq!(timeline.assigned_agent_name, Some("TimelineAgent".to_string()));
+    assert_eq!(
+        timeline.assigned_agent_name,
+        Some("TimelineAgent".to_string())
+    );
     assert!(timeline.events.len() >= 4);
 
     // Verify stages
@@ -342,8 +346,14 @@ async fn test_phase13_3_agent_activity_timeline() {
 
     assert_eq!(timeline.agent_id, agent.id);
     assert_eq!(timeline.human_owner, "ObservabilityWorker");
-    assert!(timeline.activities.iter().any(|a| a.activity_type == "registered"));
-    assert!(timeline.activities.iter().any(|a| a.message == "Running unit tests"));
+    assert!(timeline
+        .activities
+        .iter()
+        .any(|a| a.activity_type == "registered"));
+    assert!(timeline
+        .activities
+        .iter()
+        .any(|a| a.message == "Running unit tests"));
 }
 
 #[tokio::test]
@@ -378,13 +388,24 @@ async fn test_phase13_4_delivery_visibility_and_expiration_detection() {
         .expect("Inspect deliveries");
 
     assert_eq!(diagnostics.total_attempts, 1);
-    let cur = diagnostics.current_attempt.expect("Current attempt present");
+    let cur = diagnostics
+        .current_attempt
+        .expect("Current attempt present");
     assert_eq!(cur.attempt, 1);
     assert_eq!(cur.status, DeliveryStatus::Pending);
-    assert!(cur.is_expired, "Pending delivery with past expires_at should be flagged expired");
+    assert!(
+        cur.is_expired,
+        "Pending delivery with past expires_at should be flagged expired"
+    );
 
     // Clean up created record
-    let _ = TaskDeliveryRepository::record_ack(&pool, expired_delivery.id, AckKind::Term, DeliveryStatus::Terminal).await;
+    let _ = TaskDeliveryRepository::record_ack(
+        &pool,
+        expired_delivery.id,
+        AckKind::Term,
+        DeliveryStatus::Terminal,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -433,8 +454,12 @@ async fn test_phase13_5_failure_diagnostics_and_remediation_guidance() {
     .unwrap();
 
     // Mark agent degraded with consecutive failures
-    AgentRepository::record_task_failure(&pool, agent.id, "Test failure 1").await.unwrap();
-    AgentRepository::record_task_failure(&pool, agent.id, "Test failure 2").await.unwrap();
+    AgentRepository::record_task_failure(&pool, agent.id, "Test failure 1")
+        .await
+        .unwrap();
+    AgentRepository::record_task_failure(&pool, agent.id, "Test failure 2")
+        .await
+        .unwrap();
 
     let task1 = TaskRepository::create(
         &pool,
@@ -512,14 +537,21 @@ async fn test_phase13_5_failure_diagnostics_and_remediation_guidance() {
         .expect("Diagnose task");
 
     assert_eq!(diag.task_id, task1.id);
-    assert_eq!(diag.error_message, "Compilation error: borrow checker violation");
+    assert_eq!(
+        diag.error_message,
+        "Compilation error: borrow checker violation"
+    );
     assert_eq!(diag.agent_owner, Some("FailingAgent".to_string()));
     assert!(diag.has_git_conflicts);
     assert!(diag.has_unexpected_resource_changes);
 
     // Verify remediation advice
     assert!(diag.remediation_advice.len() >= 2);
-    let titles: Vec<&str> = diag.remediation_advice.iter().map(|r| r.title.as_str()).collect();
+    let titles: Vec<&str> = diag
+        .remediation_advice
+        .iter()
+        .map(|r| r.title.as_str())
+        .collect();
     assert!(titles.contains(&"Resolve Cross-Agent Git Merge Conflicts"));
     assert!(titles.contains(&"Review Unexpected Resource Footprint"));
 }
@@ -536,9 +568,17 @@ async fn test_phase13_6_system_metrics_aggregation() {
         .expect("Collect system metrics");
 
     // Basic invariant checks
-    assert!(metrics.total_tasks >= metrics.tasks_completed + metrics.tasks_failed + metrics.tasks_executing);
-    assert!(metrics.total_agents >= metrics.agents_idle + metrics.agents_busy + metrics.agents_offline);
-    assert!(metrics.delivery_success_rate_percent >= 0.0 && metrics.delivery_success_rate_percent <= 100.0);
+    assert!(
+        metrics.total_tasks
+            >= metrics.tasks_completed + metrics.tasks_failed + metrics.tasks_executing
+    );
+    assert!(
+        metrics.total_agents >= metrics.agents_idle + metrics.agents_busy + metrics.agents_offline
+    );
+    assert!(
+        metrics.delivery_success_rate_percent >= 0.0
+            && metrics.delivery_success_rate_percent <= 100.0
+    );
 }
 
 #[tokio::test]

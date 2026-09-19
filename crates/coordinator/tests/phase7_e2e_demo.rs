@@ -1,16 +1,16 @@
-use std::time::Duration;
 use chrono::Utc;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use futures::StreamExt;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use sqlx::PgPool;
+use std::time::Duration;
 use uuid::Uuid;
 
 use agent_protocol::{AgentMessage, CoordinatorMessage};
 use coordinator::ai::{
-    AvailableAgentContext, MockLlmProvider, PlanningRequest, PlanningResponse,
-    PlanningService, ProposedDependency, ProposedTask,
+    AvailableAgentContext, MockLlmProvider, PlanningRequest, PlanningResponse, PlanningService,
+    ProposedDependency, ProposedTask,
 };
 use coordinator::coordinator::{
     ApprovalGateError, CommandHandler, CoordinatorCore, CoordinatorState, OverlapDetector,
@@ -26,7 +26,6 @@ use coordinator::messaging::{connect, ensure_streams};
 use coordinator::tui::{
     render, AppState, CurrentScreen, ReviewTaskState, TuiAction, TuiUpdateEvent,
 };
-
 
 async fn setup_pool() -> Option<PgPool> {
     let _ = dotenvy::dotenv();
@@ -60,7 +59,8 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
         return;
     };
 
-    let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
     let (_client, jetstream) = match connect(&nats_url, None).await {
         Ok(res) => res,
         Err(_) => {
@@ -107,8 +107,12 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
     .unwrap();
 
     // Agents start Idle
-    AgentRepository::update_status(&pool, agent_a_id, AgentStatus::Idle).await.unwrap();
-    AgentRepository::update_status(&pool, agent_b_id, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, agent_a_id, AgentStatus::Idle)
+        .await
+        .unwrap();
+    AgentRepository::update_status(&pool, agent_b_id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     // Create consumers for task assignments on agent side
     let stream_assignments = jetstream
@@ -145,7 +149,8 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
     // - Task 2 (PLAN-2) touches "src/models/order.rs" (CONCURRENT CONFLICT with Task 1!)
     // - Task 3 (PLAN-3) touches "src/inventory.rs" and DEPENDS ON Task 1 (BLOCKS)
     let ai_plan = PlanningResponse {
-        reasoning: "Decomposed into order schema, webhook processing, and inventory decrement".to_string(),
+        reasoning: "Decomposed into order schema, webhook processing, and inventory decrement"
+            .to_string(),
         proposed_tasks: vec![
             ProposedTask {
                 short_id: "PLAN-1".to_string(),
@@ -178,14 +183,12 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
                 estimated_size: Some("M".to_string()),
             },
         ],
-        proposed_dependencies: vec![
-            ProposedDependency {
-                dependent_short_id: "PLAN-3".to_string(),
-                depends_on_short_id: "PLAN-1".to_string(),
-                kind: "blocks".to_string(),
-                reason: "Inventory decrement requires order schema to exist".to_string(),
-            },
-        ],
+        proposed_dependencies: vec![ProposedDependency {
+            dependent_short_id: "PLAN-3".to_string(),
+            depends_on_short_id: "PLAN-1".to_string(),
+            kind: "blocks".to_string(),
+            reason: "Inventory decrement requires order schema to exist".to_string(),
+        }],
     };
 
     let mock_llm = MockLlmProvider::new().with_response(ai_plan);
@@ -217,21 +220,30 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
     .await
     .expect("AI decomposition failed");
 
-    let tasks = TaskRepository::list_by_project(&pool, project.id).await.unwrap();
+    let tasks = TaskRepository::list_by_project(&pool, project.id)
+        .await
+        .unwrap();
     assert_eq!(tasks.len(), 3);
 
     let task1 = tasks.iter().find(|t| t.short_id == "PLAN-1").unwrap();
     let task2 = tasks.iter().find(|t| t.short_id == "PLAN-2").unwrap();
     let task3 = tasks.iter().find(|t| t.short_id == "PLAN-3").unwrap();
 
-
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 3: Resource Overlap Detection & Persistence
     // ─────────────────────────────────────────────────────────────────────────
     // Task 1 and Task 2 both touch "src/models/order.rs" concurrently -> Critical overlap!
-    let overlaps = OverlapWarningRepository::list_by_project(&pool, project.id).await.unwrap();
-    assert!(!overlaps.is_empty(), "Critical overlap warning must be generated");
-    let critical_overlap = overlaps.iter().find(|w| w.resource == "src/models/order.rs").unwrap();
+    let overlaps = OverlapWarningRepository::list_by_project(&pool, project.id)
+        .await
+        .unwrap();
+    assert!(
+        !overlaps.is_empty(),
+        "Critical overlap warning must be generated"
+    );
+    let critical_overlap = overlaps
+        .iter()
+        .find(|w| w.resource == "src/models/order.rs")
+        .unwrap();
     assert_eq!(critical_overlap.severity, OverlapSeverity::Critical);
     assert!(!critical_overlap.acknowledged);
 
@@ -266,49 +278,82 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
     // Render Plan Review screen headless (TestBackend)
     let backend = TestBackend::new(140, 45);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|f| render(f, &app_state)).expect("Render PlanReview");
+    terminal
+        .draw(|f| render(f, &app_state))
+        .expect("Render PlanReview");
 
     // Human operator acknowledges the overlap warning via key 'a'
     let ack_action = app_state.handle_key(make_key(KeyCode::Char('a')));
     assert_eq!(
         ack_action,
-        Some(TuiAction::AcknowledgeOverlap { warning_id: critical_overlap.id })
+        Some(TuiAction::AcknowledgeOverlap {
+            warning_id: critical_overlap.id
+        })
     );
-    CommandHandler::execute_acknowledge_overlap(&pool, critical_overlap.id).await.unwrap();
+    CommandHandler::execute_acknowledge_overlap(&pool, critical_overlap.id)
+        .await
+        .unwrap();
 
     // Now Human Operator approves Task 1 via key 'y'
     let approve_action_1 = app_state.handle_key(make_key(KeyCode::Char('y')));
-    assert_eq!(approve_action_1, Some(TuiAction::ApproveTask { task_id: task1.id }));
-    CommandHandler::execute_approve_task(&pool, task1.id, "Alice").await.unwrap();
+    assert_eq!(
+        approve_action_1,
+        Some(TuiAction::ApproveTask { task_id: task1.id })
+    );
+    CommandHandler::execute_approve_task(&pool, task1.id, "Alice")
+        .await
+        .unwrap();
 
     // Human Operator rejects Task 2 via key 'n'
     let reject_action_2 = app_state.handle_key(make_key(KeyCode::Char('n')));
-    assert_eq!(reject_action_2, Some(TuiAction::RejectTask { task_id: task2.id }));
-    CommandHandler::execute_reject_task(&pool, task2.id, "Alice").await.unwrap();
+    assert_eq!(
+        reject_action_2,
+        Some(TuiAction::RejectTask { task_id: task2.id })
+    );
+    CommandHandler::execute_reject_task(&pool, task2.id, "Alice")
+        .await
+        .unwrap();
 
     // Human Operator approves Task 3 via key 'y'
     let approve_action_3 = app_state.handle_key(make_key(KeyCode::Char('y')));
-    assert_eq!(approve_action_3, Some(TuiAction::ApproveTask { task_id: task3.id }));
-    CommandHandler::execute_approve_task(&pool, task3.id, "Alice").await.unwrap();
+    assert_eq!(
+        approve_action_3,
+        Some(TuiAction::ApproveTask { task_id: task3.id })
+    );
+    CommandHandler::execute_approve_task(&pool, task3.id, "Alice")
+        .await
+        .unwrap();
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 5: Dependency-Ordered Assignment Gating (Coordinator Core)
     // ─────────────────────────────────────────────────────────────────────────
     let mut coordinator = CoordinatorCore::new(pool.clone(), Some(jetstream.clone()));
     coordinator.set_active_project(project.id);
-    coordinator.transition_state(CoordinatorState::Assigning).unwrap();
+    coordinator
+        .transition_state(CoordinatorState::Assigning)
+        .unwrap();
 
     // Assignment Cycle 1:
     // Task 1 is Approved and has 0 blockers -> Assigned to Agent A!
     // Task 3 is Approved, but blocked by Task 1 (not yet Completed) -> Remains Approved!
     let assignments = coordinator.run_assignment_cycle().await.unwrap();
-    assert_eq!(assignments.len(), 1, "Only Task 1 should be ready for assignment");
+    assert_eq!(
+        assignments.len(),
+        1,
+        "Only Task 1 should be ready for assignment"
+    );
     assert_eq!(assignments[0].task_id, task1.id);
     assert_eq!(assignments[0].agent_id, agent_a_id);
 
     // Verify Task 1 is Assigned in PostgreSQL, Task 3 is still Approved
-    let t1_db = TaskRepository::find_by_id(&pool, task1.id).await.unwrap().unwrap();
-    let t3_db = TaskRepository::find_by_id(&pool, task3.id).await.unwrap().unwrap();
+    let t1_db = TaskRepository::find_by_id(&pool, task1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let t3_db = TaskRepository::find_by_id(&pool, task3.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t1_db.status, TaskStatus::Assigned);
     assert_eq!(t3_db.status, TaskStatus::Approved);
 
@@ -342,8 +387,13 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
         idempotency_key: format!("idem-{}", Uuid::new_v4()),
         timestamp: Utc::now(),
     };
-    coordinator.handle_agent_message(start_msg.clone()).await.unwrap();
-    tui_tx.send(TuiUpdateEvent::AgentMessage(start_msg)).unwrap();
+    coordinator
+        .handle_agent_message(start_msg.clone())
+        .await
+        .unwrap();
+    tui_tx
+        .send(TuiUpdateEvent::AgentMessage(start_msg))
+        .unwrap();
 
     // 2. ProgressUpdate (50%)
     let progress_msg = AgentMessage::ProgressUpdate {
@@ -353,8 +403,13 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
         message: "Applying schema migrations".to_string(),
         timestamp: Utc::now(),
     };
-    coordinator.handle_agent_message(progress_msg.clone()).await.unwrap();
-    tui_tx.send(TuiUpdateEvent::AgentMessage(progress_msg)).unwrap();
+    coordinator
+        .handle_agent_message(progress_msg.clone())
+        .await
+        .unwrap();
+    tui_tx
+        .send(TuiUpdateEvent::AgentMessage(progress_msg))
+        .unwrap();
 
     // 3. Completed
     let complete_msg = AgentMessage::Completed {
@@ -363,8 +418,13 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
         summary: "Migrations applied cleanly".to_string(),
         timestamp: Utc::now(),
     };
-    coordinator.handle_agent_message(complete_msg.clone()).await.unwrap();
-    tui_tx.send(TuiUpdateEvent::AgentMessage(complete_msg)).unwrap();
+    coordinator
+        .handle_agent_message(complete_msg.clone())
+        .await
+        .unwrap();
+    tui_tx
+        .send(TuiUpdateEvent::AgentMessage(complete_msg))
+        .unwrap();
 
     // Drain into TUI state and verify live projection
     while let Ok(evt) = tui_rx.try_recv() {
@@ -373,7 +433,11 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
 
     assert_eq!(app_state.agents[0].status, AgentStatus::Idle);
     assert_eq!(app_state.agents[0].current_task_id, None);
-    let t1_state = app_state.review_tasks.iter().find(|rt| rt.task.id == task1.id).unwrap();
+    let t1_state = app_state
+        .review_tasks
+        .iter()
+        .find(|rt| rt.task.id == task1.id)
+        .unwrap();
     assert_eq!(t1_state.task.status, TaskStatus::Completed);
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -381,10 +445,17 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
     // ─────────────────────────────────────────────────────────────────────────
     // Task 1 is now Completed! Next assignment cycle should unblock Task 3!
     let assignments_2 = coordinator.run_assignment_cycle().await.unwrap();
-    assert_eq!(assignments_2.len(), 1, "Task 3 must now be assigned after Task 1 completed");
+    assert_eq!(
+        assignments_2.len(),
+        1,
+        "Task 3 must now be assigned after Task 1 completed"
+    );
     assert_eq!(assignments_2[0].task_id, task3.id);
 
-    let t3_assigned = TaskRepository::find_by_id(&pool, task3.id).await.unwrap().unwrap();
+    let t3_assigned = TaskRepository::find_by_id(&pool, task3.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t3_assigned.status, TaskStatus::Assigned);
 
     // Agent executes Task 3 to completion
@@ -394,7 +465,10 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
         idempotency_key: format!("idem-{}", Uuid::new_v4()),
         timestamp: Utc::now(),
     };
-    coordinator.handle_agent_message(start_msg_3.clone()).await.unwrap();
+    coordinator
+        .handle_agent_message(start_msg_3.clone())
+        .await
+        .unwrap();
     app_state.apply_agent_message(&start_msg_3);
 
     let complete_msg_3 = AgentMessage::Completed {
@@ -403,7 +477,10 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
         summary: "Inventory decrement hook integrated".to_string(),
         timestamp: Utc::now(),
     };
-    coordinator.handle_agent_message(complete_msg_3.clone()).await.unwrap();
+    coordinator
+        .handle_agent_message(complete_msg_3.clone())
+        .await
+        .unwrap();
     app_state.apply_agent_message(&complete_msg_3);
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -415,12 +492,23 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
 
     // Switch to Dashboard Screen and render final summary
     app_state.current_screen = CurrentScreen::Dashboard;
-    terminal.draw(|f| render(f, &app_state)).expect("Render Final Dashboard");
+    terminal
+        .draw(|f| render(f, &app_state))
+        .expect("Render Final Dashboard");
 
     // Verify all 3 tasks in final state
-    let t1_final = TaskRepository::find_by_id(&pool, task1.id).await.unwrap().unwrap();
-    let t2_final = TaskRepository::find_by_id(&pool, task2.id).await.unwrap().unwrap();
-    let t3_final = TaskRepository::find_by_id(&pool, task3.id).await.unwrap().unwrap();
+    let t1_final = TaskRepository::find_by_id(&pool, task1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let t2_final = TaskRepository::find_by_id(&pool, task2.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let t3_final = TaskRepository::find_by_id(&pool, task3.id)
+        .await
+        .unwrap()
+        .unwrap();
 
     assert_eq!(t1_final.status, TaskStatus::Completed);
     assert_eq!(t2_final.status, TaskStatus::Rejected);

@@ -14,8 +14,9 @@ use coordinator::domain::{AdapterType, NewAgent, NewProject, TaskStatus};
 
 async fn setup_test_pool() -> Option<PgPool> {
     let _ = dotenvy::dotenv();
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
 
     let pool = create_pool(&db_url).await.ok()?;
     run_migrations(&pool).await.ok()?;
@@ -65,7 +66,7 @@ async fn test_ai_planning_service_full_workflow() {
             agent_id: agent.id,
             human_owner: agent.human_owner.clone(),
             adapter_type: "Mock".to_string(),
-            capabilities: agent.capabilities_list().into_iter().map(String::from).collect(),
+            capabilities: agent.capabilities_list(),
         }],
         existing_tasks: vec![],
         repo_context: None,
@@ -115,7 +116,9 @@ async fn test_ai_planning_service_full_workflow() {
     assert_eq!(proposal.ai_provider, "mock");
 
     // (B) Tasks are created and placed directly into HumanReview state
-    let tasks = TaskRepository::list_by_project(&pool, project.id).await.unwrap();
+    let tasks = TaskRepository::list_by_project(&pool, project.id)
+        .await
+        .unwrap();
     assert_eq!(tasks.len(), 2);
     for t in &tasks {
         assert_eq!(
@@ -131,17 +134,23 @@ async fn test_ai_planning_service_full_workflow() {
 
     // (C) Dependencies are recorded
     let plan2 = tasks.iter().find(|t| t.short_id == "PLAN-2").unwrap();
-    let deps = TaskRepository::list_dependencies(&pool, plan2.id).await.unwrap();
+    let deps = TaskRepository::list_dependencies(&pool, plan2.id)
+        .await
+        .unwrap();
     assert_eq!(deps.len(), 1);
     let plan1 = tasks.iter().find(|t| t.short_id == "PLAN-1").unwrap();
     assert_eq!(deps[0].depends_on_id, plan1.id);
 
     // (D) Overlap is detected and recorded (sequential overlap -> Info)
-    let overlaps = coordinator::db::repositories::OverlapWarningRepository::list_by_project(&pool, project.id)
-        .await
-        .unwrap();
+    let overlaps =
+        coordinator::db::repositories::OverlapWarningRepository::list_by_project(&pool, project.id)
+            .await
+            .unwrap();
     assert_eq!(overlaps.len(), 1);
-    assert_eq!(overlaps[0].resource, "crates/coordinator/src/messaging/streams.rs");
+    assert_eq!(
+        overlaps[0].resource,
+        "crates/coordinator/src/messaging/streams.rs"
+    );
 
     // Clean up
     ProjectRepository::delete(&pool, project.id).await.unwrap();
@@ -215,8 +224,14 @@ async fn test_ai_planning_service_rejects_cycle_and_aborts() {
     assert!(res.is_err(), "Cyclic plan must fail validation");
 
     // Verify NO tasks were persisted for this project
-    let tasks = TaskRepository::list_by_project(&pool, project.id).await.unwrap();
-    assert_eq!(tasks.len(), 0, "No tasks should be persisted when validation fails");
+    let tasks = TaskRepository::list_by_project(&pool, project.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        tasks.len(),
+        0,
+        "No tasks should be persisted when validation fails"
+    );
 
     ProjectRepository::delete(&pool, project.id).await.unwrap();
 }

@@ -2,8 +2,8 @@
 
 use uuid::Uuid;
 
-use agent_protocol::security::{AgentRole, PermissionBoundary};
 use crate::security::SecurityError;
+use agent_protocol::security::{AgentRole, PermissionBoundary};
 
 /// Enforces role permissions and filesystem boundary constraints on agents.
 pub struct PermissionEnforcer;
@@ -29,7 +29,8 @@ impl PermissionEnforcer {
                     return Err(SecurityError::UnauthorizedAction {
                         agent_id,
                         action: "assign_write_task".to_string(),
-                        reason: "ReadOnly agent cannot be assigned tasks with affected resources".to_string(),
+                        reason: "ReadOnly agent cannot be assigned tasks with affected resources"
+                            .to_string(),
                     });
                 }
             }
@@ -120,15 +121,17 @@ mod tests {
     #[test]
     fn test_boundary_denied_paths_rejected() {
         let agent_id = Uuid::new_v4();
-        let boundary = PermissionBoundary::new()
-            .with_denied_path("secure_config/*");
+        let boundary = PermissionBoundary::new().with_denied_path("secure_config/*");
 
         let res = PermissionEnforcer::validate_task_assignment(
             agent_id,
             AgentRole::Worker,
             &boundary,
             false,
-            &["src/lib.rs".to_string(), "secure_config/keys.json".to_string()],
+            &[
+                "src/lib.rs".to_string(),
+                "secure_config/keys.json".to_string(),
+            ],
         );
 
         match res {

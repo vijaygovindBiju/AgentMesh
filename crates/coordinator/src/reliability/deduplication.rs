@@ -99,7 +99,8 @@ mod tests {
         assert!(!dedup.check_or_record(&key));
 
         // Different event type for same agent/task -> should process
-        let key2 = EventDeduplicator::compute_event_key(agent_id, task_id, "ProgressUpdate", Some("50%"));
+        let key2 =
+            EventDeduplicator::compute_event_key(agent_id, task_id, "ProgressUpdate", Some("50%"));
         assert!(dedup.check_or_record(&key2));
     }
 

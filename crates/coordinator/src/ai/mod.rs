@@ -13,8 +13,8 @@ pub mod schema;
 pub mod service;
 pub mod validator;
 
-use std::sync::Arc;
 use anyhow::{bail, Result};
+use std::sync::Arc;
 
 pub use anthropic::AnthropicProvider;
 pub use complexity::{ComplexityEstimate, ComplexityEstimator};
@@ -41,12 +41,18 @@ pub fn create_provider_by_name(name: &str) -> Result<Arc<dyn LlmProvider>> {
             Ok(Arc::new(mock))
         }
         "anthropic" => {
-            let api_key = std::env::var("ANTHROPIC_API_KEY")
-                .map_err(|_| anyhow::anyhow!("ANTHROPIC_API_KEY environment variable must be set when AI_PROVIDER=anthropic"))?;
-            let model = std::env::var("AI_MODEL").unwrap_or_else(|_| "claude-3-5-sonnet-20241022".to_string());
+            let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| {
+                anyhow::anyhow!(
+                    "ANTHROPIC_API_KEY environment variable must be set when AI_PROVIDER=anthropic"
+                )
+            })?;
+            let model = std::env::var("AI_MODEL")
+                .unwrap_or_else(|_| "claude-3-5-sonnet-20241022".to_string());
             Ok(Arc::new(AnthropicProvider::new(api_key, model)))
         }
-        other => bail!("Unsupported AI_PROVIDER '{other}'. Supported providers: 'mock', 'anthropic'"),
+        other => {
+            bail!("Unsupported AI_PROVIDER '{other}'. Supported providers: 'mock', 'anthropic'")
+        }
     }
 }
 

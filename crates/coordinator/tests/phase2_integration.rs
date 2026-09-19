@@ -1,7 +1,7 @@
-use std::time::Duration;
 use chrono::Utc;
 use futures::StreamExt;
 use sqlx::PgPool;
+use std::time::Duration;
 use uuid::Uuid;
 
 use agent_mock::{MockAgent, MockAgentRunner};
@@ -20,10 +20,13 @@ use coordinator::messaging::{
 
 async fn setup_test_env() -> Option<(PgPool, async_nats::Client, async_nats::jetstream::Context)> {
     let _ = dotenvy::dotenv();
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
-    let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
-    let nats_token = std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let nats_token =
+        std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
 
     let pool = create_pool(&db_url).await.ok()?;
     run_migrations(&pool).await.ok()?;
@@ -43,8 +46,8 @@ async fn test_mock_agent_registration_and_full_lifecycle() {
 
     // 1. Create a Mock Agent
     let agent_id = Uuid::new_v4();
-    let mut mock_agent = MockAgent::new("Alice", "test_key_123")
-        .with_delay(Duration::from_millis(20));
+    let mut mock_agent =
+        MockAgent::new("Alice", "test_key_123").with_delay(Duration::from_millis(20));
     mock_agent.id = agent_id;
 
     // 2. Mock agent registers with coordinator
@@ -62,14 +65,21 @@ async fn test_mock_agent_registration_and_full_lifecycle() {
         .expect("Registration failed");
 
     let event_subject = match reg_resp {
-        CoordinatorMessage::RegisterResponse { status, nats_subject, .. } => {
+        CoordinatorMessage::RegisterResponse {
+            status,
+            nats_subject,
+            ..
+        } => {
             assert_eq!(status, "ok");
             nats_subject.unwrap()
         }
         _ => panic!("Expected RegisterResponse"),
     };
 
-    let registered_agent = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
+    let registered_agent = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(registered_agent.human_owner, "Alice");
     assert_eq!(registered_agent.adapter_type, AdapterType::Mock);
 
@@ -113,10 +123,18 @@ async fn test_mock_agent_registration_and_full_lifecycle() {
     .unwrap();
 
     // Advance task through approval to Assigned
-    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent_id)).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent_id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned)
+        .await
+        .unwrap();
 
     // 4. Create TaskDelivery record (Pending)
     let idempotency_key = format!("{}:1", task.id);
@@ -157,11 +175,17 @@ async fn test_mock_agent_registration_and_full_lifecycle() {
     assert!(seq > 0);
 
     // Update TaskDelivery to Delivered
-    TaskDeliveryRepository::mark_delivered(&pool, delivery.id, seq as i64).await.unwrap();
+    TaskDeliveryRepository::mark_delivered(&pool, delivery.id, seq as i64)
+        .await
+        .unwrap();
 
     // 7. Mock Agent consumes assignment from JetStream
     let mut messages = consumer.messages().await.unwrap();
-    let msg = messages.next().await.unwrap().expect("Should receive assignment message");
+    let msg = messages
+        .next()
+        .await
+        .unwrap()
+        .expect("Should receive assignment message");
     msg.ack().await.expect("JetStream transport ACK failed");
 
     let coord_msg: CoordinatorMessage = serde_json::from_slice(&msg.payload).unwrap();
@@ -191,10 +215,16 @@ async fn test_mock_agent_registration_and_full_lifecycle() {
     .await
     .unwrap();
 
-    let d_after_start = TaskDeliveryRepository::find_by_id(&pool, delivery.id).await.unwrap().unwrap();
+    let d_after_start = TaskDeliveryRepository::find_by_id(&pool, delivery.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(d_after_start.status, DeliveryStatus::Acknowledged);
 
-    let t_after_start = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let t_after_start = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t_after_start.status, TaskStatus::Executing);
 
     // (B) ProgressUpdate
@@ -224,14 +254,25 @@ async fn test_mock_agent_registration_and_full_lifecycle() {
     .await
     .unwrap();
 
-    let t_after_complete = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let t_after_complete = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t_after_complete.status, TaskStatus::Completed);
 
-    let a_after_complete = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
-    assert_eq!(a_after_complete.status, coordinator::domain::AgentStatus::Idle);
+    let a_after_complete = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        a_after_complete.status,
+        coordinator::domain::AgentStatus::Idle
+    );
 
     // Verify all 3 events recorded in agent_events table
-    let events = AgentEventRepository::list_by_task(&pool, task.id).await.unwrap();
+    let events = AgentEventRepository::list_by_task(&pool, task.id)
+        .await
+        .unwrap();
     assert_eq!(events.len(), 3);
 
     // Clean up
@@ -262,7 +303,9 @@ async fn test_mock_agent_blocked_and_resumed_lifecycle() {
         profile: None,
         api_key: mock_agent.api_key.clone(),
     };
-    RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
+    RegistrationHandler::process_registration(&pool, reg_msg)
+        .await
+        .unwrap();
 
     let project = ProjectRepository::create(
         &pool,
@@ -302,10 +345,18 @@ async fn test_mock_agent_blocked_and_resumed_lifecycle() {
     .await
     .unwrap();
 
-    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent_id)).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent_id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned)
+        .await
+        .unwrap();
 
     let spec = TaskSpec::new(
         task.id,
@@ -351,11 +402,16 @@ async fn test_mock_agent_blocked_and_resumed_lifecycle() {
     .await
     .unwrap();
 
-    let t_blocked = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let t_blocked = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t_blocked.status, TaskStatus::Blocked);
 
     // Resume: coordinator unblocks task
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Executing).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Executing)
+        .await
+        .unwrap();
 
     // Process Completed
     EventSubscriber::handle_agent_message(
@@ -370,7 +426,10 @@ async fn test_mock_agent_blocked_and_resumed_lifecycle() {
     .await
     .unwrap();
 
-    let t_completed = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let t_completed = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t_completed.status, TaskStatus::Completed);
 
     ProjectRepository::delete(&pool, project.id).await.unwrap();
@@ -408,19 +467,29 @@ async fn test_jetstream_durable_redelivery_on_nak() {
 
     // 3. First fetch: receive message and NAK it
     let mut messages = consumer.messages().await.unwrap();
-    let msg1 = messages.next().await.unwrap().expect("Should receive message first time");
-    
+    let msg1 = messages
+        .next()
+        .await
+        .unwrap()
+        .expect("Should receive message first time");
+
     // NAK the message to request redelivery
     msg1.ack_with(async_nats::jetstream::message::AckKind::Nak(None))
         .await
         .expect("NAK should succeed");
 
     // 4. Second fetch: JetStream redelivers the message!
-    let msg2 = messages.next().await.unwrap().expect("JetStream must redeliver NAKed message");
-    
+    let msg2 = messages
+        .next()
+        .await
+        .unwrap()
+        .expect("JetStream must redeliver NAKed message");
+
     let coord_msg: CoordinatorMessage = serde_json::from_slice(&msg2.payload).unwrap();
     match coord_msg {
-        CoordinatorMessage::TaskAssignment { spec: redelivered_spec } => {
+        CoordinatorMessage::TaskAssignment {
+            spec: redelivered_spec,
+        } => {
             assert_eq!(redelivered_spec.task_id, task_id);
             assert_eq!(redelivered_spec.idempotency_key, format!("{}:1", task_id));
         }

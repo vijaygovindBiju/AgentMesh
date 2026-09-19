@@ -35,11 +35,9 @@ impl CompletionManager {
         let worktree_path = &worktree.worktree_path;
 
         // 1. Detect all modified resources prior to committing
-        let actual_modified = ResourceTracker::detect_modified_resources(
-            worktree_path,
-            &worktree.base_commit_sha,
-        )
-        .await?;
+        let actual_modified =
+            ResourceTracker::detect_modified_resources(worktree_path, &worktree.base_commit_sha)
+                .await?;
 
         // 2. Check for uncommitted working tree changes
         let status_out = Command::new("git")
@@ -49,7 +47,9 @@ impl CompletionManager {
             .await
             .context("Failed to check worktree status")?;
 
-        let is_dirty = !String::from_utf8_lossy(&status_out.stdout).trim().is_empty();
+        let is_dirty = !String::from_utf8_lossy(&status_out.stdout)
+            .trim()
+            .is_empty();
 
         if is_dirty {
             // Stage all files
@@ -100,7 +100,10 @@ impl CompletionManager {
         };
 
         // 5. Clean up isolated worktree cleanly
-        worktree.cleanup().await.context("Failed to cleanup worktree")?;
+        worktree
+            .cleanup()
+            .await
+            .context("Failed to cleanup worktree")?;
 
         Ok(CompletionGitResult {
             task_branch: worktree.task_branch.clone(),
@@ -120,7 +123,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_finalize_task_git_state() {
-        let temp_dir = std::env::temp_dir().join(format!("agentmesh_completion_test_{}", Uuid::new_v4()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("agentmesh_completion_test_{}", Uuid::new_v4()));
         let id = RepositoryIdentity::init(&temp_dir, "main").await.unwrap();
 
         let ws = AgentWorkspace::create(
@@ -135,9 +139,12 @@ mod tests {
         .unwrap();
 
         // Simulate agent making changes
-        tokio::fs::write(ws.worktree_path.join("completed_work.rs"), "pub fn done() -> bool { true }")
-            .await
-            .unwrap();
+        tokio::fs::write(
+            ws.worktree_path.join("completed_work.rs"),
+            "pub fn done() -> bool { true }",
+        )
+        .await
+        .unwrap();
 
         let result = CompletionManager::finalize_task_git_state(
             &ws,
@@ -151,7 +158,9 @@ mod tests {
         assert_eq!(result.task_branch, "agentmesh/task-200");
         assert_eq!(result.completion_commit_sha.len(), 40);
         assert_ne!(result.completion_commit_sha, ws.base_commit_sha);
-        assert!(result.actual_modified_resources.contains(&"completed_work.rs".to_string()));
+        assert!(result
+            .actual_modified_resources
+            .contains(&"completed_work.rs".to_string()));
         assert!(result.can_merge_cleanly);
         assert!(result.merge_conflict_warning.is_none());
 

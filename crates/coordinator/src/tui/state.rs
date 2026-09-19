@@ -19,10 +19,7 @@ pub enum TuiAction {
         new_description: String,
     },
     /// Human submitted a new project for AI planning
-    SubmitProject {
-        name: String,
-        description: String,
-    },
+    SubmitProject { name: String, description: String },
     /// Human acknowledged a detected resource overlap warning
     AcknowledgeOverlap { warning_id: Uuid },
     /// Human cancelled an active or assigned task
@@ -46,7 +43,6 @@ pub enum TuiUpdateEvent {
     Timeline(crate::observability::TaskTimeline),
     ObservabilityEvent(crate::observability::CoordinatorEvent),
 }
-
 
 /// Active top-level screen
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -172,7 +168,9 @@ impl AppState {
             selected_timeline: None,
             selected_event_index: 0,
 
-            status_message: Some("Welcome to AgentMesh Coordinator. Press [Tab] to switch screens.".to_string()),
+            status_message: Some(
+                "Welcome to AgentMesh Coordinator. Press [Tab] to switch screens.".to_string(),
+            ),
             should_quit: false,
         }
     }
@@ -186,7 +184,8 @@ impl AppState {
         self.active_project = Some(Project {
             id: proj_id,
             name: "Cloud Migration Mesh".to_string(),
-            description: "Decompose and migrate monolith services to cloud native workers".to_string(),
+            description: "Decompose and migrate monolith services to cloud native workers"
+                .to_string(),
             status: crate::domain::ProjectStatus::Planning,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
@@ -204,7 +203,11 @@ impl AppState {
                 agent2_id,
                 "agent-infra (Bob)",
                 crate::domain::AdapterType::Mock,
-                vec!["infra".to_string(), "nats".to_string(), "docker".to_string()],
+                vec![
+                    "infra".to_string(),
+                    "nats".to_string(),
+                    "docker".to_string(),
+                ],
                 crate::domain::AgentStatus::Busy,
             ),
         ];
@@ -503,11 +506,15 @@ impl AppState {
 
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let task_id = self.review_tasks[self.selected_task_index].task.id;
-                let short_id = self.review_tasks[self.selected_task_index].task.short_id.clone();
-                self.review_tasks[self.selected_task_index].human_decision = Some(ApprovalStatus::Approved);
+                let short_id = self.review_tasks[self.selected_task_index]
+                    .task
+                    .short_id
+                    .clone();
+                self.review_tasks[self.selected_task_index].human_decision =
+                    Some(ApprovalStatus::Approved);
                 self.review_tasks[self.selected_task_index].task.status = TaskStatus::Approved;
                 self.status_message = Some(format!("Task {short_id} marked Approved."));
-                
+
                 // Advance selection if not at end
                 if self.selected_task_index + 1 < self.review_tasks.len() {
                     self.selected_task_index += 1;
@@ -516,26 +523,38 @@ impl AppState {
             }
             KeyCode::Char('n') | KeyCode::Char('N') => {
                 let task_id = self.review_tasks[self.selected_task_index].task.id;
-                let short_id = self.review_tasks[self.selected_task_index].task.short_id.clone();
-                self.review_tasks[self.selected_task_index].human_decision = Some(ApprovalStatus::Rejected);
+                let short_id = self.review_tasks[self.selected_task_index]
+                    .task
+                    .short_id
+                    .clone();
+                self.review_tasks[self.selected_task_index].human_decision =
+                    Some(ApprovalStatus::Rejected);
                 self.status_message = Some(format!("Task {short_id} marked Rejected."));
-                
+
                 if self.selected_task_index + 1 < self.review_tasks.len() {
                     self.selected_task_index += 1;
                 }
                 Some(TuiAction::RejectTask { task_id })
             }
             KeyCode::Char('e') | KeyCode::Char('E') => {
-                let current_desc = self.review_tasks[self.selected_task_index].task.description.clone();
+                let current_desc = self.review_tasks[self.selected_task_index]
+                    .task
+                    .description
+                    .clone();
                 self.edit_buffer = current_desc;
                 self.edit_cursor = self.edit_buffer.len();
                 self.input_mode = InputMode::EditingDescription;
-                self.status_message = Some("Editing description inline. [Enter] save & approve, [Esc] cancel.".to_string());
+                self.status_message = Some(
+                    "Editing description inline. [Enter] save & approve, [Esc] cancel.".to_string(),
+                );
                 None
             }
             KeyCode::Char('c') | KeyCode::Char('C') => {
                 let task_id = self.review_tasks[self.selected_task_index].task.id;
-                let short_id = self.review_tasks[self.selected_task_index].task.short_id.clone();
+                let short_id = self.review_tasks[self.selected_task_index]
+                    .task
+                    .short_id
+                    .clone();
                 self.status_message = Some(format!("Cancelling task {short_id}..."));
                 Some(TuiAction::CancelTask { task_id })
             }
@@ -553,14 +572,19 @@ impl AppState {
             KeyCode::Enter => {
                 self.input_mode = InputMode::Normal;
                 let task_id = self.review_tasks[self.selected_task_index].task.id;
-                let short_id = self.review_tasks[self.selected_task_index].task.short_id.clone();
+                let short_id = self.review_tasks[self.selected_task_index]
+                    .task
+                    .short_id
+                    .clone();
                 let new_desc = self.edit_buffer.trim().to_string();
 
                 self.review_tasks[self.selected_task_index].task.description = new_desc.clone();
                 // Acceptance criteria: [E] edit description, Enter confirms edit + approves
-                self.review_tasks[self.selected_task_index].human_decision = Some(ApprovalStatus::EditedAndApproved);
+                self.review_tasks[self.selected_task_index].human_decision =
+                    Some(ApprovalStatus::EditedAndApproved);
                 self.review_tasks[self.selected_task_index].task.status = TaskStatus::Approved;
-                self.status_message = Some(format!("Updated {short_id} description & marked Approved."));
+                self.status_message =
+                    Some(format!("Updated {short_id} description & marked Approved."));
 
                 Some(TuiAction::EditTaskDescription {
                     task_id,
@@ -618,7 +642,8 @@ impl AppState {
                 self.input_mode = InputMode::Normal;
                 let name = self.project_name_input.trim().to_string();
                 let desc = self.project_desc_input.trim().to_string();
-                self.status_message = Some(format!("Submitted project '{name}' for decomposition."));
+                self.status_message =
+                    Some(format!("Submitted project '{name}' for decomposition."));
 
                 Some(TuiAction::SubmitProject {
                     name,
@@ -662,12 +687,14 @@ impl AppState {
     pub fn apply_agent_message(&mut self, msg: &agent_protocol::AgentMessage) {
         match msg {
             agent_protocol::AgentMessage::TaskStarted {
-                agent_id,
-                task_id,
-                ..
+                agent_id, task_id, ..
             } => {
                 let mut short_id_opt = None;
-                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                if let Some(rt) = self
+                    .review_tasks
+                    .iter_mut()
+                    .find(|rt| rt.task.id == *task_id)
+                {
                     rt.task.status = TaskStatus::Executing;
                     rt.task.assigned_agent_id = Some(*agent_id);
                     short_id_opt = Some(rt.task.short_id.clone());
@@ -676,7 +703,8 @@ impl AppState {
                     agent.status = crate::domain::AgentStatus::Busy;
                     agent.current_task_id = Some(*task_id);
                 }
-                let display_name = short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
+                let display_name =
+                    short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
                 self.status_message = Some(format!("Task {display_name} is now EXECUTING."));
             }
             agent_protocol::AgentMessage::ProgressUpdate {
@@ -700,14 +728,19 @@ impl AppState {
                 ..
             } => {
                 let mut short_id_opt = None;
-                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                if let Some(rt) = self
+                    .review_tasks
+                    .iter_mut()
+                    .find(|rt| rt.task.id == *task_id)
+                {
                     rt.task.status = TaskStatus::Blocked;
                     short_id_opt = Some(rt.task.short_id.clone());
                 }
                 if let Some(agent) = self.agents.iter_mut().find(|a| a.id == *agent_id) {
                     agent.status = crate::domain::AgentStatus::Blocked;
                 }
-                let display_name = short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
+                let display_name =
+                    short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
                 self.status_message = Some(format!("Task {display_name} is BLOCKED: {reason}"));
             }
             agent_protocol::AgentMessage::Completed {
@@ -717,7 +750,11 @@ impl AppState {
                 ..
             } => {
                 let mut short_id_opt = None;
-                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                if let Some(rt) = self
+                    .review_tasks
+                    .iter_mut()
+                    .find(|rt| rt.task.id == *task_id)
+                {
                     rt.task.status = TaskStatus::Completed;
                     short_id_opt = Some(rt.task.short_id.clone());
                 }
@@ -725,7 +762,8 @@ impl AppState {
                     agent.status = crate::domain::AgentStatus::Idle;
                     agent.current_task_id = None;
                 }
-                let display_name = short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
+                let display_name =
+                    short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
                 self.status_message = Some(format!("Task {display_name} COMPLETED: {summary}"));
             }
             agent_protocol::AgentMessage::Failed {
@@ -735,7 +773,11 @@ impl AppState {
                 ..
             } => {
                 let mut short_id_opt = None;
-                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                if let Some(rt) = self
+                    .review_tasks
+                    .iter_mut()
+                    .find(|rt| rt.task.id == *task_id)
+                {
                     rt.task.status = TaskStatus::Failed;
                     short_id_opt = Some(rt.task.short_id.clone());
                 }
@@ -743,7 +785,8 @@ impl AppState {
                     agent.status = crate::domain::AgentStatus::Error;
                     agent.current_task_id = None;
                 }
-                let display_name = short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
+                let display_name =
+                    short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
                 self.status_message = Some(format!("Task {display_name} FAILED: {error}"));
             }
             agent_protocol::AgentMessage::Heartbeat {
@@ -772,13 +815,21 @@ impl AppState {
     pub fn apply_coordinator_event(&mut self, event: &crate::coordinator::CoordinatorEvent) {
         match event {
             crate::coordinator::CoordinatorEvent::TaskApproved { task_id } => {
-                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                if let Some(rt) = self
+                    .review_tasks
+                    .iter_mut()
+                    .find(|rt| rt.task.id == *task_id)
+                {
                     rt.human_decision = Some(ApprovalStatus::Approved);
                     rt.task.status = TaskStatus::Approved;
                 }
             }
             crate::coordinator::CoordinatorEvent::TaskRejected { task_id } => {
-                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                if let Some(rt) = self
+                    .review_tasks
+                    .iter_mut()
+                    .find(|rt| rt.task.id == *task_id)
+                {
                     rt.human_decision = Some(ApprovalStatus::Rejected);
                     rt.task.status = TaskStatus::Rejected;
                 }
@@ -788,12 +839,20 @@ impl AppState {
                 new_status,
                 ..
             } => {
-                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                if let Some(rt) = self
+                    .review_tasks
+                    .iter_mut()
+                    .find(|rt| rt.task.id == *task_id)
+                {
                     rt.task.status = *new_status;
                 }
             }
             crate::coordinator::CoordinatorEvent::TaskAssigned { task_id, agent_id } => {
-                if let Some(rt) = self.review_tasks.iter_mut().find(|rt| rt.task.id == *task_id) {
+                if let Some(rt) = self
+                    .review_tasks
+                    .iter_mut()
+                    .find(|rt| rt.task.id == *task_id)
+                {
                     rt.task.status = TaskStatus::Assigned;
                     rt.task.assigned_agent_id = Some(*agent_id);
                 }
@@ -843,7 +902,6 @@ impl AppState {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -943,7 +1001,10 @@ mod tests {
 
         let action = state.handle_key(make_key(KeyCode::Char('y')));
         assert_eq!(action, Some(TuiAction::ApproveTask { task_id: task0_id }));
-        assert_eq!(state.review_tasks[0].human_decision, Some(ApprovalStatus::Approved));
+        assert_eq!(
+            state.review_tasks[0].human_decision,
+            Some(ApprovalStatus::Approved)
+        );
         assert_eq!(state.review_tasks[0].task.status, TaskStatus::Approved);
         // Automatically advances to index 1
         assert_eq!(state.selected_task_index, 1);
@@ -956,7 +1017,10 @@ mod tests {
 
         let action = state.handle_key(make_key(KeyCode::Char('n')));
         assert_eq!(action, Some(TuiAction::RejectTask { task_id: task0_id }));
-        assert_eq!(state.review_tasks[0].human_decision, Some(ApprovalStatus::Rejected));
+        assert_eq!(
+            state.review_tasks[0].human_decision,
+            Some(ApprovalStatus::Rejected)
+        );
         assert_eq!(state.selected_task_index, 1);
     }
 
@@ -988,8 +1052,14 @@ mod tests {
                 new_description: format!("{original_desc} (Revised)"),
             })
         );
-        assert_eq!(state.review_tasks[0].task.description, format!("{original_desc} (Revised)"));
-        assert_eq!(state.review_tasks[0].human_decision, Some(ApprovalStatus::EditedAndApproved));
+        assert_eq!(
+            state.review_tasks[0].task.description,
+            format!("{original_desc} (Revised)")
+        );
+        assert_eq!(
+            state.review_tasks[0].human_decision,
+            Some(ApprovalStatus::EditedAndApproved)
+        );
     }
 
     #[test]
@@ -1054,7 +1124,12 @@ mod tests {
 
         // Press 'a' to acknowledge overlap
         let action = state.handle_key(make_key(KeyCode::Char('a')));
-        assert_eq!(action, Some(TuiAction::AcknowledgeOverlap { warning_id: warn_id }));
+        assert_eq!(
+            action,
+            Some(TuiAction::AcknowledgeOverlap {
+                warning_id: warn_id
+            })
+        );
         assert!(state.review_tasks[0].overlap_warnings[0].acknowledged);
         assert!(state.active_overlaps.is_empty());
     }
@@ -1069,7 +1144,12 @@ mod tests {
 
         // Press 'a' in dashboard to acknowledge
         let action = state.handle_key(make_key(KeyCode::Char('a')));
-        assert_eq!(action, Some(TuiAction::AcknowledgeOverlap { warning_id: warn_id }));
+        assert_eq!(
+            action,
+            Some(TuiAction::AcknowledgeOverlap {
+                warning_id: warn_id
+            })
+        );
         assert!(state.active_overlaps.is_empty());
     }
 
@@ -1107,4 +1187,3 @@ mod tests {
         assert_eq!(state.agents[0].current_task_id, None);
     }
 }
-

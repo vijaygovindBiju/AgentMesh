@@ -3,11 +3,11 @@ use async_nats::Client;
 use sqlx::PgPool;
 use tracing::{error, info, warn};
 
-use agent_protocol::{AgentMessage, CoordinatorMessage};
 use crate::db::repositories::AgentRepository;
 use crate::domain::{AdapterType, NewAgent};
 use crate::security::audit::{AuditEvent, AuditLogger};
 use crate::security::auth::ApiKeyManager;
+use agent_protocol::{AgentMessage, CoordinatorMessage};
 
 pub const REGISTRATION_SUBJECT: &str = "coordinator.agents.register";
 
@@ -26,7 +26,8 @@ impl RegistrationHandler {
             capabilities,
             profile,
             api_key,
-        } = msg else {
+        } = msg
+        else {
             return Ok(CoordinatorMessage::RegisterResponse {
                 status: "error".to_string(),
                 nats_subject: None,
@@ -67,7 +68,8 @@ impl RegistrationHandler {
                             "denied",
                             serde_json::json!({ "reason": "Agent key is revoked" }),
                         ),
-                    ).await;
+                    )
+                    .await;
                     warn!(%agent_id, "Registration failed: agent key is revoked");
                     return Ok(CoordinatorMessage::RegisterResponse {
                         status: "error".to_string(),
@@ -89,7 +91,8 @@ impl RegistrationHandler {
                             "denied",
                             serde_json::json!({ "reason": "Agent key has expired" }),
                         ),
-                    ).await;
+                    )
+                    .await;
                     warn!(%agent_id, "Registration failed: agent key has expired");
                     return Ok(CoordinatorMessage::RegisterResponse {
                         status: "error".to_string(),
@@ -100,7 +103,12 @@ impl RegistrationHandler {
 
                 // Verify API key against stored hash using constant-time check
                 if !ApiKeyManager::verify_key(&api_key, &existing.api_key_hash) {
-                    let _ = AuditLogger::log_auth_failure(pool, agent_id, "Invalid API key during re-registration").await;
+                    let _ = AuditLogger::log_auth_failure(
+                        pool,
+                        agent_id,
+                        "Invalid API key during re-registration",
+                    )
+                    .await;
                     warn!(%agent_id, "Registration failed: invalid API key");
                     return Ok(CoordinatorMessage::RegisterResponse {
                         status: "error".to_string(),
@@ -125,7 +133,8 @@ impl RegistrationHandler {
                         "success",
                         serde_json::json!({ "re_registration": true }),
                     ),
-                ).await;
+                )
+                .await;
             }
             None => {
                 // Register new agent: hash API key if not already hashed
@@ -160,7 +169,8 @@ impl RegistrationHandler {
                         "success",
                         serde_json::json!({ "human_owner": human_owner }),
                     ),
-                ).await;
+                )
+                .await;
             }
         }
 
@@ -187,14 +197,16 @@ impl RegistrationHandler {
             };
 
             let response = match serde_json::from_slice::<AgentMessage>(&msg.payload) {
-                Ok(agent_msg) => Self::process_registration(&pool, agent_msg).await.unwrap_or_else(|e| {
-                    error!(error = %e, "Failed to process registration");
-                    CoordinatorMessage::RegisterResponse {
-                        status: "error".to_string(),
-                        nats_subject: None,
-                        error: Some(e.to_string()),
-                    }
-                }),
+                Ok(agent_msg) => Self::process_registration(&pool, agent_msg)
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!(error = %e, "Failed to process registration");
+                        CoordinatorMessage::RegisterResponse {
+                            status: "error".to_string(),
+                            nats_subject: None,
+                            error: Some(e.to_string()),
+                        }
+                    }),
                 Err(e) => {
                     warn!(error = %e, "Malformed registration JSON");
                     CoordinatorMessage::RegisterResponse {
@@ -218,13 +230,14 @@ impl RegistrationHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uuid::Uuid;
     use crate::db::pool::{create_pool, run_migrations};
+    use uuid::Uuid;
 
     async fn setup_pool() -> Option<PgPool> {
         let _ = dotenvy::dotenv();
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+        let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+        });
         let pool = create_pool(&url).await.ok()?;
         run_migrations(&pool).await.ok()?;
         Some(pool)

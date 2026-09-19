@@ -144,8 +144,14 @@ mod tests {
         let raw = r#"{"event":"init","conversation_id":"8a6e3b0f-2ee1-4c48-a19b-52e0f71db1c2","init":{"cwd":"/media/test","tools":["read_file","run_command"],"permission_mode":"always-proceed"}}"#;
         let event = parse_stream_line(raw).expect("Failed to parse init event");
         match event {
-            AgyStreamEvent::Init { conversation_id, init } => {
-                assert_eq!(conversation_id.as_deref(), Some("8a6e3b0f-2ee1-4c48-a19b-52e0f71db1c2"));
+            AgyStreamEvent::Init {
+                conversation_id,
+                init,
+            } => {
+                assert_eq!(
+                    conversation_id.as_deref(),
+                    Some("8a6e3b0f-2ee1-4c48-a19b-52e0f71db1c2")
+                );
                 let init = init.expect("Init payload missing");
                 assert_eq!(init.permission_mode.as_deref(), Some("always-proceed"));
                 assert_eq!(init.tools.len(), 2);
@@ -188,7 +194,9 @@ mod tests {
         match event {
             AgyStreamEvent::StepUpdate { step_update } => {
                 assert!(step_update.is_blocked());
-                assert!(step_update.blocked_reason().contains("Which database migration version"));
+                assert!(step_update
+                    .blocked_reason()
+                    .contains("Which database migration version"));
             }
             other => panic!("Expected StepUpdate, got {other:?}"),
         }
@@ -201,7 +209,10 @@ mod tests {
         match event {
             AgyStreamEvent::Result { result } => {
                 assert_eq!(result.status, "ERROR");
-                assert_eq!(result.error.as_deref(), Some("RESOURCE_EXHAUSTED: rate limit exceeded (HTTP 429)"));
+                assert_eq!(
+                    result.error.as_deref(),
+                    Some("RESOURCE_EXHAUSTED: rate limit exceeded (HTTP 429)")
+                );
             }
             other => panic!("Expected Result, got {other:?}"),
         }
@@ -220,4 +231,3 @@ mod tests {
         }
     }
 }
-

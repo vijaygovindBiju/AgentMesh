@@ -32,7 +32,8 @@ pub async fn connect_secure(
         }
     }
 
-    if let (Some(ref cert_path), Some(ref key_path)) = (&sec.client_cert_path, &sec.client_key_path) {
+    if let (Some(ref cert_path), Some(ref key_path)) = (&sec.client_cert_path, &sec.client_key_path)
+    {
         if Path::new(cert_path).exists() && Path::new(key_path).exists() {
             options = options.add_client_certificate(cert_path.into(), key_path.into());
         }
@@ -67,12 +68,17 @@ mod tests {
     #[tokio::test]
     async fn test_nats_client_connection() {
         let _ = dotenvy::dotenv();
-        let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
-        let nats_token = std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
+        let nats_url =
+            std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+        let nats_token =
+            std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
 
         match connect(&nats_url, Some(&nats_token)).await {
             Ok((client, _jetstream)) => {
-                assert_eq!(client.connection_state(), async_nats::connection::State::Connected);
+                assert_eq!(
+                    client.connection_state(),
+                    async_nats::connection::State::Connected
+                );
             }
             Err(e) => {
                 eprintln!("Skipping NATS test (server not reachable): {e}");
@@ -83,7 +89,8 @@ mod tests {
     #[tokio::test]
     async fn test_nats_client_connect_secure_config() {
         let _ = dotenvy::dotenv();
-        let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+        let nats_url =
+            std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
         let sec = NatsSecurityConfig {
             auth_token: Some("agentmesh_dev_token".to_string()),
             require_tls: false,
@@ -92,7 +99,10 @@ mod tests {
 
         match connect_secure(&nats_url, &sec).await {
             Ok((client, _jetstream)) => {
-                assert_eq!(client.connection_state(), async_nats::connection::State::Connected);
+                assert_eq!(
+                    client.connection_state(),
+                    async_nats::connection::State::Connected
+                );
             }
             Err(e) => {
                 eprintln!("Skipping NATS test: {e}");

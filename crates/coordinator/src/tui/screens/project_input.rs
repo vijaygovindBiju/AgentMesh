@@ -18,7 +18,9 @@ impl ProjectInputScreen {
             .border_style(Style::default().fg(Color::Cyan))
             .title(Span::styled(
                 " Project Definition & Planning Input ",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         let inner_area = block.inner(area);
@@ -36,19 +38,38 @@ impl ProjectInputScreen {
 
         // Instructions
         let intro_text = Line::from(vec![
-            Span::styled("Enter project details below. Press ", Style::default().fg(Color::White)),
-            Span::styled("[i]", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Enter project details below. Press ",
+                Style::default().fg(Color::White),
+            ),
+            Span::styled(
+                "[i]",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" or ", Style::default().fg(Color::White)),
-            Span::styled("[Enter]", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            Span::styled(" to start typing. Tab switches fields.", Style::default().fg(Color::White)),
+            Span::styled(
+                "[Enter]",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " to start typing. Tab switches fields.",
+                Style::default().fg(Color::White),
+            ),
         ]);
         let intro_p = Paragraph::new(intro_text);
         frame.render_widget(intro_p, chunks[0]);
 
         // Field 1: Name
-        let is_name_focused = state.input_mode == InputMode::EnteringProject && state.project_focus_field == 0;
+        let is_name_focused =
+            state.input_mode == InputMode::EnteringProject && state.project_focus_field == 0;
         let name_border_style = if is_name_focused {
-            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::DarkGray)
         };
@@ -76,9 +97,12 @@ impl ProjectInputScreen {
         frame.render_widget(name_p, chunks[1]);
 
         // Field 2: Description
-        let is_desc_focused = state.input_mode == InputMode::EnteringProject && state.project_focus_field == 1;
+        let is_desc_focused =
+            state.input_mode == InputMode::EnteringProject && state.project_focus_field == 1;
         let desc_border_style = if is_desc_focused {
-            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::DarkGray)
         };
@@ -86,7 +110,8 @@ impl ProjectInputScreen {
         let desc_text = if is_desc_focused {
             format!("{}_", state.project_desc_input)
         } else if state.project_desc_input.is_empty() {
-            "Describe the overall system goals, tech stack, and components to decompose...".to_string()
+            "Describe the overall system goals, tech stack, and components to decompose..."
+                .to_string()
         } else {
             state.project_desc_input.clone()
         };
@@ -109,12 +134,26 @@ impl ProjectInputScreen {
         // Planning Contract Note
         let note_lines = vec![
             Line::from(vec![
-                Span::styled("Planning Protocol Contract: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Planning Protocol Contract: ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("AI proposals are strictly advisory."),
             ]),
-            Line::from(Span::styled(" • The AI generates task breakdown, dependencies, and affected resources.", Style::default().fg(Color::DarkGray))),
-            Line::from(Span::styled(" • All proposals pass deterministic cycle & validation checks before appearing.", Style::default().fg(Color::DarkGray))),
-            Line::from(Span::styled(" • No tasks are assigned or executed without human operator approval.", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled(
+                " • The AI generates task breakdown, dependencies, and affected resources.",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(Span::styled(
+                " • All proposals pass deterministic cycle & validation checks before appearing.",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(Span::styled(
+                " • No tasks are assigned or executed without human operator approval.",
+                Style::default().fg(Color::DarkGray),
+            )),
         ];
         let note_p = Paragraph::new(note_lines).block(
             Block::default()

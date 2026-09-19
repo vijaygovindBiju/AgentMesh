@@ -71,28 +71,48 @@ impl DeliveryDiagnostics {
             (None, Vec::new())
         };
 
-        let has_reassigned = prior_attempts.iter().any(|a| a.status == DeliveryStatus::Reassigned);
-        let is_terminal = current_attempt.as_ref().map_or(false, |c| c.status == DeliveryStatus::Terminal);
+        let has_reassigned = prior_attempts
+            .iter()
+            .any(|a| a.status == DeliveryStatus::Reassigned);
+        let is_terminal = current_attempt
+            .as_ref()
+            .is_some_and(|c| c.status == DeliveryStatus::Terminal);
 
         let summary = match &current_attempt {
             Some(curr) => match curr.status {
                 DeliveryStatus::Acknowledged => {
-                    format!("Successfully acknowledged on attempt #{} by {:?}", curr.attempt, curr.agent_name)
+                    format!(
+                        "Successfully acknowledged on attempt #{} by {:?}",
+                        curr.attempt, curr.agent_name
+                    )
                 }
                 DeliveryStatus::Pending if curr.is_expired => {
-                    format!("Attempt #{} timed out/expired, awaiting recovery/reassignment", curr.attempt)
+                    format!(
+                        "Attempt #{} timed out/expired, awaiting recovery/reassignment",
+                        curr.attempt
+                    )
                 }
                 DeliveryStatus::Pending => {
-                    format!("Attempt #{} pending acknowledgment (expires in {}s)", curr.attempt, (curr.expires_at - now).num_seconds().max(0))
+                    format!(
+                        "Attempt #{} pending acknowledgment (expires in {}s)",
+                        curr.attempt,
+                        (curr.expires_at - now).num_seconds().max(0)
+                    )
                 }
                 DeliveryStatus::NakRequeued => {
                     format!("Attempt #{} was NAKed and requeued", curr.attempt)
                 }
                 DeliveryStatus::Terminal => {
-                    format!("Delivery permanently failed after {} attempts", total_attempts)
+                    format!(
+                        "Delivery permanently failed after {} attempts",
+                        total_attempts
+                    )
                 }
                 DeliveryStatus::Reassigned => {
-                    format!("Task was reassigned across {} total attempts", total_attempts)
+                    format!(
+                        "Task was reassigned across {} total attempts",
+                        total_attempts
+                    )
                 }
                 DeliveryStatus::Delivered => {
                     format!("Attempt #{} delivered over NATS", curr.attempt)

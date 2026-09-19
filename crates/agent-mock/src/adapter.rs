@@ -1,5 +1,5 @@
-use std::time::Duration;
 use agent_protocol::AgentAdapter;
+use std::time::Duration;
 use uuid::Uuid;
 
 /// Configuration and state for a Mock Agent instance.

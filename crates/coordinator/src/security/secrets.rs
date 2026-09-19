@@ -26,7 +26,9 @@ impl SecretScoper {
 
         for (k, v) in source_env {
             let k_upper = k.to_uppercase();
-            let is_blocked = blocked_prefixes.iter().any(|prefix| k_upper.starts_with(prefix))
+            let is_blocked = blocked_prefixes
+                .iter()
+                .any(|prefix| k_upper.starts_with(prefix))
                 || k_upper == "DATABASE_URL"
                 || k_upper.contains("API_KEY")
                 || k_upper.contains("SECRET");
@@ -51,7 +53,8 @@ mod tests {
 
     #[test]
     fn test_secret_redactor_api_key() {
-        let text = "Agent connected with key am_ak_9f83a4c5d6e7f80192837465abcde1234 to coordinator";
+        let text =
+            "Agent connected with key am_ak_9f83a4c5d6e7f80192837465abcde1234 to coordinator";
         let redacted = SecretRedactor::redact(text);
         assert!(!redacted.contains("9f83a4c5d6e7f80192837465abcde1234"));
         assert!(redacted.contains("[REDACTED_API_KEY]"));

@@ -3,7 +3,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::{
-    NewProposal, NewTaskApproval, Proposal, ProposalStatus, TaskApproval, ApprovalStatus,
+    ApprovalStatus, NewProposal, NewTaskApproval, Proposal, ProposalStatus, TaskApproval,
 };
 
 pub struct ProposalRepository;

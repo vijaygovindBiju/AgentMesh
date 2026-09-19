@@ -12,14 +12,11 @@ use crate::tui::state::ReviewTaskState;
 pub struct TaskCardWidget;
 
 impl TaskCardWidget {
-    pub fn render(
-        frame: &mut Frame,
-        area: Rect,
-        item: &ReviewTaskState,
-        is_selected: bool,
-    ) {
+    pub fn render(frame: &mut Frame, area: Rect, item: &ReviewTaskState, is_selected: bool) {
         let border_style = if is_selected {
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::DarkGray)
         };
@@ -41,8 +38,12 @@ impl TaskCardWidget {
 
         // 1. Header: [PLAN-1] Title
         let prefix = if is_selected { "▶ " } else { "  " };
-        let short_id_style = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
-        let title_style = Style::default().fg(Color::White).add_modifier(Modifier::BOLD);
+        let short_id_style = Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD);
+        let title_style = Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD);
 
         lines.push(Line::from(vec![
             Span::styled(prefix, Style::default().fg(Color::Cyan)),
@@ -86,7 +87,11 @@ impl TaskCardWidget {
 
         // 3. Overlap warning banner (if any)
         if !item.overlap_warnings.is_empty() {
-            let unacked_count = item.overlap_warnings.iter().filter(|w| !w.acknowledged).count();
+            let unacked_count = item
+                .overlap_warnings
+                .iter()
+                .filter(|w| !w.acknowledged)
+                .count();
             if unacked_count > 0 {
                 lines.push(Line::from(vec![
                     Span::raw("    "),
@@ -102,15 +107,15 @@ impl TaskCardWidget {
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(
-                        format!(" ✔ {} Overlap Warning(s) Acknowledged ", item.overlap_warnings.len()),
-                        Style::default()
-                            .fg(Color::Green)
-                            .bg(Color::Black),
+                        format!(
+                            " ✔ {} Overlap Warning(s) Acknowledged ",
+                            item.overlap_warnings.len()
+                        ),
+                        Style::default().fg(Color::Green).bg(Color::Black),
                     ),
                 ]));
             }
         }
-
 
         // 4. Dependencies preview
         let deps_summary = if item.dependencies.is_empty() {

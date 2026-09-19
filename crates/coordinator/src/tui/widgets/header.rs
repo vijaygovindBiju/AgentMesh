@@ -23,7 +23,12 @@ impl HeaderWidget {
 
         // Title
         let title_line = Line::from(vec![
-            Span::styled(" AgentMesh ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " AgentMesh ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled("v0.1 ", Style::default().fg(Color::DarkGray)),
         ]);
         let title_p = Paragraph::new(title_line).block(
@@ -41,7 +46,12 @@ impl HeaderWidget {
             .unwrap_or("No Project Selected");
         let proj_line = Line::from(vec![
             Span::styled(" Project: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(proj_name, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                proj_name,
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]);
         let proj_p = Paragraph::new(proj_line).block(
             Block::default()

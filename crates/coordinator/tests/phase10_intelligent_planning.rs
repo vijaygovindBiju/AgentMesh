@@ -20,8 +20,9 @@ use coordinator::domain::{AdapterType, NewAgent, NewProject, TaskStatus};
 
 async fn setup_test_pool() -> Option<PgPool> {
     let _ = dotenvy::dotenv();
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
 
     let pool = create_pool(&db_url).await.ok()?;
     run_migrations(&pool).await.ok()?;
@@ -45,7 +46,9 @@ async fn test_repo_scanner_discovers_architecture_and_modules() {
         "Must identify Rust as primary language"
     );
     assert!(
-        ctx.key_modules.iter().any(|m| m.contains("coordinator") || m == "crates"),
+        ctx.key_modules
+            .iter()
+            .any(|m| m.contains("coordinator") || m == "crates"),
         "Must identify crates or coordinator as key module"
     );
     assert!(
@@ -59,9 +62,15 @@ async fn test_repo_scanner_discovers_architecture_and_modules() {
 
     // 2. Scan simulated polyglot repository in temp dir
     let temp_dir = std::env::temp_dir().join(format!("polyglot_test_{}", Uuid::new_v4()));
-    tokio::fs::create_dir_all(temp_dir.join("backend/src")).await.unwrap();
-    tokio::fs::create_dir_all(temp_dir.join("frontend/src")).await.unwrap();
-    tokio::fs::create_dir_all(temp_dir.join("migrations")).await.unwrap();
+    tokio::fs::create_dir_all(temp_dir.join("backend/src"))
+        .await
+        .unwrap();
+    tokio::fs::create_dir_all(temp_dir.join("frontend/src"))
+        .await
+        .unwrap();
+    tokio::fs::create_dir_all(temp_dir.join("migrations"))
+        .await
+        .unwrap();
 
     tokio::fs::write(
         temp_dir.join("backend/Cargo.toml"),
@@ -110,13 +119,29 @@ async fn test_repo_scanner_discovers_architecture_and_modules() {
         .await
         .expect("Failed to scan polyglot repository");
 
-    assert!(polyglot_ctx.detected_ecosystems.iter().any(|e| e.contains("Rust")));
-    assert!(polyglot_ctx.detected_ecosystems.iter().any(|e| e.contains("Node")));
-    assert!(polyglot_ctx.detected_ecosystems.iter().any(|e| e.contains("Python")));
-    assert!(polyglot_ctx.detected_ecosystems.iter().any(|e| e.contains("Go")));
+    assert!(polyglot_ctx
+        .detected_ecosystems
+        .iter()
+        .any(|e| e.contains("Rust")));
+    assert!(polyglot_ctx
+        .detected_ecosystems
+        .iter()
+        .any(|e| e.contains("Node")));
+    assert!(polyglot_ctx
+        .detected_ecosystems
+        .iter()
+        .any(|e| e.contains("Python")));
+    assert!(polyglot_ctx
+        .detected_ecosystems
+        .iter()
+        .any(|e| e.contains("Go")));
     assert!(polyglot_ctx.primary_languages.contains(&"Rust".to_string()));
-    assert!(polyglot_ctx.primary_languages.contains(&"TypeScript".to_string()));
-    assert!(polyglot_ctx.primary_languages.contains(&"Python".to_string()));
+    assert!(polyglot_ctx
+        .primary_languages
+        .contains(&"TypeScript".to_string()));
+    assert!(polyglot_ctx
+        .primary_languages
+        .contains(&"Python".to_string()));
     assert!(polyglot_ctx.primary_languages.contains(&"Go".to_string()));
     assert!(polyglot_ctx.key_modules.contains(&"backend".to_string()));
 
@@ -130,12 +155,17 @@ fn test_repository_aware_planning_prompt_generation() {
         repo_root: current_dir.clone(),
         detected_ecosystems: vec!["Rust / Cargo".to_string(), "PostgreSQL".to_string()],
         primary_languages: vec!["Rust".to_string(), "SQL".to_string()],
-        key_modules: vec!["crates/coordinator".to_string(), "crates/agent-protocol".to_string()],
+        key_modules: vec![
+            "crates/coordinator".to_string(),
+            "crates/agent-protocol".to_string(),
+        ],
         file_tree_sample: vec![
             "crates/coordinator/src/main.rs".to_string(),
             "crates/coordinator/src/ai/service.rs".to_string(),
         ],
-        readme_summary: Some("# AgentMesh Architecture\nDistributed agent coordination.".to_string()),
+        readme_summary: Some(
+            "# AgentMesh Architecture\nDistributed agent coordination.".to_string(),
+        ),
     };
 
     let request = PlanningRequest {
@@ -181,7 +211,11 @@ fn test_agent_capability_matcher_heuristics() {
             agent_id: ts_agent_id,
             human_owner: "FrontDev".to_string(),
             adapter_type: "Agy".to_string(),
-            capabilities: vec!["frontend".to_string(), "typescript".to_string(), "react".to_string()],
+            capabilities: vec![
+                "frontend".to_string(),
+                "typescript".to_string(),
+                "react".to_string(),
+            ],
         },
         AvailableAgentContext {
             agent_id: py_agent_id,
@@ -271,10 +305,22 @@ fn test_complexity_estimator_sizing_and_risk_factors() {
     );
     assert!(est_large.estimated_size == "L" || est_large.estimated_size == "XL");
     assert!(est_large.score >= 66);
-    assert!(est_large.risk_factors.iter().any(|f| f.contains("database")));
-    assert!(est_large.risk_factors.iter().any(|f| f.contains("refactor")));
-    assert!(est_large.risk_factors.iter().any(|f| f.contains("Security-critical")));
-    assert!(est_large.risk_factors.iter().any(|f| f.contains("High dependency gating")));
+    assert!(est_large
+        .risk_factors
+        .iter()
+        .any(|f| f.contains("database")));
+    assert!(est_large
+        .risk_factors
+        .iter()
+        .any(|f| f.contains("refactor")));
+    assert!(est_large
+        .risk_factors
+        .iter()
+        .any(|f| f.contains("Security-critical")));
+    assert!(est_large
+        .risk_factors
+        .iter()
+        .any(|f| f.contains("High dependency gating")));
 }
 
 #[tokio::test]
@@ -335,7 +381,7 @@ async fn test_repo_aware_plan_service_integration() {
                 description: "Implement PostgreSQL persistence layer in Rust".to_string(),
                 suggested_agent_id: None, // Will be auto-inferred by AgentCapabilityMatcher
                 affected_resources: vec!["crates/coordinator/src/db/repo.rs".to_string()],
-                estimated_size: None,     // Will be auto-inferred by ComplexityEstimator
+                estimated_size: None, // Will be auto-inferred by ComplexityEstimator
             },
             ProposedTask {
                 short_id: "PLAN-102".to_string(),
@@ -361,14 +407,10 @@ async fn test_repo_aware_plan_service_integration() {
 
     // Call generate_repo_aware_plan scanning current repository
     let current_dir = std::env::current_dir().unwrap();
-    let proposal_id = PlanningService::generate_repo_aware_plan(
-        &pool,
-        &mock_llm,
-        &current_dir,
-        planning_req,
-    )
-    .await
-    .expect("generate_repo_aware_plan must succeed");
+    let proposal_id =
+        PlanningService::generate_repo_aware_plan(&pool, &mock_llm, &current_dir, planning_req)
+            .await
+            .expect("generate_repo_aware_plan must succeed");
 
     assert_ne!(proposal_id, Uuid::nil());
 
@@ -380,7 +422,9 @@ async fn test_repo_aware_plan_service_integration() {
     assert_eq!(proposal.project_id, project.id);
 
     // Verify Tasks stored with auto-matched agent and auto-estimated complexity
-    let tasks = TaskRepository::list_by_project(&pool, project.id).await.unwrap();
+    let tasks = TaskRepository::list_by_project(&pool, project.id)
+        .await
+        .unwrap();
     assert_eq!(tasks.len(), 2);
 
     let task1 = tasks.iter().find(|t| t.short_id == "PLAN-101").unwrap();
@@ -395,8 +439,16 @@ async fn test_repo_aware_plan_service_integration() {
 
     // Auto-matched agent is recorded in proposal raw_response via capability matching
     let enriched_plan: PlanningResponse = serde_json::from_str(&proposal.raw_response).unwrap();
-    let p_task1 = enriched_plan.proposed_tasks.iter().find(|t| t.short_id == "PLAN-101").unwrap();
-    let p_task2 = enriched_plan.proposed_tasks.iter().find(|t| t.short_id == "PLAN-102").unwrap();
+    let p_task1 = enriched_plan
+        .proposed_tasks
+        .iter()
+        .find(|t| t.short_id == "PLAN-101")
+        .unwrap();
+    let p_task2 = enriched_plan
+        .proposed_tasks
+        .iter()
+        .find(|t| t.short_id == "PLAN-102")
+        .unwrap();
     assert_eq!(
         p_task1.suggested_agent_id,
         Some(rust_agent_id),
@@ -409,11 +461,19 @@ async fn test_repo_aware_plan_service_integration() {
     );
 
     // Auto-estimated complexity check
-    assert!(task1.estimated_size.is_some(), "PLAN-101 must have auto-estimated size");
-    assert!(task2.estimated_size.is_some(), "PLAN-102 must have auto-estimated size");
+    assert!(
+        task1.estimated_size.is_some(),
+        "PLAN-101 must have auto-estimated size"
+    );
+    assert!(
+        task2.estimated_size.is_some(),
+        "PLAN-102 must have auto-estimated size"
+    );
 
     // Overlap warning check (both touch "crates/coordinator/src/db/repo.rs")
-    let overlaps = OverlapWarningRepository::list_by_project(&pool, project.id).await.unwrap_or_default();
+    let overlaps = OverlapWarningRepository::list_by_project(&pool, project.id)
+        .await
+        .unwrap_or_default();
     assert!(
         overlaps.iter().any(|o| o.resource.contains("repo.rs")),
         "Must record overlap warning for shared resource repo.rs"
@@ -433,7 +493,8 @@ async fn test_dynamic_replanning_on_failure_and_state_change() {
         &pool,
         &NewProject {
             name: "Dynamic Replanning Proj".to_string(),
-            description: "Test replanning after execution failure and unexpected changes".to_string(),
+            description: "Test replanning after execution failure and unexpected changes"
+                .to_string(),
         },
     )
     .await
@@ -502,10 +563,14 @@ async fn test_dynamic_replanning_on_failure_and_state_change() {
     .unwrap();
 
     // Mark task1 completed
-    TaskRepository::update_status(&pool, task1.id, TaskStatus::Completed).await.unwrap();
+    TaskRepository::update_status(&pool, task1.id, TaskStatus::Completed)
+        .await
+        .unwrap();
 
     // Mark task2 failed
-    TaskRepository::update_status(&pool, task2.id, TaskStatus::Failed).await.unwrap();
+    TaskRepository::update_status(&pool, task2.id, TaskStatus::Failed)
+        .await
+        .unwrap();
 
     // Record an unexpected resource modification on task2
     let _ = UnexpectedResourceRepository::record(
@@ -525,7 +590,10 @@ async fn test_dynamic_replanning_on_failure_and_state_change() {
     assert_eq!(replan_ctx.completed_tasks[0].short_id, "INIT-01");
     assert_eq!(replan_ctx.failed_tasks.len(), 1);
     assert_eq!(replan_ctx.failed_tasks[0].short_id, "INIT-02");
-    assert!(replan_ctx.unexpected_changes.iter().any(|c| c.contains("unintended_config.json")));
+    assert!(replan_ctx
+        .unexpected_changes
+        .iter()
+        .any(|c| c.contains("unintended_config.json")));
 
     // 3. Verify Replan Prompt formatting
     let replan_prompt = ReplanPrompt::user_prompt(&replan_ctx);
@@ -563,15 +631,31 @@ async fn test_dynamic_replanning_on_failure_and_state_change() {
 
     assert_ne!(replan_proposal_id, Uuid::nil());
 
-    let all_tasks = TaskRepository::list_by_project(&pool, project.id).await.unwrap();
-    let corrective_task = all_tasks.iter().find(|t| t.short_id == "REPLAN-01").unwrap();
+    let all_tasks = TaskRepository::list_by_project(&pool, project.id)
+        .await
+        .unwrap();
+    let corrective_task = all_tasks
+        .iter()
+        .find(|t| t.short_id == "REPLAN-01")
+        .unwrap();
     assert_eq!(corrective_task.status, TaskStatus::HumanReview);
-    assert!(corrective_task.assigned_agent_id.is_none(), "Must wait for human approval");
+    assert!(
+        corrective_task.assigned_agent_id.is_none(),
+        "Must wait for human approval"
+    );
     assert_eq!(corrective_task.resources().len(), 2);
 
-    let replan_prop = ProposalRepository::find_by_id(&pool, replan_proposal_id).await.unwrap().unwrap();
-    let enriched_replan: PlanningResponse = serde_json::from_str(&replan_prop.raw_response).unwrap();
-    let p_corr = enriched_replan.proposed_tasks.iter().find(|t| t.short_id == "REPLAN-01").unwrap();
+    let replan_prop = ProposalRepository::find_by_id(&pool, replan_proposal_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let enriched_replan: PlanningResponse =
+        serde_json::from_str(&replan_prop.raw_response).unwrap();
+    let p_corr = enriched_replan
+        .proposed_tasks
+        .iter()
+        .find(|t| t.short_id == "REPLAN-01")
+        .unwrap();
     assert_eq!(p_corr.suggested_agent_id, Some(agent.id));
 
     ProjectRepository::delete(&pool, project.id).await.unwrap();

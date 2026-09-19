@@ -71,10 +71,7 @@ impl GitConflictRepository {
     }
 
     /// Lists unresolved Git conflicts for a specific task.
-    pub async fn list_by_task(
-        pool: &PgPool,
-        task_id: Uuid,
-    ) -> Result<Vec<GitConflictRecord>> {
+    pub async fn list_by_task(pool: &PgPool, task_id: Uuid) -> Result<Vec<GitConflictRecord>> {
         let records = sqlx::query_as!(
             GitConflictRecord,
             r#"

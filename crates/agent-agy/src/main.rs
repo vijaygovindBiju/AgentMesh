@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use std::time::Duration;
 use anyhow::Result;
 use futures::StreamExt;
+use std::path::PathBuf;
+use std::time::Duration;
 use tracing::{error, info};
 use uuid::Uuid;
 
@@ -12,10 +12,13 @@ use agent_protocol::CoordinatorMessage;
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
-    let nats_token = std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let nats_token =
+        std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
     let owner = std::env::var("AGY_AGENT_OWNER").unwrap_or_else(|_| "AgyDev".to_string());
-    let api_key = std::env::var("AGY_AGENT_API_KEY").unwrap_or_else(|_| "agentmesh_agy_key".to_string());
+    let api_key =
+        std::env::var("AGY_AGENT_API_KEY").unwrap_or_else(|_| "agentmesh_agy_key".to_string());
 
     let mut agent = AgyAgent::new(owner, api_key);
 
@@ -102,21 +105,24 @@ async fn main() -> Result<()> {
                             short_id = %spec.short_id,
                             "Received task assignment"
                         );
-                        if let Err(e) = AgyAgentRunner::execute_task(
-                            &client,
-                            &agent,
-                            &spec,
-                            &event_subject,
-                        )
-                        .await
+                        if let Err(e) =
+                            AgyAgentRunner::execute_task(&client, &agent, &spec, &event_subject)
+                                .await
                         {
                             error!(error = %e, "agy task execution failed");
                         }
                     }
-                    Ok(CoordinatorMessage::TaskCancelled { task_id, reason, .. }) => {
+                    Ok(CoordinatorMessage::TaskCancelled {
+                        task_id, reason, ..
+                    }) => {
                         tracing::warn!(%task_id, %reason, "Received TaskCancelled instruction from coordinator; cancelling agy task");
                     }
-                    Ok(CoordinatorMessage::WaitForDependency { task_id, blocking_task_id, message, .. }) => {
+                    Ok(CoordinatorMessage::WaitForDependency {
+                        task_id,
+                        blocking_task_id,
+                        message,
+                        ..
+                    }) => {
                         tracing::info!(%task_id, %blocking_task_id, %message, "Received WaitForDependency notice from coordinator; waiting for prerequisite");
                     }
                     Ok(other) => {

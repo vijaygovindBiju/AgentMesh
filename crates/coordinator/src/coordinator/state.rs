@@ -47,7 +47,10 @@ impl CoordinatorState {
 
     /// Returns `true` if the coordinator is actively orchestrating tasks (Assigning or Executing).
     pub fn is_active(&self) -> bool {
-        matches!(self, CoordinatorState::Assigning | CoordinatorState::Executing)
+        matches!(
+            self,
+            CoordinatorState::Assigning | CoordinatorState::Executing
+        )
     }
 }
 

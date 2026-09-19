@@ -30,13 +30,22 @@ RULES:
             prompt.push_str("REPOSITORY ARCHITECTURE & CODEBASE CONTEXT:\n");
             prompt.push_str(&format!("- Root Path: {}\n", repo.repo_root.display()));
             if !repo.detected_ecosystems.is_empty() {
-                prompt.push_str(&format!("- Detected Ecosystems: {}\n", repo.detected_ecosystems.join(", ")));
+                prompt.push_str(&format!(
+                    "- Detected Ecosystems: {}\n",
+                    repo.detected_ecosystems.join(", ")
+                ));
             }
             if !repo.primary_languages.is_empty() {
-                prompt.push_str(&format!("- Primary Languages: {}\n", repo.primary_languages.join(", ")));
+                prompt.push_str(&format!(
+                    "- Primary Languages: {}\n",
+                    repo.primary_languages.join(", ")
+                ));
             }
             if !repo.key_modules.is_empty() {
-                prompt.push_str(&format!("- Key Modules & Directories: {}\n", repo.key_modules.join(", ")));
+                prompt.push_str(&format!(
+                    "- Key Modules & Directories: {}\n",
+                    repo.key_modules.join(", ")
+                ));
             }
             if let Some(ref readme) = repo.readme_summary {
                 prompt.push_str(&format!("- README Excerpt:\n{}\n", readme));

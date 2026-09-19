@@ -9,4 +9,3 @@ pub use commands::{ApprovalGateError, CommandHandler, CoordinatorCommand, Coordi
 pub use engine::CoordinatorCore;
 pub use overlap::OverlapDetector;
 pub use state::CoordinatorState;
-

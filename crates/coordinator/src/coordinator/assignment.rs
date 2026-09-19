@@ -5,15 +5,13 @@ use sqlx::PgPool;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use agent_protocol::TaskSpec;
-use crate::db::repositories::{
-    AgentRepository, TaskDeliveryRepository, TaskRepository,
-};
+use crate::db::repositories::{AgentRepository, TaskDeliveryRepository, TaskRepository};
 use crate::domain::{
     AdapterType, Agent, AgentStatus, DeliveryStatus, HealthStatus, Task, TaskStatus,
 };
 use crate::git::GitCoordinator;
 use crate::messaging::publisher::TaskPublisher;
+use agent_protocol::TaskSpec;
 
 #[derive(Debug, Clone)]
 pub struct AssignmentResult {
@@ -42,7 +40,10 @@ impl AssignmentService {
         project_id: Option<Uuid>,
         jetstream: Option<&JetStreamContext>,
     ) -> Result<Vec<AssignmentResult>> {
-        let mut tx = pool.begin().await.context("Failed to begin assignment transaction")?;
+        let mut tx = pool
+            .begin()
+            .await
+            .context("Failed to begin assignment transaction")?;
 
         // 1. Claim candidate approved tasks with satisfied blockers and recorded human approval
         let claimable_tasks = sqlx::query_as!(
@@ -157,13 +158,15 @@ impl AssignmentService {
 
             // Enforce permission boundary and role constraints
             let affected = task.resources();
-            if let Err(sec_err) = crate::security::permissions::PermissionEnforcer::validate_task_assignment(
-                agent.id,
-                agent.role(),
-                &agent.permissions_boundary(),
-                agent.is_revoked,
-                &affected,
-            ) {
+            if let Err(sec_err) =
+                crate::security::permissions::PermissionEnforcer::validate_task_assignment(
+                    agent.id,
+                    agent.role(),
+                    &agent.permissions_boundary(),
+                    agent.is_revoked,
+                    &affected,
+                )
+            {
                 tracing::warn!(%task.id, agent_id = %agent.id, error = %sec_err, "Task assignment blocked by security permission boundary");
                 continue;
             }
@@ -222,7 +225,9 @@ impl AssignmentService {
         }
 
         // Commit DB transaction (outbox intent is now durable)
-        tx.commit().await.context("Failed to commit assignment transaction")?;
+        tx.commit()
+            .await
+            .context("Failed to commit assignment transaction")?;
 
         let mut results = Vec::new();
 
@@ -232,7 +237,9 @@ impl AssignmentService {
 
             if let Some(js) = jetstream {
                 // Fetch blocking dependency IDs
-                let deps = TaskRepository::list_dependencies(pool, task.id).await.unwrap_or_default();
+                let deps = TaskRepository::list_dependencies(pool, task.id)
+                    .await
+                    .unwrap_or_default();
                 let depends_on = deps
                     .into_iter()
                     .filter(|d| d.kind == crate::domain::DependencyKind::Blocks)
@@ -271,7 +278,8 @@ impl AssignmentService {
                                 Ok(ws) => {
                                     spec.task_branch = Some(ws.task_branch.clone());
                                     spec.base_branch = Some(base_branch.to_string());
-                                    spec.repo_path = Some(ws.worktree_path.to_string_lossy().to_string());
+                                    spec.repo_path =
+                                        Some(ws.worktree_path.to_string_lossy().to_string());
                                     workspace_ready = true;
                                 }
                                 Err(e) => {
@@ -295,7 +303,10 @@ impl AssignmentService {
                 match TaskPublisher::publish_assignment(js, agent.id, &spec).await {
                     Ok(seq) => {
                         nats_seq = Some(seq);
-                        if let Err(e) = TaskDeliveryRepository::mark_delivered(pool, delivery_id, seq as i64).await {
+                        if let Err(e) =
+                            TaskDeliveryRepository::mark_delivered(pool, delivery_id, seq as i64)
+                                .await
+                        {
                             error!(delivery_id = %delivery_id, error = %e, "Failed to mark delivery delivered");
                         }
                     }
@@ -313,9 +324,16 @@ impl AssignmentService {
                             &format!("NATS publish error: {e}"),
                         )
                         .await;
-                        let _ = TaskRepository::update_status(pool, task.id, TaskStatus::Approved).await;
+                        let _ = TaskRepository::update_status(pool, task.id, TaskStatus::Approved)
+                            .await;
                         let _ = TaskRepository::assign_agent(pool, task.id, None).await;
-                        let _ = AgentRepository::set_current_task(pool, agent.id, None, AgentStatus::Idle).await;
+                        let _ = AgentRepository::set_current_task(
+                            pool,
+                            agent.id,
+                            None,
+                            AgentStatus::Idle,
+                        )
+                        .await;
                         continue;
                     }
                 }
@@ -369,7 +387,9 @@ impl AssignmentService {
             let Some(task) = task else { continue };
 
             if let Some(js) = jetstream {
-                let deps = TaskRepository::list_dependencies(pool, task.id).await.unwrap_or_default();
+                let deps = TaskRepository::list_dependencies(pool, task.id)
+                    .await
+                    .unwrap_or_default();
                 let depends_on = deps
                     .into_iter()
                     .filter(|d| d.kind == crate::domain::DependencyKind::Blocks)
@@ -395,7 +415,9 @@ impl AssignmentService {
                 match TaskPublisher::publish_assignment(js, delivery.agent_id, &spec).await {
                     Ok(seq) => {
                         info!(delivery_id = %delivery.id, seq, "Reconciliation republished task assignment");
-                        let _ = TaskDeliveryRepository::mark_delivered(pool, delivery.id, seq as i64).await;
+                        let _ =
+                            TaskDeliveryRepository::mark_delivered(pool, delivery.id, seq as i64)
+                                .await;
                     }
                     Err(e) => {
                         error!(delivery_id = %delivery.id, error = %e, "Reconciliation publish failed");
@@ -406,9 +428,17 @@ impl AssignmentService {
                                 "Reconciliation publish retry limit exceeded",
                             )
                             .await;
-                            let _ = TaskRepository::update_status(pool, task.id, TaskStatus::Approved).await;
+                            let _ =
+                                TaskRepository::update_status(pool, task.id, TaskStatus::Approved)
+                                    .await;
                             let _ = TaskRepository::assign_agent(pool, task.id, None).await;
-                            let _ = AgentRepository::set_current_task(pool, delivery.agent_id, None, AgentStatus::Idle).await;
+                            let _ = AgentRepository::set_current_task(
+                                pool,
+                                delivery.agent_id,
+                                None,
+                                AgentStatus::Idle,
+                            )
+                            .await;
                         }
                     }
                 }

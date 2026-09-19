@@ -85,7 +85,6 @@ impl TerminalApp {
     }
 }
 
-
 impl Drop for TerminalApp {
     fn drop(&mut self) {
         let _ = disable_raw_mode();

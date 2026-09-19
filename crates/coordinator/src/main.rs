@@ -1,9 +1,11 @@
-use std::time::Duration;
 use anyhow::Result;
+use std::time::Duration;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use coordinator::ai::{create_provider_from_env, AvailableAgentContext, PlanningRequest, PlanningService};
+use coordinator::ai::{
+    create_provider_from_env, AvailableAgentContext, PlanningRequest, PlanningService,
+};
 use coordinator::coordinator::{
     ApprovalGateError, CommandHandler, CoordinatorCore, CoordinatorState, OverlapDetector,
 };
@@ -35,12 +37,13 @@ async fn main() -> Result<()> {
     let _ = dotenvy::dotenv();
     let is_interactive = crossterm::tty::IsTty::is_tty(&std::io::stdout());
 
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
-    let nats_url = std::env::var("NATS_URL")
-        .unwrap_or_else(|_| "nats://localhost:4222".to_string());
-    let nats_token = std::env::var("NATS_AUTH_TOKEN")
-        .unwrap_or_else(|_| "agentmesh_dev_token".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let nats_token =
+        std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
 
     // 2. Attempt connection to PostgreSQL and NATS JetStream
     let pool_res = create_pool(&db_url).await;
@@ -62,7 +65,12 @@ async fn main() -> Result<()> {
 
             // Execute coordinator startup crash recovery & delivery reconciliation
             info!("Executing coordinator startup crash recovery & delivery reconciliation...");
-            match coordinator::reliability::CoordinatorRecoveryService::recover_on_startup(&pool, Some(&jetstream)).await {
+            match coordinator::reliability::CoordinatorRecoveryService::recover_on_startup(
+                &pool,
+                Some(&jetstream),
+            )
+            .await
+            {
                 Ok(report) => {
                     info!(
                         republished_deliveries = report.pending_deliveries_republished,
@@ -100,7 +108,12 @@ async fn main() -> Result<()> {
                 let mut interval = tokio::time::interval(Duration::from_secs(5));
                 loop {
                     interval.tick().await;
-                    match coordinator::reliability::StaleTaskSweeper::sweep(&sweeper_pool, chrono::Duration::seconds(30)).await {
+                    match coordinator::reliability::StaleTaskSweeper::sweep(
+                        &sweeper_pool,
+                        chrono::Duration::seconds(30),
+                    )
+                    .await
+                    {
                         Ok(res) => {
                             if !res.tasks_reclaimed.is_empty() || !res.agents_timed_out.is_empty() {
                                 info!(
@@ -131,11 +144,12 @@ async fn main() -> Result<()> {
                 loop {
                     interval.tick().await;
                     // Reconcile timed-out pending deliveries
-                    let _ = coordinator::coordinator::AssignmentService::reconcile_pending_deliveries(
-                        &assign_worker_pool,
-                        Some(&assign_worker_js),
-                    )
-                    .await;
+                    let _ =
+                        coordinator::coordinator::AssignmentService::reconcile_pending_deliveries(
+                            &assign_worker_pool,
+                            Some(&assign_worker_js),
+                        )
+                        .await;
                     // Assign any approved ready tasks
                     let _ = coordinator::coordinator::AssignmentService::assign_ready_tasks(
                         &assign_worker_pool,
@@ -156,7 +170,9 @@ async fn main() -> Result<()> {
                 let mut interval = tokio::time::interval(Duration::from_secs(2));
                 loop {
                     interval.tick().await;
-                    if let Ok(m) = coordinator::observability::MetricsCollector::collect(&metrics_pool).await {
+                    if let Ok(m) =
+                        coordinator::observability::MetricsCollector::collect(&metrics_pool).await
+                    {
                         let _ = metrics_tx.send(TuiUpdateEvent::Metrics(m));
                     }
                 }
@@ -173,7 +189,11 @@ async fn main() -> Result<()> {
                     if let Ok(mut messages) = consumer.messages().await {
                         while let Some(msg_result) = messages.next().await {
                             if let Ok(msg) = msg_result {
-                                if let Ok(agent_msg) = serde_json::from_slice::<agent_protocol::AgentMessage>(&msg.payload) {
+                                if let Ok(agent_msg) =
+                                    serde_json::from_slice::<agent_protocol::AgentMessage>(
+                                        &msg.payload,
+                                    )
+                                {
                                     let _ = msg.ack().await;
                                     let _ = EventSubscriber::handle_agent_message_with_jetstream(
                                         &sub_pool,
@@ -217,7 +237,11 @@ async fn main() -> Result<()> {
                         human_owner: "Bob (Infra Lead)".to_string(),
                         api_key_hash: "seed_bob".to_string(),
                         adapter_type: AdapterType::Mock,
-                        capabilities: vec!["infra".to_string(), "sql".to_string(), "nats".to_string()],
+                        capabilities: vec![
+                            "infra".to_string(),
+                            "sql".to_string(),
+                            "nats".to_string(),
+                        ],
                         nats_subject: format!("agents.{a2_id}.events"),
                         ..Default::default()
                     },
@@ -238,7 +262,8 @@ async fn main() -> Result<()> {
             if let Some(active_proj) = projects.first() {
                 coordinator.set_active_project(active_proj.id);
                 app_state.active_project = Some(active_proj.clone());
-                let (review_tasks, overlaps) = load_project_review_state(&pool, active_proj.id).await?;
+                let (review_tasks, overlaps) =
+                    load_project_review_state(&pool, active_proj.id).await?;
                 app_state.review_tasks = review_tasks;
                 app_state.active_overlaps = overlaps;
                 if !app_state.review_tasks.is_empty() {
@@ -268,7 +293,9 @@ async fn main() -> Result<()> {
         }
 
         _ => {
-            warn!("PostgreSQL or NATS JetStream not reachable. Falling back to Standalone Mock Mode.");
+            warn!(
+                "PostgreSQL or NATS JetStream not reachable. Falling back to Standalone Mock Mode."
+            );
 
             if !is_interactive {
                 info!("Non-interactive terminal detected. Start PostgreSQL & NATS with `docker compose up -d`.");
@@ -280,49 +307,73 @@ async fn main() -> Result<()> {
                 "AgentMesh Demo Mode (PostgreSQL / NATS offline). Full interactive UI active. Tab to switch.".to_string(),
             );
             let mut app = TerminalApp::new()?;
-            app.run(&mut state, |action, app_state| {
-                match action {
-                    TuiAction::ApproveTask { task_id } => {
-                        if let Some(rt) = app_state.review_tasks.iter_mut().find(|rt| rt.task.id == task_id) {
-                            rt.task.status = TaskStatus::Approved;
-                            app_state.status_message = Some(format!("Task {} approved (mock).", rt.task.short_id));
-                        }
+            app.run(&mut state, |action, app_state| match action {
+                TuiAction::ApproveTask { task_id } => {
+                    if let Some(rt) = app_state
+                        .review_tasks
+                        .iter_mut()
+                        .find(|rt| rt.task.id == task_id)
+                    {
+                        rt.task.status = TaskStatus::Approved;
+                        app_state.status_message =
+                            Some(format!("Task {} approved (mock).", rt.task.short_id));
                     }
-                    TuiAction::RejectTask { task_id } => {
-                        if let Some(rt) = app_state.review_tasks.iter_mut().find(|rt| rt.task.id == task_id) {
-                            rt.task.status = TaskStatus::Rejected;
-                            app_state.status_message = Some(format!("Task {} rejected (mock).", rt.task.short_id));
-                        }
+                }
+                TuiAction::RejectTask { task_id } => {
+                    if let Some(rt) = app_state
+                        .review_tasks
+                        .iter_mut()
+                        .find(|rt| rt.task.id == task_id)
+                    {
+                        rt.task.status = TaskStatus::Rejected;
+                        app_state.status_message =
+                            Some(format!("Task {} rejected (mock).", rt.task.short_id));
                     }
-                    TuiAction::EditTaskDescription { task_id, new_description } => {
-                        if let Some(rt) = app_state.review_tasks.iter_mut().find(|rt| rt.task.id == task_id) {
-                            rt.task.description = new_description;
-                            rt.task.status = TaskStatus::Approved;
-                            app_state.status_message = Some(format!("Task {} description updated & approved (mock).", rt.task.short_id));
-                        }
+                }
+                TuiAction::EditTaskDescription {
+                    task_id,
+                    new_description,
+                } => {
+                    if let Some(rt) = app_state
+                        .review_tasks
+                        .iter_mut()
+                        .find(|rt| rt.task.id == task_id)
+                    {
+                        rt.task.description = new_description;
+                        rt.task.status = TaskStatus::Approved;
+                        app_state.status_message = Some(format!(
+                            "Task {} description updated & approved (mock).",
+                            rt.task.short_id
+                        ));
                     }
-                    TuiAction::AcknowledgeOverlap { warning_id } => {
-                        app_state.active_overlaps.retain(|w| w.id != warning_id);
-                        for rt in &mut app_state.review_tasks {
-                            for w in &mut rt.overlap_warnings {
-                                if w.id == warning_id {
-                                    w.acknowledged = true;
-                                }
+                }
+                TuiAction::AcknowledgeOverlap { warning_id } => {
+                    app_state.active_overlaps.retain(|w| w.id != warning_id);
+                    for rt in &mut app_state.review_tasks {
+                        for w in &mut rt.overlap_warnings {
+                            if w.id == warning_id {
+                                w.acknowledged = true;
                             }
                         }
-                        app_state.status_message = Some("Resource overlap acknowledged (mock).".to_string());
                     }
-                    TuiAction::CancelTask { task_id } => {
-                        if let Some(rt) = app_state.review_tasks.iter_mut().find(|rt| rt.task.id == task_id) {
-                            rt.task.status = TaskStatus::Cancelled;
-                            app_state.status_message = Some(format!("Task {} cancelled (mock).", rt.task.short_id));
-                        }
-                    }
-                    TuiAction::RefreshData => {
-                        app_state.status_message = Some("Refreshed (mock).".to_string());
-                    }
-                    _ => {}
+                    app_state.status_message =
+                        Some("Resource overlap acknowledged (mock).".to_string());
                 }
+                TuiAction::CancelTask { task_id } => {
+                    if let Some(rt) = app_state
+                        .review_tasks
+                        .iter_mut()
+                        .find(|rt| rt.task.id == task_id)
+                    {
+                        rt.task.status = TaskStatus::Cancelled;
+                        app_state.status_message =
+                            Some(format!("Task {} cancelled (mock).", rt.task.short_id));
+                    }
+                }
+                TuiAction::RefreshData => {
+                    app_state.status_message = Some("Refreshed (mock).".to_string());
+                }
+                _ => {}
             })?;
         }
     }
@@ -334,13 +385,18 @@ async fn main() -> Result<()> {
 async fn load_project_review_state(
     pool: &sqlx::PgPool,
     project_id: Uuid,
-) -> Result<(Vec<ReviewTaskState>, Vec<coordinator::domain::OverlapWarning>)> {
+) -> Result<(
+    Vec<ReviewTaskState>,
+    Vec<coordinator::domain::OverlapWarning>,
+)> {
     let tasks = TaskRepository::list_by_project(pool, project_id).await?;
     let overlaps = OverlapWarningRepository::list_by_project(pool, project_id).await?;
 
     let mut review_tasks = Vec::new();
     for task in tasks {
-        let deps = TaskRepository::list_dependencies(pool, task.id).await.unwrap_or_default();
+        let deps = TaskRepository::list_dependencies(pool, task.id)
+            .await
+            .unwrap_or_default();
         let mut rts = ReviewTaskState::new(task);
         rts.dependencies = deps;
         review_tasks.push(rts);
@@ -382,7 +438,8 @@ async fn handle_tui_action(
 
             // Discover repository Git identity if running inside a Git repository
             let current_repo = std::env::current_dir().unwrap_or_default();
-            if let Ok(git_id) = coordinator::git::RepositoryIdentity::discover(&current_repo).await {
+            if let Ok(git_id) = coordinator::git::RepositoryIdentity::discover(&current_repo).await
+            {
                 let _ = ProjectRepository::update_git_identity(
                     pool,
                     project.id,
@@ -408,12 +465,13 @@ async fn handle_tui_action(
                 .collect();
 
             // Run AI Planning
-            let provider = create_provider_from_env().unwrap_or_else(|_| {
-                std::sync::Arc::new(coordinator::ai::MockLlmProvider::new())
-            });
+            let provider = create_provider_from_env()
+                .unwrap_or_else(|_| std::sync::Arc::new(coordinator::ai::MockLlmProvider::new()));
 
             let current_repo = std::env::current_dir().unwrap_or_default();
-            let repo_context = coordinator::ai::RepositoryScanner::scan(&current_repo).await.ok();
+            let repo_context = coordinator::ai::RepositoryScanner::scan(&current_repo)
+                .await
+                .ok();
 
             let plan_result = PlanningService::generate_and_persist_plan(
                 pool,
@@ -434,7 +492,9 @@ async fn handle_tui_action(
                     let _ = coordinator.transition_state(CoordinatorState::HumanReview);
 
                     // Load tasks & detect resource overlaps
-                    if let Ok((review_tasks, overlaps)) = load_project_review_state(pool, project.id).await {
+                    if let Ok((review_tasks, overlaps)) =
+                        load_project_review_state(pool, project.id).await
+                    {
                         let task_count = review_tasks.len();
                         let overlap_count = overlaps.len();
                         state.review_tasks = review_tasks;
@@ -455,7 +515,11 @@ async fn handle_tui_action(
         TuiAction::ApproveTask { task_id } => {
             match CommandHandler::execute_approve_task(pool, task_id, "Operator").await {
                 Ok(task) => {
-                    if let Some(rt) = state.review_tasks.iter_mut().find(|rt| rt.task.id == task_id) {
+                    if let Some(rt) = state
+                        .review_tasks
+                        .iter_mut()
+                        .find(|rt| rt.task.id == task_id)
+                    {
                         rt.task.status = task.status;
                         rt.human_decision = Some(coordinator::domain::ApprovalStatus::Approved);
                     }
@@ -471,7 +535,8 @@ async fn handle_tui_action(
                             ));
                             // Refresh tasks
                             if let Some(proj) = &state.active_project {
-                                if let Ok((rts, _)) = load_project_review_state(pool, proj.id).await {
+                                if let Ok((rts, _)) = load_project_review_state(pool, proj.id).await
+                                {
                                     state.review_tasks = rts;
                                 }
                             }
@@ -493,7 +558,11 @@ async fn handle_tui_action(
         TuiAction::RejectTask { task_id } => {
             match CommandHandler::execute_reject_task(pool, task_id, "Operator").await {
                 Ok(task) => {
-                    if let Some(rt) = state.review_tasks.iter_mut().find(|rt| rt.task.id == task_id) {
+                    if let Some(rt) = state
+                        .review_tasks
+                        .iter_mut()
+                        .find(|rt| rt.task.id == task_id)
+                    {
                         rt.task.status = task.status;
                         rt.human_decision = Some(coordinator::domain::ApprovalStatus::Rejected);
                     }
@@ -505,15 +574,31 @@ async fn handle_tui_action(
             }
         }
 
-        TuiAction::EditTaskDescription { task_id, new_description } => {
-            match CommandHandler::execute_edit_and_approve_task(pool, task_id, &new_description, "Operator").await {
+        TuiAction::EditTaskDescription {
+            task_id,
+            new_description,
+        } => {
+            match CommandHandler::execute_edit_and_approve_task(
+                pool,
+                task_id,
+                &new_description,
+                "Operator",
+            )
+            .await
+            {
                 Ok(task) => {
-                    if let Some(rt) = state.review_tasks.iter_mut().find(|rt| rt.task.id == task_id) {
+                    if let Some(rt) = state
+                        .review_tasks
+                        .iter_mut()
+                        .find(|rt| rt.task.id == task_id)
+                    {
                         rt.task.description = task.description.clone();
                         rt.task.status = task.status;
-                        rt.human_decision = Some(coordinator::domain::ApprovalStatus::EditedAndApproved);
+                        rt.human_decision =
+                            Some(coordinator::domain::ApprovalStatus::EditedAndApproved);
                     }
-                    state.status_message = Some(format!("Task {} updated and approved.", task.short_id));
+                    state.status_message =
+                        Some(format!("Task {} updated and approved.", task.short_id));
                     let _ = coordinator.run_assignment_cycle().await;
                 }
                 Err(ApprovalGateError::BlockedByCriticalOverlap { resources, .. }) => {
@@ -539,7 +624,8 @@ async fn handle_tui_action(
                             }
                         }
                     }
-                    state.status_message = Some("Overlap warning acknowledged. Approval unblocked.".to_string());
+                    state.status_message =
+                        Some("Overlap warning acknowledged. Approval unblocked.".to_string());
                 }
                 Ok(false) => {
                     state.status_message = Some("Overlap warning not found.".to_string());
@@ -557,7 +643,11 @@ async fn handle_tui_action(
             };
             match coordinator.handle_command(cmd).await {
                 Ok(_) => {
-                    if let Some(rt) = state.review_tasks.iter_mut().find(|rt| rt.task.id == task_id) {
+                    if let Some(rt) = state
+                        .review_tasks
+                        .iter_mut()
+                        .find(|rt| rt.task.id == task_id)
+                    {
                         rt.task.status = TaskStatus::Cancelled;
                     }
                     state.status_message = Some(format!("Task {task_id} cancelled."));

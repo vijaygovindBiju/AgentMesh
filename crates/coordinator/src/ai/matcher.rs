@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use agent_protocol::{AgentCapabilities, HealthStatus, TaskRequirements};
 use crate::ai::schema::AvailableAgentContext;
 use crate::domain::Agent;
+use agent_protocol::{AgentCapabilities, HealthStatus, TaskRequirements};
 
 /// Detailed breakdown of how well an agent fits a task's requirements.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,11 +73,15 @@ impl AgentCapabilityMatcher {
         description: &str,
         affected_resources: &[String],
     ) -> Option<Uuid> {
-        let candidates: Vec<CandidateAgent> = available_agents.iter().map(CandidateAgent::from).collect();
+        let candidates: Vec<CandidateAgent> =
+            available_agents.iter().map(CandidateAgent::from).collect();
         let requirements = Self::infer_task_requirements(title, description, affected_resources);
         let ranked = Self::rank_candidates(&candidates, &requirements);
 
-        ranked.into_iter().find(|m| m.is_eligible && m.score > 0).map(|m| m.agent_id)
+        ranked
+            .into_iter()
+            .find(|m| m.is_eligible && m.score > 0)
+            .map(|m| m.agent_id)
     }
 
     /// Evaluates registered coordinator agents against a task and returns the best matching eligible agent.
@@ -129,13 +133,20 @@ impl AgentCapabilityMatcher {
         // 1. Availability check
         if !candidate.is_available {
             is_eligible = false;
-            missing_requirements.push("Agent not currently available (busy or draining)".to_string());
+            missing_requirements
+                .push("Agent not currently available (busy or draining)".to_string());
         }
 
         // 2. Health check
-        if matches!(candidate.health_status, HealthStatus::Unhealthy | HealthStatus::Offline) {
+        if matches!(
+            candidate.health_status,
+            HealthStatus::Unhealthy | HealthStatus::Offline
+        ) {
             is_eligible = false;
-            missing_requirements.push(format!("Unfavorable health state: {:?}", candidate.health_status));
+            missing_requirements.push(format!(
+                "Unfavorable health state: {:?}",
+                candidate.health_status
+            ));
         } else if candidate.health_status == HealthStatus::Healthy {
             score += 10;
             match_reasons.push("Agent health is optimal".to_string());
@@ -147,7 +158,10 @@ impl AgentCapabilityMatcher {
             let matches_os = if let Some(ref prof) = candidate.profile {
                 prof.runtime.os.to_lowercase() == req_os_lower
             } else {
-                candidate.capabilities.iter().any(|c| c.to_lowercase() == req_os_lower)
+                candidate
+                    .capabilities
+                    .iter()
+                    .any(|c| c.to_lowercase() == req_os_lower)
             };
 
             if matches_os {
@@ -166,7 +180,10 @@ impl AgentCapabilityMatcher {
             let matches_lang = if let Some(ref prof) = candidate.profile {
                 prof.has_language(&lang_lower)
             } else {
-                candidate.capabilities.iter().any(|c| c.to_lowercase() == lang_lower)
+                candidate
+                    .capabilities
+                    .iter()
+                    .any(|c| c.to_lowercase() == lang_lower)
             };
 
             if matches_lang {
@@ -184,7 +201,10 @@ impl AgentCapabilityMatcher {
             let tool_lower = req_tool.to_lowercase();
             let matches_tool = if let Some(ref prof) = candidate.profile {
                 prof.has_tool(&tool_lower)
-                    || candidate.capabilities.iter().any(|c| c.to_lowercase() == tool_lower)
+                    || candidate
+                        .capabilities
+                        .iter()
+                        .any(|c| c.to_lowercase() == tool_lower)
                     || (tool_lower == "cargo" && prof.has_language("rust"))
                     || (tool_lower == "flutter" && prof.has_language("dart"))
             } else {
@@ -303,10 +323,10 @@ impl AgentCapabilityMatcher {
             preferred_tags.push("flutter".to_string());
             preferred_tags.push("frontend".to_string());
         }
-        if text.contains("python") || text.contains("django") || text.contains("fastapi") {
-            if !required_languages.contains(&"python".to_string()) {
-                required_languages.push("python".to_string());
-            }
+        if (text.contains("python") || text.contains("django") || text.contains("fastapi"))
+            && !required_languages.contains(&"python".to_string())
+        {
+            required_languages.push("python".to_string());
         }
         if text.contains("react") || text.contains("frontend") || text.contains("ui") {
             preferred_tags.push("frontend".to_string());
@@ -314,7 +334,11 @@ impl AgentCapabilityMatcher {
         if text.contains("backend") || text.contains("server") || text.contains("api") {
             preferred_tags.push("backend".to_string());
         }
-        if text.contains("database") || text.contains("postgres") || text.contains("migration") || text.contains("sql") {
+        if text.contains("database")
+            || text.contains("postgres")
+            || text.contains("migration")
+            || text.contains("sql")
+        {
             preferred_tags.push("database".to_string());
             preferred_tags.push("sql".to_string());
         }
@@ -372,7 +396,11 @@ mod tests {
                 agent_id: rust_agent_id,
                 human_owner: "Alice".to_string(),
                 adapter_type: "Agy".to_string(),
-                capabilities: vec!["rust".to_string(), "backend".to_string(), "cargo".to_string()],
+                capabilities: vec![
+                    "rust".to_string(),
+                    "backend".to_string(),
+                    "cargo".to_string(),
+                ],
             },
             AvailableAgentContext {
                 agent_id: frontend_agent_id,
@@ -416,7 +444,11 @@ mod tests {
             cpu_count: 8,
             memory_mb: None,
         })
-        .with_language(LanguageCapability::new("rust", Some("1.79.0".to_string()), vec![]))
+        .with_language(LanguageCapability::new(
+            "rust",
+            Some("1.79.0".to_string()),
+            vec![],
+        ))
         .with_tool(ToolCapability::new("cargo", None, None))
         .with_tag("backend");
 
@@ -428,7 +460,11 @@ mod tests {
             cpu_count: 8,
             memory_mb: None,
         })
-        .with_language(LanguageCapability::new("dart", Some("3.4.0".to_string()), vec!["flutter".to_string()]))
+        .with_language(LanguageCapability::new(
+            "dart",
+            Some("3.4.0".to_string()),
+            vec!["flutter".to_string()],
+        ))
         .with_tag("frontend");
 
         let candidates = vec![
@@ -459,7 +495,10 @@ mod tests {
         let ranked_rust = AgentCapabilityMatcher::rank_candidates(&candidates, &rust_reqs);
         assert_eq!(ranked_rust[0].agent_id, agent_a_id);
         assert!(ranked_rust[0].is_eligible);
-        assert!(!ranked_rust[1].is_eligible, "Agent B should be ineligible because missing Rust");
+        assert!(
+            !ranked_rust[1].is_eligible,
+            "Agent B should be ineligible because missing Rust"
+        );
 
         // 2. Flutter frontend task
         let flutter_reqs = AgentCapabilityMatcher::infer_task_requirements(
@@ -470,7 +509,10 @@ mod tests {
         let ranked_flutter = AgentCapabilityMatcher::rank_candidates(&candidates, &flutter_reqs);
         assert_eq!(ranked_flutter[0].agent_id, agent_b_id);
         assert!(ranked_flutter[0].is_eligible);
-        assert!(!ranked_flutter[1].is_eligible, "Agent A should be ineligible because missing Dart");
+        assert!(
+            !ranked_flutter[1].is_eligible,
+            "Agent A should be ineligible because missing Dart"
+        );
     }
 
     #[test]

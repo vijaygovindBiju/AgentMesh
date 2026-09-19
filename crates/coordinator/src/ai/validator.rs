@@ -11,7 +11,10 @@ pub enum ValidationError {
     EmptyPlan,
 
     #[error("Task short_id '{short_id}' has an empty or blank field: {field}")]
-    EmptyField { short_id: String, field: &'static str },
+    EmptyField {
+        short_id: String,
+        field: &'static str,
+    },
 
     #[error("Duplicate task short_id detected: '{0}'")]
     DuplicateShortId(String),
@@ -22,8 +25,13 @@ pub enum ValidationError {
     #[error("Task '{0}' cannot depend on itself")]
     SelfDependency(String),
 
-    #[error("Dependent task '{dependent}' references non-existent prerequisite task '{depends_on}'")]
-    UnknownDependencyTarget { dependent: String, depends_on: String },
+    #[error(
+        "Dependent task '{dependent}' references non-existent prerequisite task '{depends_on}'"
+    )]
+    UnknownDependencyTarget {
+        dependent: String,
+        depends_on: String,
+    },
 
     #[error("Dependent task '{dependent}' is not defined in this proposed plan")]
     UnknownDependentTask { dependent: String },
@@ -268,8 +276,8 @@ impl PlanValidator {
                     for j in (i + 1)..sharing_tasks.len() {
                         let t1 = sharing_tasks[i];
                         let t2 = sharing_tasks[j];
-                        let is_sequential = reachability.contains(&(t1, t2))
-                            || reachability.contains(&(t2, t1));
+                        let is_sequential =
+                            reachability.contains(&(t1, t2)) || reachability.contains(&(t2, t1));
                         if !is_sequential {
                             has_concurrent_pair = true;
                             break;

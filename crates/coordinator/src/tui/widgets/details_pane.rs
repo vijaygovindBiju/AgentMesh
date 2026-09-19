@@ -19,14 +19,17 @@ impl DetailsPaneWidget {
             .border_style(Style::default().fg(Color::Cyan))
             .title(Span::styled(
                 " Task Details & Inspector [Enter to toggle] ",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         let inner_area = block.inner(area);
         frame.render_widget(block, area);
 
         let Some(selected) = state.selected_task() else {
-            let empty_p = Paragraph::new("No tasks available to inspect.").style(Style::default().fg(Color::DarkGray));
+            let empty_p = Paragraph::new("No tasks available to inspect.")
+                .style(Style::default().fg(Color::DarkGray));
             frame.render_widget(empty_p, inner_area);
             return;
         };
@@ -46,11 +49,24 @@ impl DetailsPaneWidget {
         let mut meta_lines = Vec::new();
         meta_lines.push(Line::from(vec![
             Span::styled("Task ID: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("[{}] ", selected.task.short_id), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::styled(selected.task.title.clone(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("[{}] ", selected.task.short_id),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                selected.task.title.clone(),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]));
 
-        let agent = selected.suggested_agent_name.as_deref().unwrap_or("Unassigned");
+        let agent = selected
+            .suggested_agent_name
+            .as_deref()
+            .unwrap_or("Unassigned");
         let decision_str = match selected.human_decision {
             Some(ApprovalStatus::Approved) => "Approved by Operator",
             Some(ApprovalStatus::EditedAndApproved) => "Edited & Approved by Operator",
@@ -72,7 +88,9 @@ impl DetailsPaneWidget {
         let desc_block = Block::default()
             .borders(Borders::ALL)
             .border_style(if state.input_mode == InputMode::EditingDescription {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::DarkGray)
             })
@@ -105,16 +123,28 @@ impl DetailsPaneWidget {
             .title(" Dependencies (Prerequisites) ");
 
         let dep_lines: Vec<Line> = if selected.dependencies.is_empty() {
-            vec![Line::from(Span::styled("  None (Task can execute immediately once approved)", Style::default().fg(Color::Green)))]
+            vec![Line::from(Span::styled(
+                "  None (Task can execute immediately once approved)",
+                Style::default().fg(Color::Green),
+            ))]
         } else {
             selected
                 .dependencies
                 .iter()
                 .map(|d| {
                     Line::from(vec![
-                        Span::styled("  ↳ Depends on Task ID: ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(d.depends_on_id.to_string(), Style::default().fg(Color::Cyan)),
-                        Span::styled(format!(" [{:?}]", d.kind), Style::default().fg(Color::Yellow)),
+                        Span::styled(
+                            "  ↳ Depends on Task ID: ",
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled(
+                            d.depends_on_id.to_string(),
+                            Style::default().fg(Color::Cyan),
+                        ),
+                        Span::styled(
+                            format!(" [{:?}]", d.kind),
+                            Style::default().fg(Color::Yellow),
+                        ),
                     ])
                 })
                 .collect()
@@ -131,14 +161,19 @@ impl DetailsPaneWidget {
 
         let resources = selected.task.resources();
         let res_lines: Vec<Line> = if resources.is_empty() {
-            vec![Line::from(Span::styled("  No shared file/module resources specified", Style::default().fg(Color::DarkGray)))]
+            vec![Line::from(Span::styled(
+                "  No shared file/module resources specified",
+                Style::default().fg(Color::DarkGray),
+            ))]
         } else {
             resources
                 .iter()
-                .map(|r| Line::from(vec![
-                    Span::styled("  • ", Style::default().fg(Color::Cyan)),
-                    Span::styled(r.clone(), Style::default().fg(Color::White)),
-                ]))
+                .map(|r| {
+                    Line::from(vec![
+                        Span::styled("  • ", Style::default().fg(Color::Cyan)),
+                        Span::styled(r.clone(), Style::default().fg(Color::White)),
+                    ])
+                })
                 .collect()
         };
 
@@ -163,7 +198,10 @@ impl DetailsPaneWidget {
             });
 
         let warn_lines: Vec<Line> = if selected.overlap_warnings.is_empty() {
-            vec![Line::from(Span::styled("  ✔ No concurrent resource collisions detected", Style::default().fg(Color::Green)))]
+            vec![Line::from(Span::styled(
+                "  ✔ No concurrent resource collisions detected",
+                Style::default().fg(Color::Green),
+            ))]
         } else {
             selected
                 .overlap_warnings
@@ -172,23 +210,32 @@ impl DetailsPaneWidget {
                     if w.acknowledged {
                         Line::from(vec![
                             Span::styled("  [ACKNOWLEDGED] ", Style::default().fg(Color::Green)),
-                            Span::styled(format!("Resource '{}' is shared (conflict accepted)", w.resource), Style::default().fg(Color::DarkGray)),
+                            Span::styled(
+                                format!("Resource '{}' is shared (conflict accepted)", w.resource),
+                                Style::default().fg(Color::DarkGray),
+                            ),
                         ])
                     } else {
                         let sev_style = match w.severity {
-                            OverlapSeverity::Critical => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                            OverlapSeverity::Warning => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                            OverlapSeverity::Critical => {
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                            }
+                            OverlapSeverity::Warning => Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
                             OverlapSeverity::Info => Style::default().fg(Color::Blue),
                         };
                         Line::from(vec![
                             Span::styled(format!("  [{:?}] ", w.severity), sev_style),
-                            Span::styled(format!("Resource '{}' is shared with other task(s)", w.resource), Style::default().fg(Color::White)),
+                            Span::styled(
+                                format!("Resource '{}' is shared with other task(s)", w.resource),
+                                Style::default().fg(Color::White),
+                            ),
                         ])
                     }
                 })
                 .collect()
         };
-
 
         let warn_p = Paragraph::new(warn_lines).block(warn_block);
         frame.render_widget(warn_p, chunks[4]);

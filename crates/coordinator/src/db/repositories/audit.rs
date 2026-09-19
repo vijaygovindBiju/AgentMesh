@@ -90,7 +90,11 @@ impl AuditRepository {
     }
 
     /// Fetches audit logs for a specific actor.
-    pub async fn find_by_actor(pool: &PgPool, actor_type: &str, actor_id: &str) -> Result<Vec<AuditEvent>> {
+    pub async fn find_by_actor(
+        pool: &PgPool,
+        actor_type: &str,
+        actor_id: &str,
+    ) -> Result<Vec<AuditEvent>> {
         let rows = sqlx::query_as!(
             AuditLogRow,
             r#"

@@ -72,7 +72,11 @@ impl CapabilityDetector {
                 frameworks.push("yarn".to_string());
             }
 
-            languages.push(LanguageCapability::new("javascript", Some(node_ver), frameworks.clone()));
+            languages.push(LanguageCapability::new(
+                "javascript",
+                Some(node_ver),
+                frameworks.clone(),
+            ));
             if Self::has_command("tsc") {
                 let tsc_ver = Self::probe_command_version("tsc", &["--version"]);
                 languages.push(LanguageCapability::new("typescript", tsc_ver, frameworks));
@@ -86,7 +90,11 @@ impl CapabilityDetector {
 
         // 5. Dart / Flutter
         if let Some(ver) = Self::probe_command_version("flutter", &["--version"]) {
-            languages.push(LanguageCapability::new("flutter", Some(ver), vec!["dart".to_string()]));
+            languages.push(LanguageCapability::new(
+                "flutter",
+                Some(ver),
+                vec!["dart".to_string()],
+            ));
         } else if let Some(ver) = Self::probe_command_version("dart", &["--version"]) {
             languages.push(LanguageCapability::new("dart", Some(ver), vec![]));
         }

@@ -186,10 +186,11 @@ impl AgentCapabilities {
 // ─── Agent Health ─────────────────────────────────────────────────────────────
 
 /// Overall operational health status of an agent.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum HealthStatus {
     /// Agent is fully operational and heartbeating normally.
+    #[default]
     Healthy,
     /// Agent experienced consecutive failures or elevated latency.
     Degraded,
@@ -197,12 +198,6 @@ pub enum HealthStatus {
     Unhealthy,
     /// Agent is disconnected or missed heartbeats.
     Offline,
-}
-
-impl Default for HealthStatus {
-    fn default() -> Self {
-        Self::Healthy
-    }
 }
 
 /// Dynamic health metrics and status reported by an agent or evaluated by coordinator.

@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use sqlx::PgPool;
+use std::sync::Arc;
 
 use agent_protocol::AgentMessage;
 use coordinator::coordinator::{
@@ -11,17 +11,20 @@ use coordinator::db::repositories::{
     TaskDeliveryRepository, TaskRepository,
 };
 use coordinator::domain::{
-    AdapterType, AgentStatus, DependencyKind, NewAgent, NewOverlapWarning, NewProject,
-    NewProposal, NewTask, NewTaskDependency, OverlapSeverity, TaskStatus,
+    AdapterType, AgentStatus, DependencyKind, NewAgent, NewOverlapWarning, NewProject, NewProposal,
+    NewTask, NewTaskDependency, OverlapSeverity, TaskStatus,
 };
 use coordinator::messaging::{connect, ensure_streams};
 
 async fn setup_test_env() -> Option<(PgPool, async_nats::jetstream::Context)> {
     let _ = dotenvy::dotenv();
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
-    let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
-    let nats_token = std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let nats_token =
+        std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
 
     let pool = create_pool(&db_url).await.ok()?;
     run_migrations(&pool).await.ok()?;
@@ -75,7 +78,9 @@ async fn test_approval_gating_unapproved_task_cannot_be_assigned() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     let task = TaskRepository::create(
         &pool,
@@ -92,8 +97,12 @@ async fn test_approval_gating_unapproved_task_cannot_be_assigned() {
     .await
     .unwrap();
     // Task is in HumanReview
-    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent.id)).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent.id))
+        .await
+        .unwrap();
 
     // 1. Attempt assignment without approval -> Must NOT assign!
     let assigned = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
@@ -101,7 +110,10 @@ async fn test_approval_gating_unapproved_task_cannot_be_assigned() {
         .unwrap();
     assert!(assigned.is_empty(), "Unapproved task must NOT be assigned");
 
-    let t = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let t = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t.status, TaskStatus::HumanReview);
 
     // 2. Human explicitly approves the task
@@ -109,7 +121,10 @@ async fn test_approval_gating_unapproved_task_cannot_be_assigned() {
         .await
         .expect("Approval should succeed");
 
-    let t = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let t = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t.status, TaskStatus::Approved);
 
     // 3. Now assignment cycle runs -> Must be assigned!
@@ -120,7 +135,10 @@ async fn test_approval_gating_unapproved_task_cannot_be_assigned() {
     assert_eq!(assigned[0].task_id, task.id);
     assert_eq!(assigned[0].agent_id, agent.id);
 
-    let t = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let t = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t.status, TaskStatus::Assigned);
 
     // Clean up
@@ -171,7 +189,9 @@ async fn test_dependency_tracking_b_waits_for_a_completed() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     // Task A (blocker)
     let task_a = TaskRepository::create(
@@ -218,13 +238,25 @@ async fn test_dependency_tracking_b_waits_for_a_completed() {
     .unwrap();
 
     // Move both to HumanReview then Approve both
-    TaskRepository::update_status(&pool, task_a.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::update_status(&pool, task_b.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::assign_agent(&pool, task_a.id, Some(agent.id)).await.unwrap();
-    TaskRepository::assign_agent(&pool, task_b.id, Some(agent.id)).await.unwrap();
+    TaskRepository::update_status(&pool, task_a.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task_b.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task_a.id, Some(agent.id))
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task_b.id, Some(agent.id))
+        .await
+        .unwrap();
 
-    CommandHandler::execute_approve_task(&pool, task_a.id, "Bob").await.unwrap();
-    CommandHandler::execute_approve_task(&pool, task_b.id, "Bob").await.unwrap();
+    CommandHandler::execute_approve_task(&pool, task_a.id, "Bob")
+        .await
+        .unwrap();
+    CommandHandler::execute_approve_task(&pool, task_b.id, "Bob")
+        .await
+        .unwrap();
 
     // 1. Run assignment -> Only Task A should be assigned!
     let assigned = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
@@ -233,21 +265,36 @@ async fn test_dependency_tracking_b_waits_for_a_completed() {
     assert_eq!(assigned.len(), 1);
     assert_eq!(assigned[0].task_id, task_a.id);
 
-    let tb = TaskRepository::find_by_id(&pool, task_b.id).await.unwrap().unwrap();
-    assert_eq!(tb.status, TaskStatus::Approved, "Task B must remain Approved while Task A is not completed");
+    let tb = TaskRepository::find_by_id(&pool, task_b.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        tb.status,
+        TaskStatus::Approved,
+        "Task B must remain Approved while Task A is not completed"
+    );
 
     // 2. Complete Task A and make agent Idle again
-    TaskRepository::update_status(&pool, task_a.id, TaskStatus::Completed).await.unwrap();
-    AgentRepository::set_current_task(&pool, agent.id, None, AgentStatus::Idle).await.unwrap();
-
-    // 3. Run assignment again -> Now Task B must be assigned!
-    let assigned2 = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+    TaskRepository::update_status(&pool, task_a.id, TaskStatus::Completed)
         .await
         .unwrap();
+    AgentRepository::set_current_task(&pool, agent.id, None, AgentStatus::Idle)
+        .await
+        .unwrap();
+
+    // 3. Run assignment again -> Now Task B must be assigned!
+    let assigned2 =
+        AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+            .await
+            .unwrap();
     assert_eq!(assigned2.len(), 1);
     assert_eq!(assigned2[0].task_id, task_b.id);
 
-    let tb_now = TaskRepository::find_by_id(&pool, task_b.id).await.unwrap().unwrap();
+    let tb_now = TaskRepository::find_by_id(&pool, task_b.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(tb_now.status, TaskStatus::Assigned);
 
     // Clean up
@@ -299,7 +346,9 @@ async fn test_critical_overlap_blocks_approval_until_acknowledged() {
     )
     .await
     .unwrap();
-    TaskRepository::update_status(&pool, task1.id, TaskStatus::HumanReview).await.unwrap();
+    TaskRepository::update_status(&pool, task1.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
 
     let task2 = TaskRepository::create(
         &pool,
@@ -315,7 +364,9 @@ async fn test_critical_overlap_blocks_approval_until_acknowledged() {
     )
     .await
     .unwrap();
-    TaskRepository::update_status(&pool, task2.id, TaskStatus::HumanReview).await.unwrap();
+    TaskRepository::update_status(&pool, task2.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
 
     // Create an unacknowledged Critical Overlap
     let warning = OverlapWarningRepository::create(
@@ -344,11 +395,20 @@ async fn test_critical_overlap_blocks_approval_until_acknowledged() {
         other => panic!("Expected BlockedByCriticalOverlap, got {:?}", other),
     }
 
-    let t1 = TaskRepository::find_by_id(&pool, task1.id).await.unwrap().unwrap();
-    assert_eq!(t1.status, TaskStatus::HumanReview, "Task status must remain HumanReview when blocked");
+    let t1 = TaskRepository::find_by_id(&pool, task1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        t1.status,
+        TaskStatus::HumanReview,
+        "Task status must remain HumanReview when blocked"
+    );
 
     // 2. Operator acknowledges the overlap warning
-    let ack_ok = CommandHandler::execute_acknowledge_overlap(&pool, warning.id).await.unwrap();
+    let ack_ok = CommandHandler::execute_acknowledge_overlap(&pool, warning.id)
+        .await
+        .unwrap();
     assert!(ack_ok);
 
     // 3. Now approval must SUCCEED!
@@ -418,7 +478,9 @@ async fn test_human_override_reassign_task() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, agent_b.id, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, agent_b.id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     let task = TaskRepository::create(
         &pool,
@@ -434,8 +496,12 @@ async fn test_human_override_reassign_task() {
     )
     .await
     .unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent_a.id)).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Failed).await.unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent_a.id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Failed)
+        .await
+        .unwrap();
 
     // Human operator reassigns to Agent B
     let updated = CommandHandler::execute_reassign_task(&pool, task.id, agent_b.id, "Alice")
@@ -494,7 +560,9 @@ async fn test_concurrency_locking_prevents_double_assignment() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     let task = TaskRepository::create(
         &pool,
@@ -510,9 +578,15 @@ async fn test_concurrency_locking_prevents_double_assignment() {
     )
     .await
     .unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent.id)).await.unwrap();
-    CommandHandler::execute_approve_task(&pool, task.id, "Alice").await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent.id))
+        .await
+        .unwrap();
+    CommandHandler::execute_approve_task(&pool, task.id, "Alice")
+        .await
+        .unwrap();
 
     // Spawn 5 concurrent workers attempting assignment simultaneously
     let mut handles = Vec::new();
@@ -534,10 +608,19 @@ async fn test_concurrency_locking_prevents_double_assignment() {
         total_assigned += res.len();
     }
 
-    assert_eq!(total_assigned, 1, "Exactly one worker must have successfully claimed and assigned the task");
+    assert_eq!(
+        total_assigned, 1,
+        "Exactly one worker must have successfully claimed and assigned the task"
+    );
 
-    let deliveries = TaskDeliveryRepository::list_by_task(&pool, task.id).await.unwrap();
-    assert_eq!(deliveries.len(), 1, "There must be exactly one delivery record");
+    let deliveries = TaskDeliveryRepository::list_by_task(&pool, task.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        deliveries.len(),
+        1,
+        "There must be exactly one delivery record"
+    );
 
     // Clean up
     ProjectRepository::delete(&pool, project.id).await.unwrap();
@@ -587,7 +670,9 @@ async fn test_coordinator_core_engine_lifecycle_and_blocked_event() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     let task = TaskRepository::create(
         &pool,
@@ -603,26 +688,36 @@ async fn test_coordinator_core_engine_lifecycle_and_blocked_event() {
     )
     .await
     .unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent.id)).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent.id))
+        .await
+        .unwrap();
 
     let mut core = CoordinatorCore::new(pool.clone(), Some(jetstream));
     core.set_active_project(project.id);
     assert_eq!(core.state(), CoordinatorState::Idle);
 
     // Advance to HumanReview
-    core.transition_state(CoordinatorState::ProjectInput).unwrap();
+    core.transition_state(CoordinatorState::ProjectInput)
+        .unwrap();
     core.transition_state(CoordinatorState::Planning).unwrap();
-    core.transition_state(CoordinatorState::HumanReview).unwrap();
+    core.transition_state(CoordinatorState::HumanReview)
+        .unwrap();
 
     // Approve task via command
-    let evt = core.handle_command(coordinator::coordinator::CoordinatorCommand::ApproveTask {
-        task_id: task.id,
-        approved_by: "Alice".to_string(),
-    })
-    .await
-    .unwrap();
-    assert_eq!(evt, coordinator::coordinator::CoordinatorEvent::TaskApproved { task_id: task.id });
+    let evt = core
+        .handle_command(coordinator::coordinator::CoordinatorCommand::ApproveTask {
+            task_id: task.id,
+            approved_by: "Alice".to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        evt,
+        coordinator::coordinator::CoordinatorEvent::TaskApproved { task_id: task.id }
+    );
 
     // Run assignment cycle -> moves state to Executing
     let assigned = core.run_assignment_cycle().await.unwrap();
@@ -640,11 +735,25 @@ async fn test_coordinator_core_engine_lifecycle_and_blocked_event() {
     .await
     .unwrap();
 
-    let t = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
-    assert_eq!(t.status, TaskStatus::Blocked, "Blocked message must update task to Blocked in DB");
+    let t = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        t.status,
+        TaskStatus::Blocked,
+        "Blocked message must update task to Blocked in DB"
+    );
 
-    let a = AgentRepository::find_by_id(&pool, agent.id).await.unwrap().unwrap();
-    assert_eq!(a.status, AgentStatus::Blocked, "Blocked message must update agent to Blocked in DB");
+    let a = AgentRepository::find_by_id(&pool, agent.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        a.status,
+        AgentStatus::Blocked,
+        "Blocked message must update agent to Blocked in DB"
+    );
 
     // Agent sends Completed message
     core.handle_agent_message(AgentMessage::Completed {
@@ -656,9 +765,16 @@ async fn test_coordinator_core_engine_lifecycle_and_blocked_event() {
     .await
     .unwrap();
 
-    let t = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let t = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t.status, TaskStatus::Completed);
-    assert_eq!(core.state(), CoordinatorState::Done, "All tasks completed -> Coordinator reaches Done");
+    assert_eq!(
+        core.state(),
+        CoordinatorState::Done,
+        "All tasks completed -> Coordinator reaches Done"
+    );
 
     // Clean up
     ProjectRepository::delete(&pool, project.id).await.unwrap();

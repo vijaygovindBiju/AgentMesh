@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
 use tokio::process::Command;
 use uuid::Uuid;
 
@@ -22,7 +22,10 @@ pub struct AgentWorkspace {
 impl AgentWorkspace {
     /// Returns the standard path where a task's worktree is expected to be placed.
     pub fn expected_worktree_path(repo_root: &Path, short_id: &str) -> PathBuf {
-        repo_root.join(".agentmesh").join("worktrees").join(short_id)
+        repo_root
+            .join(".agentmesh")
+            .join("worktrees")
+            .join(short_id)
     }
 
     /// Creates an isolated Git worktree for the task, checked out on `task_branch`
@@ -36,7 +39,10 @@ impl AgentWorkspace {
         custom_base_dir: Option<&Path>,
     ) -> Result<Self> {
         let repo_root = repo_root.canonicalize().with_context(|| {
-            format!("Failed to canonicalize repository root {}", repo_root.display())
+            format!(
+                "Failed to canonicalize repository root {}",
+                repo_root.display()
+            )
         })?;
 
         // 1. Determine destination worktree directory
@@ -52,7 +58,12 @@ impl AgentWorkspace {
         // If a leftover directory exists at destination, clean it up before creating worktree
         if worktree_path.exists() {
             let _ = Command::new("git")
-                .args(["worktree", "remove", "--force", &worktree_path.to_string_lossy()])
+                .args([
+                    "worktree",
+                    "remove",
+                    "--force",
+                    &worktree_path.to_string_lossy(),
+                ])
                 .current_dir(&repo_root)
                 .output()
                 .await;
@@ -93,7 +104,9 @@ impl AgentWorkspace {
             .current_dir(&worktree_path)
             .output()
             .await?;
-        let base_commit_sha = String::from_utf8_lossy(&sha_output.stdout).trim().to_string();
+        let base_commit_sha = String::from_utf8_lossy(&sha_output.stdout)
+            .trim()
+            .to_string();
 
         // 4. Configure local git user inside worktree if needed
         let _ = Command::new("git")
@@ -173,16 +186,10 @@ mod tests {
         let short_id = "TASK-042";
         let task_branch = "agentmesh/task-042";
 
-        let ws = AgentWorkspace::create(
-            &id.repo_root,
-            task_id,
-            short_id,
-            task_branch,
-            "main",
-            None,
-        )
-        .await
-        .expect("Workspace creation must succeed");
+        let ws =
+            AgentWorkspace::create(&id.repo_root, task_id, short_id, task_branch, "main", None)
+                .await
+                .expect("Workspace creation must succeed");
 
         assert!(ws.is_valid());
         assert_eq!(ws.short_id, short_id);
@@ -191,9 +198,14 @@ mod tests {
 
         // Verify independent working directory: writing to worktree does NOT affect main repo
         let worktree_file = ws.worktree_path.join("agent_work.txt");
-        tokio::fs::write(&worktree_file, "isolated agent modifications").await.unwrap();
+        tokio::fs::write(&worktree_file, "isolated agent modifications")
+            .await
+            .unwrap();
         assert!(worktree_file.exists());
-        assert!(!id.repo_root.join("agent_work.txt").exists(), "Main repo root must remain untouched");
+        assert!(
+            !id.repo_root.join("agent_work.txt").exists(),
+            "Main repo root must remain untouched"
+        );
 
         // Cleanup
         ws.cleanup().await.expect("Cleanup must succeed");

@@ -8,9 +8,7 @@ use coordinator::db::pool::{create_pool, run_migrations};
 use coordinator::db::repositories::{
     AgentRepository, AuditRepository, ProjectRepository, ProposalRepository, TaskRepository,
 };
-use coordinator::domain::{
-    AdapterType, AgentStatus, NewAgent, NewProject, NewProposal, NewTask,
-};
+use coordinator::domain::{AdapterType, AgentStatus, NewAgent, NewProject, NewProposal, NewTask};
 use coordinator::messaging::{connect, ensure_streams, RegistrationHandler};
 use coordinator::security::audit::AuditLogger;
 use coordinator::security::auth::ApiKeyManager;
@@ -22,10 +20,11 @@ use coordinator::security::SecurityError;
 
 async fn setup_test_env() -> Option<(PgPool, async_nats::Client, async_nats::jetstream::Context)> {
     let _ = dotenvy::dotenv();
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
-    let nats_url = std::env::var("NATS_URL")
-        .unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
 
     let pool = create_pool(&db_url).await.ok()?;
     run_migrations(&pool).await.ok()?;
@@ -68,7 +67,10 @@ async fn test_phase12_1_agent_authentication_and_api_key_hashing() {
     }
 
     // Verify stored agent in DB has SHA-256 hashed key, never raw key
-    let agent = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
+    let agent = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(agent.api_key_hash, key_hash);
     assert_ne!(agent.api_key_hash, raw_key);
     assert!(ApiKeyManager::verify_key(&raw_key, &agent.api_key_hash));
@@ -125,7 +127,10 @@ async fn test_phase12_2_agent_authorization_and_roles() {
         false,
         &["src/main.rs".to_string()],
     );
-    assert!(matches!(res_readonly, Err(SecurityError::UnauthorizedAction { .. })));
+    assert!(matches!(
+        res_readonly,
+        Err(SecurityError::UnauthorizedAction { .. })
+    ));
 
     // 3. Reviewer without code modification rights is rejected for write tasks
     let reviewer_boundary = PermissionBoundary::new().with_code_modification(false);
@@ -136,7 +141,10 @@ async fn test_phase12_2_agent_authorization_and_roles() {
         false,
         &["src/lib.rs".to_string()],
     );
-    assert!(matches!(res_reviewer, Err(SecurityError::UnauthorizedAction { .. })));
+    assert!(matches!(
+        res_reviewer,
+        Err(SecurityError::UnauthorizedAction { .. })
+    ));
 }
 
 #[tokio::test]
@@ -157,16 +165,25 @@ async fn test_phase12_3_agent_revocation_and_expiration() {
         profile: None,
         api_key: raw_key.clone(),
     };
-    RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
+    RegistrationHandler::process_registration(&pool, reg_msg)
+        .await
+        .unwrap();
 
     // Update agent to Idle
-    AgentRepository::update_status(&pool, agent_id, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, agent_id, AgentStatus::Idle)
+        .await
+        .unwrap();
     let available = AgentRepository::list_available(&pool).await.unwrap();
     assert!(available.iter().any(|a| a.id == agent_id));
 
     // Revoke agent
-    AgentRepository::revoke_agent(&pool, agent_id).await.unwrap();
-    let revoked = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
+    AgentRepository::revoke_agent(&pool, agent_id)
+        .await
+        .unwrap();
+    let revoked = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(revoked.is_revoked);
     assert!(!revoked.is_available());
 
@@ -183,7 +200,9 @@ async fn test_phase12_3_agent_revocation_and_expiration() {
         profile: None,
         api_key: raw_key.clone(),
     };
-    let resp = RegistrationHandler::process_registration(&pool, reg_revoked).await.unwrap();
+    let resp = RegistrationHandler::process_registration(&pool, reg_revoked)
+        .await
+        .unwrap();
     match resp {
         CoordinatorMessage::RegisterResponse { status, error, .. } => {
             assert_eq!(status, "error");
@@ -193,14 +212,24 @@ async fn test_phase12_3_agent_revocation_and_expiration() {
     }
 
     // Un-revoke and verify it can be restored
-    AgentRepository::unrevoke_agent(&pool, agent_id).await.unwrap();
-    let unrevoked = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
+    AgentRepository::unrevoke_agent(&pool, agent_id)
+        .await
+        .unwrap();
+    let unrevoked = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(!unrevoked.is_revoked);
 
     // Rotate API key
     let (new_key, new_hash) = ApiKeyManager::generate_key();
-    AgentRepository::rotate_api_key(&pool, agent_id, &new_hash).await.unwrap();
-    let rotated = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
+    AgentRepository::rotate_api_key(&pool, agent_id, &new_hash)
+        .await
+        .unwrap();
+    let rotated = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(rotated.api_key_hash, new_hash);
     assert!(ApiKeyManager::verify_key(&new_key, &rotated.api_key_hash));
 
@@ -251,7 +280,10 @@ async fn test_phase12_4_permission_boundaries_and_denied_paths() {
         false,
         &["backend/src/main.rs".to_string()],
     );
-    assert!(matches!(outside_boundary, Err(SecurityError::PermissionBoundaryViolation { .. })));
+    assert!(matches!(
+        outside_boundary,
+        Err(SecurityError::PermissionBoundaryViolation { .. })
+    ));
 }
 
 #[tokio::test]
@@ -342,16 +374,26 @@ async fn test_phase12_5_task_impersonation_prevention() {
     .await
     .unwrap();
 
-    TaskRepository::assign_agent(&pool, task.id, Some(agent_a_id)).await.unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent_a_id))
+        .await
+        .unwrap();
 
     // 1. Agent A is authorized to act on this task
-    let auth_ok = TaskAuthorizer::authorize_agent_for_task(&pool, agent_a_id, task.id, "task_started").await;
+    let auth_ok =
+        TaskAuthorizer::authorize_agent_for_task(&pool, agent_a_id, task.id, "task_started").await;
     assert!(auth_ok.is_ok());
 
     // 2. Agent B attempts to act on Agent A's task -> Rejected with TaskImpersonation
-    let auth_rogue = TaskAuthorizer::authorize_agent_for_task(&pool, agent_b_id, task.id, "task_completed").await;
+    let auth_rogue =
+        TaskAuthorizer::authorize_agent_for_task(&pool, agent_b_id, task.id, "task_completed")
+            .await;
     match auth_rogue {
-        Err(SecurityError::TaskImpersonation { actor_agent_id, task_id, assigned_to, .. }) => {
+        Err(SecurityError::TaskImpersonation {
+            actor_agent_id,
+            task_id,
+            assigned_to,
+            ..
+        }) => {
             assert_eq!(actor_agent_id, agent_b_id);
             assert_eq!(task_id, task.id);
             assert_eq!(assigned_to, Some(agent_a_id));
@@ -395,7 +437,10 @@ async fn test_phase12_6_secret_isolation_and_redaction() {
     // 3. Test environment isolation
     let mut coordinator_env = HashMap::new();
     coordinator_env.insert("PATH".to_string(), "/usr/local/bin:/usr/bin".to_string());
-    coordinator_env.insert("DATABASE_URL".to_string(), "postgres://agentmesh:pass@localhost:5432".to_string());
+    coordinator_env.insert(
+        "DATABASE_URL".to_string(),
+        "postgres://agentmesh:pass@localhost:5432".to_string(),
+    );
     coordinator_env.insert("POSTGRES_PASSWORD".to_string(), "master_key".to_string());
     coordinator_env.insert("NATS_ADMIN_TOKEN".to_string(), "nats_secret".to_string());
 
@@ -428,7 +473,9 @@ async fn test_phase12_7_nats_subject_authorization() {
 
     // 4. Wildcard subscribe attempts strictly denied
     assert!(NatsSubjectAuthorizer::validate_agent_subscribe(agent_id, "agents.>").is_err());
-    assert!(NatsSubjectAuthorizer::validate_agent_subscribe(agent_id, "coordinator.tasks.*").is_err());
+    assert!(
+        NatsSubjectAuthorizer::validate_agent_subscribe(agent_id, "coordinator.tasks.*").is_err()
+    );
 }
 
 #[tokio::test]
@@ -441,31 +488,52 @@ async fn test_phase12_8_persistent_audit_logging() {
     let agent_id = Uuid::new_v4();
 
     // 1. Log an authentication failure
-    AuditLogger::log_auth_failure(&pool, agent_id, "Invalid key presented").await.unwrap();
+    AuditLogger::log_auth_failure(&pool, agent_id, "Invalid key presented")
+        .await
+        .unwrap();
 
     // 2. Log a task impersonation attempt
     let task_id = Uuid::new_v4();
-    AuditLogger::log_task_impersonation(&pool, agent_id, task_id, Some(Uuid::new_v4()), "task_completed")
-        .await
-        .unwrap();
+    AuditLogger::log_task_impersonation(
+        &pool,
+        agent_id,
+        task_id,
+        Some(Uuid::new_v4()),
+        "task_completed",
+    )
+    .await
+    .unwrap();
 
     // 3. Log a permission boundary violation
-    AuditLogger::log_permission_denied(&pool, agent_id, "modify_file", &[".env.production".to_string()])
-        .await
-        .unwrap();
+    AuditLogger::log_permission_denied(
+        &pool,
+        agent_id,
+        "modify_file",
+        &[".env.production".to_string()],
+    )
+    .await
+    .unwrap();
 
     // 4. Query audit repository
     let recent = AuditRepository::find_recent(&pool, 10).await.unwrap();
     assert!(recent.iter().any(|e| e.action == "auth_failure"));
-    assert!(recent.iter().any(|e| e.action == "task_impersonation_blocked"));
+    assert!(recent
+        .iter()
+        .any(|e| e.action == "task_impersonation_blocked"));
     assert!(recent.iter().any(|e| e.action == "permission_denied"));
 
     // 5. Query alerts
     let alerts = AuditRepository::find_alerts(&pool, 10).await.unwrap();
-    assert!(alerts.iter().all(|e| e.status == "denied" || e.status == "failure"));
-    assert!(alerts.iter().any(|e| e.actor_id == Some(agent_id.to_string())));
+    assert!(alerts
+        .iter()
+        .all(|e| e.status == "denied" || e.status == "failure"));
+    assert!(alerts
+        .iter()
+        .any(|e| e.actor_id == Some(agent_id.to_string())));
 
     // 6. Query by actor
-    let agent_logs = AuditRepository::find_by_actor(&pool, "agent", &agent_id.to_string()).await.unwrap();
+    let agent_logs = AuditRepository::find_by_actor(&pool, "agent", &agent_id.to_string())
+        .await
+        .unwrap();
     assert_eq!(agent_logs.len(), 3);
 }

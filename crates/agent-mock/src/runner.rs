@@ -1,22 +1,23 @@
-use std::time::Duration;
 use anyhow::{Context, Result};
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::Context as JetStreamContext;
 use async_nats::Client;
 use chrono::Utc;
+use std::time::Duration;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use agent_protocol::{
-    AgentAdapter, AgentMessage, AgentStatus, CoordinatorMessage, TaskSpec,
-};
 use crate::adapter::MockAgent;
+use agent_protocol::{AgentAdapter, AgentMessage, AgentStatus, CoordinatorMessage, TaskSpec};
 
 pub struct MockAgentRunner;
 
 impl MockAgentRunner {
     /// Connects to the NATS broker.
-    pub async fn connect(nats_url: &str, token: Option<&str>) -> Result<(Client, JetStreamContext)> {
+    pub async fn connect(
+        nats_url: &str,
+        token: Option<&str>,
+    ) -> Result<(Client, JetStreamContext)> {
         let mut options = async_nats::ConnectOptions::new();
         if let Some(tok) = token {
             if !tok.is_empty() {
@@ -111,7 +112,9 @@ impl MockAgentRunner {
         msg: &AgentMessage,
     ) -> Result<()> {
         let payload = serde_json::to_vec(msg)?;
-        client.publish(event_subject.to_string(), payload.into()).await?;
+        client
+            .publish(event_subject.to_string(), payload.into())
+            .await?;
         Ok(())
     }
 
@@ -195,7 +198,10 @@ impl MockAgentRunner {
                 &AgentMessage::Completed {
                     agent_id: agent.agent_id(),
                     task_id: spec.task_id,
-                    summary: format!("Task {} completed successfully by mock agent", spec.short_id),
+                    summary: format!(
+                        "Task {} completed successfully by mock agent",
+                        spec.short_id
+                    ),
                     timestamp: Utc::now(),
                 },
             )

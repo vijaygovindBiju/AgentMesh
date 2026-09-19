@@ -157,8 +157,9 @@ mod tests {
 
     async fn setup_test_pool() -> Option<PgPool> {
         let _ = dotenvy::dotenv();
-        let db_url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+        let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+        });
         let pool = create_pool(&db_url).await.ok()?;
         run_migrations(&pool).await.ok()?;
         Some(pool)
@@ -197,7 +198,9 @@ mod tests {
         assert_eq!(updated.status, ProjectStatus::Planning);
 
         // 4. List
-        let list = ProjectRepository::list(&pool).await.expect("Should list projects");
+        let list = ProjectRepository::list(&pool)
+            .await
+            .expect("Should list projects");
         assert!(list.iter().any(|p| p.id == created.id));
 
         // 5. Delete

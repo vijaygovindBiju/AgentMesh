@@ -1,8 +1,8 @@
-use std::io::Write;
-use std::time::Duration;
 use chrono::Utc;
 use futures::StreamExt;
 use sqlx::PgPool;
+use std::io::Write;
+use std::time::Duration;
 use uuid::Uuid;
 
 use agent_agy::{AgyAgent, AgyAgentRunner};
@@ -47,10 +47,13 @@ impl Drop for TempScript {
 
 async fn setup_test_env() -> Option<(PgPool, async_nats::Client, async_nats::jetstream::Context)> {
     let _ = dotenvy::dotenv();
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
-    let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
-    let nats_token = std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let nats_token =
+        std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
 
     let pool = create_pool(&db_url).await.ok()?;
     run_migrations(&pool).await.ok()?;
@@ -140,7 +143,9 @@ async fn test_agy_task_lifecycle_execution() {
         profile: agy_agent.capability_profile(),
         api_key: agy_agent.api_key.clone(),
     };
-    RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
+    RegistrationHandler::process_registration(&pool, reg_msg)
+        .await
+        .unwrap();
 
     // 2. Setup DB project, proposal, task
     let project = ProjectRepository::create(
@@ -181,10 +186,18 @@ async fn test_agy_task_lifecycle_execution() {
     .await
     .unwrap();
 
-    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent_id)).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent_id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned)
+        .await
+        .unwrap();
 
     let idempotency_key = format!("test-agy-{}", Uuid::new_v4());
     TaskDeliveryRepository::create(
@@ -255,7 +268,10 @@ async fn test_agy_task_lifecycle_execution() {
     subscriber_handle.abort();
 
     // 6. Verify state in PostgreSQL
-    let final_task = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let final_task = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
         final_task.status,
         TaskStatus::Completed,
@@ -268,13 +284,19 @@ async fn test_agy_task_lifecycle_execution() {
         .unwrap();
     assert_eq!(delivery.status, DeliveryStatus::Acknowledged);
 
-    let events = AgentEventRepository::list_by_task(&pool, task.id).await.unwrap();
+    let events = AgentEventRepository::list_by_task(&pool, task.id)
+        .await
+        .unwrap();
     assert!(
-        events.iter().any(|e| e.event_type == coordinator::domain::AgentEventType::TaskStarted),
+        events
+            .iter()
+            .any(|e| e.event_type == coordinator::domain::AgentEventType::TaskStarted),
         "Must record TaskStarted event in DB"
     );
     assert!(
-        events.iter().any(|e| e.event_type == coordinator::domain::AgentEventType::Completed),
+        events
+            .iter()
+            .any(|e| e.event_type == coordinator::domain::AgentEventType::Completed),
         "Must record Completed event in DB"
     );
 }
@@ -310,7 +332,9 @@ async fn test_agy_task_failure_lifecycle() {
         profile: agy_agent.capability_profile(),
         api_key: agy_agent.api_key.clone(),
     };
-    RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
+    RegistrationHandler::process_registration(&pool, reg_msg)
+        .await
+        .unwrap();
 
     let project = ProjectRepository::create(
         &pool,
@@ -350,10 +374,18 @@ async fn test_agy_task_failure_lifecycle() {
     .await
     .unwrap();
 
-    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent_id)).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent_id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned)
+        .await
+        .unwrap();
 
     let idempotency_key = format!("test-fail-{}", Uuid::new_v4());
     TaskDeliveryRepository::create(
@@ -417,16 +449,23 @@ async fn test_agy_task_failure_lifecycle() {
     tokio::time::sleep(Duration::from_millis(150)).await;
     subscriber_handle.abort();
 
-    let final_task = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let final_task = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
         final_task.status,
         TaskStatus::Failed,
         "Task must transition to Failed after agy process error"
     );
 
-    let events = AgentEventRepository::list_by_task(&pool, task.id).await.unwrap();
+    let events = AgentEventRepository::list_by_task(&pool, task.id)
+        .await
+        .unwrap();
     assert!(
-        events.iter().any(|e| e.event_type == coordinator::domain::AgentEventType::Failed),
+        events
+            .iter()
+            .any(|e| e.event_type == coordinator::domain::AgentEventType::Failed),
         "Must record Failed event in DB"
     );
 }
@@ -462,7 +501,9 @@ async fn test_agy_task_blocked_lifecycle() {
         profile: agy_agent.capability_profile(),
         api_key: agy_agent.api_key.clone(),
     };
-    RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
+    RegistrationHandler::process_registration(&pool, reg_msg)
+        .await
+        .unwrap();
 
     let project = ProjectRepository::create(
         &pool,
@@ -502,10 +543,18 @@ async fn test_agy_task_blocked_lifecycle() {
     .await
     .unwrap();
 
-    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent_id)).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent_id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned)
+        .await
+        .unwrap();
 
     let idempotency_key = format!("test-block-{}", Uuid::new_v4());
     TaskDeliveryRepository::create(
@@ -569,16 +618,23 @@ async fn test_agy_task_blocked_lifecycle() {
     tokio::time::sleep(Duration::from_millis(150)).await;
     subscriber_handle.abort();
 
-    let final_task = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+    let final_task = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
         final_task.status,
         TaskStatus::Blocked,
         "Task must transition to Blocked when agy requests clarification"
     );
 
-    let events = AgentEventRepository::list_by_task(&pool, task.id).await.unwrap();
+    let events = AgentEventRepository::list_by_task(&pool, task.id)
+        .await
+        .unwrap();
     assert!(
-        events.iter().any(|e| e.event_type == coordinator::domain::AgentEventType::Blocked),
+        events
+            .iter()
+            .any(|e| e.event_type == coordinator::domain::AgentEventType::Blocked),
         "Must record Blocked event in DB"
     );
 }
@@ -632,7 +688,9 @@ async fn test_two_agy_instances_parallel_execution() {
             profile: agent.capability_profile(),
             api_key: agent.api_key.clone(),
         };
-        RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
+        RegistrationHandler::process_registration(&pool, reg_msg)
+            .await
+            .unwrap();
     }
 
     let project = ProjectRepository::create(
@@ -691,10 +749,18 @@ async fn test_two_agy_instances_parallel_execution() {
     .unwrap();
 
     for (t, a_id) in [(&task1, agent_id1), (&task2, agent_id2)] {
-        TaskRepository::update_status(&pool, t.id, TaskStatus::HumanReview).await.unwrap();
-        TaskRepository::update_status(&pool, t.id, TaskStatus::Approved).await.unwrap();
-        TaskRepository::assign_agent(&pool, t.id, Some(a_id)).await.unwrap();
-        TaskRepository::update_status(&pool, t.id, TaskStatus::Assigned).await.unwrap();
+        TaskRepository::update_status(&pool, t.id, TaskStatus::HumanReview)
+            .await
+            .unwrap();
+        TaskRepository::update_status(&pool, t.id, TaskStatus::Approved)
+            .await
+            .unwrap();
+        TaskRepository::assign_agent(&pool, t.id, Some(a_id))
+            .await
+            .unwrap();
+        TaskRepository::update_status(&pool, t.id, TaskStatus::Assigned)
+            .await
+            .unwrap();
 
         let idem_key = format!("test-parallel-{}", t.id);
         TaskDeliveryRepository::create(
@@ -722,7 +788,9 @@ async fn test_two_agy_instances_parallel_execution() {
             idem_key,
         );
 
-        TaskPublisher::publish_assignment(&jetstream, a_id, &spec).await.unwrap();
+        TaskPublisher::publish_assignment(&jetstream, a_id, &spec)
+            .await
+            .unwrap();
     }
 
     // Start event subscriber
@@ -741,20 +809,46 @@ async fn test_two_agy_instances_parallel_execution() {
     // Run both agy agents concurrently
     let (h1, h2) = tokio::join!(
         async {
-            let consumer = AgyAgentRunner::create_task_consumer(&jetstream, agent_id1).await.unwrap();
+            let consumer = AgyAgentRunner::create_task_consumer(&jetstream, agent_id1)
+                .await
+                .unwrap();
             let mut msgs = consumer.messages().await.unwrap();
             let msg = msgs.next().await.unwrap().unwrap();
             msg.ack().await.unwrap();
-            let CoordinatorMessage::TaskAssignment { spec } = serde_json::from_slice(&msg.payload).unwrap() else { panic!() };
-            AgyAgentRunner::execute_task(&client, &agent1, &spec, &format!("agents.{agent_id1}.events")).await.unwrap();
+            let CoordinatorMessage::TaskAssignment { spec } =
+                serde_json::from_slice(&msg.payload).unwrap()
+            else {
+                panic!()
+            };
+            AgyAgentRunner::execute_task(
+                &client,
+                &agent1,
+                &spec,
+                &format!("agents.{agent_id1}.events"),
+            )
+            .await
+            .unwrap();
         },
         async {
-            let consumer = AgyAgentRunner::create_task_consumer(&jetstream, agent_id2).await.unwrap();
+            let consumer = AgyAgentRunner::create_task_consumer(&jetstream, agent_id2)
+                .await
+                .unwrap();
             let mut msgs = consumer.messages().await.unwrap();
             let msg = msgs.next().await.unwrap().unwrap();
             msg.ack().await.unwrap();
-            let CoordinatorMessage::TaskAssignment { spec } = serde_json::from_slice(&msg.payload).unwrap() else { panic!() };
-            AgyAgentRunner::execute_task(&client, &agent2, &spec, &format!("agents.{agent_id2}.events")).await.unwrap();
+            let CoordinatorMessage::TaskAssignment { spec } =
+                serde_json::from_slice(&msg.payload).unwrap()
+            else {
+                panic!()
+            };
+            AgyAgentRunner::execute_task(
+                &client,
+                &agent2,
+                &spec,
+                &format!("agents.{agent_id2}.events"),
+            )
+            .await
+            .unwrap();
         }
     );
     let _ = (h1, h2);
@@ -763,11 +857,25 @@ async fn test_two_agy_instances_parallel_execution() {
     subscriber_handle.abort();
 
     // Verify both tasks reached Completed state independently
-    let t1_final = TaskRepository::find_by_id(&pool, task1.id).await.unwrap().unwrap();
-    let t2_final = TaskRepository::find_by_id(&pool, task2.id).await.unwrap().unwrap();
+    let t1_final = TaskRepository::find_by_id(&pool, task1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let t2_final = TaskRepository::find_by_id(&pool, task2.id)
+        .await
+        .unwrap()
+        .unwrap();
 
-    assert_eq!(t1_final.status, TaskStatus::Completed, "Task 1 must complete");
-    assert_eq!(t2_final.status, TaskStatus::Completed, "Task 2 must complete");
+    assert_eq!(
+        t1_final.status,
+        TaskStatus::Completed,
+        "Task 1 must complete"
+    );
+    assert_eq!(
+        t2_final.status,
+        TaskStatus::Completed,
+        "Task 2 must complete"
+    );
 }
 
 #[tokio::test]
@@ -789,7 +897,10 @@ async fn test_one_real_agy_binary_instance() {
             }
         });
     if !agy_binary_path.exists() {
-        eprintln!("Skipping real agy test: {} not found on system", agy_binary_path.display());
+        eprintln!(
+            "Skipping real agy test: {} not found on system",
+            agy_binary_path.display()
+        );
         return;
     }
 
@@ -808,7 +919,9 @@ async fn test_one_real_agy_binary_instance() {
         profile: agy_agent.capability_profile(),
         api_key: agy_agent.api_key.clone(),
     };
-    RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
+    RegistrationHandler::process_registration(&pool, reg_msg)
+        .await
+        .unwrap();
 
     let project = ProjectRepository::create(
         &pool,
@@ -848,10 +961,18 @@ async fn test_one_real_agy_binary_instance() {
     .await
     .unwrap();
 
-    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent_id)).await.unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent_id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned)
+        .await
+        .unwrap();
 
     let idempotency_key = format!("test-real-agy-{}", Uuid::new_v4());
     TaskDeliveryRepository::create(
@@ -879,7 +1000,9 @@ async fn test_one_real_agy_binary_instance() {
         &idempotency_key,
     );
 
-    TaskPublisher::publish_assignment(&jetstream, agent_id, &spec).await.unwrap();
+    TaskPublisher::publish_assignment(&jetstream, agent_id, &spec)
+        .await
+        .unwrap();
 
     let sub_pool = pool.clone();
     let events_consumer = EventSubscriber::create_consumer(&jetstream).await.unwrap();
@@ -893,26 +1016,45 @@ async fn test_one_real_agy_binary_instance() {
         }
     });
 
-    let task_consumer = AgyAgentRunner::create_task_consumer(&jetstream, agent_id).await.unwrap();
+    let task_consumer = AgyAgentRunner::create_task_consumer(&jetstream, agent_id)
+        .await
+        .unwrap();
     let mut task_messages = task_consumer.messages().await.unwrap();
     let assignment_msg = task_messages.next().await.unwrap().unwrap();
     assignment_msg.ack().await.unwrap();
 
-    let CoordinatorMessage::TaskAssignment { spec: received_spec } = serde_json::from_slice(&assignment_msg.payload).unwrap() else { panic!() };
+    let CoordinatorMessage::TaskAssignment {
+        spec: received_spec,
+    } = serde_json::from_slice(&assignment_msg.payload).unwrap()
+    else {
+        panic!()
+    };
     let event_subject = format!("agents.{agent_id}.events");
 
     // Execute against the real agy CLI
-    let exec_res = AgyAgentRunner::execute_task(&client, &agy_agent, &received_spec, &event_subject).await;
-    assert!(exec_res.is_ok(), "Real agy execution failed: {:?}", exec_res.err());
+    let exec_res =
+        AgyAgentRunner::execute_task(&client, &agy_agent, &received_spec, &event_subject).await;
+    assert!(
+        exec_res.is_ok(),
+        "Real agy execution failed: {:?}",
+        exec_res.err()
+    );
 
     tokio::time::sleep(Duration::from_millis(300)).await;
     subscriber_handle.abort();
 
-    let final_task = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
-    let events = AgentEventRepository::list_by_task(&pool, task.id).await.unwrap();
+    let final_task = TaskRepository::find_by_id(&pool, task.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let events = AgentEventRepository::list_by_task(&pool, task.id)
+        .await
+        .unwrap();
 
     assert!(
-        events.iter().any(|e| e.event_type == coordinator::domain::AgentEventType::TaskStarted),
+        events
+            .iter()
+            .any(|e| e.event_type == coordinator::domain::AgentEventType::TaskStarted),
         "Must record TaskStarted from real agy CLI"
     );
 
@@ -934,7 +1076,9 @@ async fn test_one_real_agy_binary_instance() {
             "Task must be Failed (due to external quota) or Completed"
         );
         assert!(
-            events.iter().any(|e| e.event_type == coordinator::domain::AgentEventType::Failed),
+            events
+                .iter()
+                .any(|e| e.event_type == coordinator::domain::AgentEventType::Failed),
             "Must record Failed event on external quota exhaustion"
         );
     } else {
@@ -944,10 +1088,10 @@ async fn test_one_real_agy_binary_instance() {
             "Task must transition to Completed with real agy binary"
         );
         assert!(
-            events.iter().any(|e| e.event_type == coordinator::domain::AgentEventType::Completed),
+            events
+                .iter()
+                .any(|e| e.event_type == coordinator::domain::AgentEventType::Completed),
             "Must record Completed from real agy CLI"
         );
     }
 }
-
-

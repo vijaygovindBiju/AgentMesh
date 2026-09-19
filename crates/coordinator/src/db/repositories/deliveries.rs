@@ -88,10 +88,7 @@ impl TaskDeliveryRepository {
 
     /// Finds a delivery by idempotency key.
     /// Agents use this to detect and skip already-processed messages.
-    pub async fn find_by_idempotency_key(
-        pool: &PgPool,
-        key: &str,
-    ) -> Result<Option<TaskDelivery>> {
+    pub async fn find_by_idempotency_key(pool: &PgPool, key: &str) -> Result<Option<TaskDelivery>> {
         let delivery = sqlx::query_as!(
             TaskDelivery,
             r#"
@@ -371,18 +368,21 @@ impl TaskDeliveryRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Duration;
     use crate::db::pool::{create_pool, run_migrations};
     use crate::db::repositories::agents::AgentRepository;
     use crate::db::repositories::projects::ProjectRepository;
     use crate::db::repositories::proposals::ProposalRepository;
     use crate::db::repositories::tasks::TaskRepository;
-    use crate::domain::{AdapterType, AgentStatus, NewAgent, NewProject, NewProposal, NewTask, TaskStatus};
+    use crate::domain::{
+        AdapterType, AgentStatus, NewAgent, NewProject, NewProposal, NewTask, TaskStatus,
+    };
+    use chrono::Duration;
 
     async fn setup_pool() -> Option<PgPool> {
         let _ = dotenvy::dotenv();
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+        let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+        });
         let pool = create_pool(&url).await.ok()?;
         run_migrations(&pool).await.ok()?;
         Some(pool)
@@ -495,10 +495,15 @@ mod tests {
         assert_eq!(delivered.nats_sequence, Some(42));
 
         // 5. Record ACK
-        let acked = TaskDeliveryRepository::record_ack(&pool, delivery.id, AckKind::Ack, DeliveryStatus::Acknowledged)
-            .await
-            .expect("Record ack failed")
-            .expect("Delivery returned");
+        let acked = TaskDeliveryRepository::record_ack(
+            &pool,
+            delivery.id,
+            AckKind::Ack,
+            DeliveryStatus::Acknowledged,
+        )
+        .await
+        .expect("Record ack failed")
+        .expect("Delivery returned");
         assert_eq!(acked.status, DeliveryStatus::Acknowledged);
         assert_eq!(acked.ack_kind, Some(AckKind::Ack));
         assert!(acked.acknowledged_at.is_some());
@@ -605,10 +610,18 @@ mod tests {
         .expect("Task creation failed");
 
         // 2. Human approves task -> Coordinator assigns task to Agent A
-        TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
-        TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-        TaskRepository::assign_agent(&pool, task.id, Some(agent_a.id)).await.unwrap();
-        TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+        TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview)
+            .await
+            .unwrap();
+        TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
+            .await
+            .unwrap();
+        TaskRepository::assign_agent(&pool, task.id, Some(agent_a.id))
+            .await
+            .unwrap();
+        TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned)
+            .await
+            .unwrap();
 
         // 3. Coordinator creates TaskDelivery (attempt 1) with an expiration in the past
         // (simulating that the timeout has expired without the agent reporting TaskStarted)
@@ -629,16 +642,28 @@ mod tests {
         .expect("Delivery 1 creation failed");
 
         // 4. Agent A receives message and sends JetStream ACK, updating delivery to Acknowledged...
-        TaskDeliveryRepository::record_ack(&pool, delivery1.id, AckKind::Ack, DeliveryStatus::Acknowledged)
-            .await
-            .unwrap();
+        TaskDeliveryRepository::record_ack(
+            &pool,
+            delivery1.id,
+            AckKind::Ack,
+            DeliveryStatus::Acknowledged,
+        )
+        .await
+        .unwrap();
 
         // ...BUT AGENT A CRASHES HERE!
         // Agent A NEVER publishes TaskStarted to AGENT_EVENTS.
         // Task.status is STILL Assigned (not Executing!).
 
-        let current_task = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
-        assert_eq!(current_task.status, TaskStatus::Assigned, "Task must still be Assigned because TaskStarted was never received");
+        let current_task = TaskRepository::find_by_id(&pool, task.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            current_task.status,
+            TaskStatus::Assigned,
+            "Task must still be Assigned because TaskStarted was never received"
+        );
 
         // 5. Coordinator's background sweep detects expired unstarted deliveries
         let expired_unstarted = TaskDeliveryRepository::list_expired_unstarted(&pool)
@@ -676,9 +701,15 @@ mod tests {
 
         // 7. Reassignment Path (Human approves reassignment to Agent B):
         // a) Task returns to Approved, then Assigned to Agent B
-        TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-        TaskRepository::assign_agent(&pool, task.id, Some(agent_b.id)).await.unwrap();
-        TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+        TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
+            .await
+            .unwrap();
+        TaskRepository::assign_agent(&pool, task.id, Some(agent_b.id))
+            .await
+            .unwrap();
+        TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned)
+            .await
+            .unwrap();
 
         // b) Mark old delivery as Reassigned to Agent B
         TaskDeliveryRepository::mark_reassigned(&pool, delivery1.id, agent_b.id)
@@ -708,12 +739,19 @@ mod tests {
 
         // 8. Agent B succeeds:
         // a) Agent B ACKs
-        TaskDeliveryRepository::record_ack(&pool, delivery2.id, AckKind::Ack, DeliveryStatus::Acknowledged)
-            .await
-            .unwrap();
+        TaskDeliveryRepository::record_ack(
+            &pool,
+            delivery2.id,
+            AckKind::Ack,
+            DeliveryStatus::Acknowledged,
+        )
+        .await
+        .unwrap();
 
         // b) Agent B sends TaskStarted
-        TaskRepository::update_status(&pool, task.id, TaskStatus::Executing).await.unwrap();
+        TaskRepository::update_status(&pool, task.id, TaskStatus::Executing)
+            .await
+            .unwrap();
 
         // c) Agent B finishes work and sends Completed
         let completed_task = TaskRepository::update_status(&pool, task.id, TaskStatus::Completed)
@@ -723,7 +761,9 @@ mod tests {
         assert_eq!(completed_task.status, TaskStatus::Completed);
 
         // 9. Verify final audit state in database:
-        let all_deliveries = TaskDeliveryRepository::list_by_task(&pool, task.id).await.unwrap();
+        let all_deliveries = TaskDeliveryRepository::list_by_task(&pool, task.id)
+            .await
+            .unwrap();
         assert_eq!(all_deliveries.len(), 2);
         assert_eq!(all_deliveries[0].attempt, 1);
         assert_eq!(all_deliveries[0].status, DeliveryStatus::Reassigned);
@@ -737,4 +777,3 @@ mod tests {
         AgentRepository::delete(&pool, agent_b.id).await.unwrap();
     }
 }
-

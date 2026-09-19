@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 /// High-level architectural and structural summary of a repository.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,7 +20,10 @@ impl RepositoryScanner {
     /// Inspects the target repository and builds a structured `RepositoryContext`.
     pub async fn scan(repo_root: impl AsRef<Path>) -> Result<RepositoryContext> {
         let repo_root = repo_root.as_ref().canonicalize().with_context(|| {
-            format!("Failed to canonicalize repo root {}", repo_root.as_ref().display())
+            format!(
+                "Failed to canonicalize repo root {}",
+                repo_root.as_ref().display()
+            )
         })?;
 
         let mut ecosystems = Vec::new();
@@ -80,7 +83,11 @@ impl RepositoryScanner {
             let path = entry.path();
             if path.is_dir() {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if !name.starts_with('.') && name != "target" && name != "node_modules" && name != "vendor" {
+                if !name.starts_with('.')
+                    && name != "target"
+                    && name != "node_modules"
+                    && name != "vendor"
+                {
                     candidate_dirs.push(name);
                 }
             }
@@ -126,10 +133,15 @@ impl RepositoryScanner {
             if in_members {
                 for part in trimmed.split('"') {
                     let part = part.trim();
-                    if !part.is_empty() && part != "members" && part != "[" && part != "]" && part != "," && !part.contains('=') {
-                        if !modules.contains(&part.to_string()) {
-                            modules.push(part.to_string());
-                        }
+                    if !part.is_empty()
+                        && part != "members"
+                        && part != "["
+                        && part != "]"
+                        && part != ","
+                        && !part.contains('=')
+                        && !modules.contains(&part.to_string())
+                    {
+                        modules.push(part.to_string());
                     }
                 }
                 if trimmed.contains(']') {
@@ -172,7 +184,12 @@ impl RepositoryScanner {
             let name = entry.file_name().to_string_lossy().to_string();
 
             // Skip common noise directories
-            if name.starts_with('.') || name == "target" || name == "node_modules" || name == "vendor" || name == "dist" {
+            if name.starts_with('.')
+                || name == "target"
+                || name == "node_modules"
+                || name == "vendor"
+                || name == "dist"
+            {
                 continue;
             }
 
@@ -193,7 +210,10 @@ impl RepositoryScanner {
         let candidates = [
             Some(repo_root.to_path_buf()),
             repo_root.parent().map(|p| p.to_path_buf()),
-            repo_root.parent().and_then(|p| p.parent()).map(|p| p.to_path_buf()),
+            repo_root
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|p| p.to_path_buf()),
         ];
 
         for candidate in candidates.into_iter().flatten() {
@@ -222,9 +242,14 @@ mod tests {
             .await
             .expect("Must scan AgentMesh repo");
 
-        assert!(ctx.detected_ecosystems.contains(&"Rust / Cargo".to_string()));
+        assert!(ctx
+            .detected_ecosystems
+            .contains(&"Rust / Cargo".to_string()));
         assert!(ctx.primary_languages.contains(&"Rust".to_string()));
-        assert!(ctx.key_modules.iter().any(|m| m.contains("coordinator") || m == "crates"));
+        assert!(ctx
+            .key_modules
+            .iter()
+            .any(|m| m.contains("coordinator") || m == "crates"));
         assert!(!ctx.file_tree_sample.is_empty());
         assert!(ctx.readme_summary.is_some());
     }
@@ -233,14 +258,25 @@ mod tests {
     async fn test_scan_temp_mixed_repo() {
         let temp = std::env::temp_dir().join(format!("scan_test_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(temp.join("src")).await.unwrap();
-        tokio::fs::write(temp.join("package.json"), "{\"name\": \"frontend\"}").await.unwrap();
-        tokio::fs::write(temp.join("tsconfig.json"), "{}").await.unwrap();
-        tokio::fs::write(temp.join("README.md"), "# Frontend App\nA test application").await.unwrap();
+        tokio::fs::write(temp.join("package.json"), "{\"name\": \"frontend\"}")
+            .await
+            .unwrap();
+        tokio::fs::write(temp.join("tsconfig.json"), "{}")
+            .await
+            .unwrap();
+        tokio::fs::write(temp.join("README.md"), "# Frontend App\nA test application")
+            .await
+            .unwrap();
 
         let ctx = RepositoryScanner::scan(&temp).await.unwrap();
-        assert!(ctx.detected_ecosystems.contains(&"Node.js / npm".to_string()));
+        assert!(ctx
+            .detected_ecosystems
+            .contains(&"Node.js / npm".to_string()));
         assert!(ctx.primary_languages.contains(&"TypeScript".to_string()));
-        assert_eq!(ctx.readme_summary.as_deref(), Some("# Frontend App\nA test application"));
+        assert_eq!(
+            ctx.readme_summary.as_deref(),
+            Some("# Frontend App\nA test application")
+        );
 
         let _ = tokio::fs::remove_dir_all(&temp).await;
     }

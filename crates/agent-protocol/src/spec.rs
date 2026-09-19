@@ -58,4 +58,3 @@ impl TaskSpec {
         self
     }
 }
-

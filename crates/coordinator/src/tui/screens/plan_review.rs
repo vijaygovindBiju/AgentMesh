@@ -36,15 +36,18 @@ impl PlanReviewScreen {
             .border_style(Style::default().fg(Color::Cyan))
             .title(Span::styled(
                 " Proposed Task Decomposition (Human Review) ",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         let inner_area = block.inner(area);
         frame.render_widget(block, area);
 
         if state.review_tasks.is_empty() {
-            let empty = Paragraph::new("No tasks proposed yet. Go to [1: Input] to submit a project.")
-                .style(Style::default().fg(Color::DarkGray));
+            let empty =
+                Paragraph::new("No tasks proposed yet. Go to [1: Input] to submit a project.")
+                    .style(Style::default().fg(Color::DarkGray));
             frame.render_widget(empty, inner_area);
             return;
         }
@@ -79,7 +82,12 @@ impl PlanReviewScreen {
                 height: card_height,
             };
 
-            TaskCardWidget::render(frame, card_rect, task_item, idx == state.selected_task_index);
+            TaskCardWidget::render(
+                frame,
+                card_rect,
+                task_item,
+                idx == state.selected_task_index,
+            );
             y += card_height;
         }
     }

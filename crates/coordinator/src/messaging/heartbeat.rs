@@ -1,14 +1,14 @@
-use std::time::Duration;
 use anyhow::{Context, Result};
 use async_nats::Client;
 use chrono::Utc;
 use futures::StreamExt;
 use sqlx::PgPool;
+use std::time::Duration;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use agent_protocol::AgentMessage;
 use crate::db::repositories::AgentRepository;
+use agent_protocol::AgentMessage;
 
 pub const HEARTBEAT_SUBJECT: &str = "coordinator.agents.heartbeat.*";
 
@@ -18,7 +18,8 @@ impl HeartbeatMonitor {
     /// Checks for agents that have not sent a heartbeat within `timeout` and marks them Offline.
     /// Returns the list of agent IDs that transitioned to Offline.
     pub async fn check_timeouts(pool: &PgPool, timeout: Duration) -> Result<Vec<Uuid>> {
-        let threshold = Utc::now() - chrono::Duration::from_std(timeout).unwrap_or(chrono::Duration::seconds(30));
+        let threshold = Utc::now()
+            - chrono::Duration::from_std(timeout).unwrap_or(chrono::Duration::seconds(30));
 
         let rows = sqlx::query!(
             r#"
@@ -38,7 +39,11 @@ impl HeartbeatMonitor {
 
         let marked_ids: Vec<Uuid> = rows.into_iter().map(|r| r.id).collect();
         if !marked_ids.is_empty() {
-            warn!(count = marked_ids.len(), ?marked_ids, "Agents marked offline due to heartbeat timeout");
+            warn!(
+                count = marked_ids.len(),
+                ?marked_ids,
+                "Agents marked offline due to heartbeat timeout"
+            );
         }
 
         Ok(marked_ids)
@@ -66,11 +71,20 @@ impl HeartbeatMonitor {
                     .as_ref()
                     .and_then(|h| h.heartbeat_latency_ms.map(|l| l as i64))
                     .or_else(|| {
-                        let elapsed = Utc::now().signed_duration_since(timestamp).num_milliseconds();
-                        if elapsed >= 0 { Some(elapsed) } else { None }
+                        let elapsed = Utc::now()
+                            .signed_duration_since(timestamp)
+                            .num_milliseconds();
+                        if elapsed >= 0 {
+                            Some(elapsed)
+                        } else {
+                            None
+                        }
                     });
 
-                if let Err(e) = AgentRepository::record_heartbeat_with_latency(&pool, agent_id, latency_ms).await {
+                if let Err(e) =
+                    AgentRepository::record_heartbeat_with_latency(&pool, agent_id, latency_ms)
+                        .await
+                {
                     error!(%agent_id, error = %e, "Failed to record agent heartbeat");
                 }
             }
@@ -88,8 +102,9 @@ mod tests {
 
     async fn setup_pool() -> Option<PgPool> {
         let _ = dotenvy::dotenv();
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+        let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+        });
         let pool = create_pool(&url).await.ok()?;
         run_migrations(&pool).await.ok()?;
         Some(pool)
@@ -118,7 +133,9 @@ mod tests {
         .unwrap();
 
         // Mark agent as Idle
-        AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle).await.unwrap();
+        AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle)
+            .await
+            .unwrap();
 
         // Artificially age the agent's last_seen
         let old_time = Utc::now() - chrono::Duration::seconds(60);
@@ -138,7 +155,10 @@ mod tests {
 
         assert!(timed_out.contains(&agent.id));
 
-        let updated_agent = AgentRepository::find_by_id(&pool, agent.id).await.unwrap().unwrap();
+        let updated_agent = AgentRepository::find_by_id(&pool, agent.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(updated_agent.status, AgentStatus::Offline);
 
         // Clean up

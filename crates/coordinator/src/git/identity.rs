@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
 /// Authoritative identity of a Git repository coordinated by AgentMesh.
@@ -32,7 +32,10 @@ impl RepositoryIdentity {
 
         if !root_output.status.success() {
             let stderr = String::from_utf8_lossy(&root_output.stderr);
-            anyhow::bail!("Path '{}' is not a git repository: {stderr}", path.display());
+            anyhow::bail!(
+                "Path '{}' is not a git repository: {stderr}",
+                path.display()
+            );
         }
 
         let repo_root = PathBuf::from(String::from_utf8_lossy(&root_output.stdout).trim());
@@ -46,7 +49,9 @@ impl RepositoryIdentity {
             .output()
             .await?;
 
-        let current_branch = String::from_utf8_lossy(&branch_output.stdout).trim().to_string();
+        let current_branch = String::from_utf8_lossy(&branch_output.stdout)
+            .trim()
+            .to_string();
         let base_branch = if current_branch == "HEAD" || current_branch.is_empty() {
             "main".to_string()
         } else {
@@ -62,7 +67,9 @@ impl RepositoryIdentity {
             .await?;
 
         let head_commit_sha = if sha_output.status.success() {
-            String::from_utf8_lossy(&sha_output.stdout).trim().to_string()
+            String::from_utf8_lossy(&sha_output.stdout)
+                .trim()
+                .to_string()
         } else {
             "0000000000000000000000000000000000000000".to_string()
         };
@@ -79,7 +86,11 @@ impl RepositoryIdentity {
         let origin_url = match origin_output {
             Ok(out) if out.status.success() => {
                 let url = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if url.is_empty() { None } else { Some(url) }
+                if url.is_empty() {
+                    None
+                } else {
+                    Some(url)
+                }
             }
             _ => None,
         };
@@ -107,7 +118,11 @@ impl RepositoryIdentity {
 
         if !init_out.status.success() {
             // Fallback for older git versions without -b flag
-            Command::new("git").arg("init").current_dir(path).output().await?;
+            Command::new("git")
+                .arg("init")
+                .current_dir(path)
+                .output()
+                .await?;
             Command::new("git")
                 .arg("checkout")
                 .arg("-B")
@@ -221,7 +236,10 @@ mod tests {
     async fn test_discover_current_repo() {
         let current_dir = std::env::current_dir().unwrap();
         let identity = RepositoryIdentity::discover(&current_dir).await;
-        assert!(identity.is_ok(), "Must discover AgentMesh repository identity");
+        assert!(
+            identity.is_ok(),
+            "Must discover AgentMesh repository identity"
+        );
         let id = identity.unwrap();
         assert!(id.repo_root.exists());
         assert!(!id.base_branch.is_empty());
@@ -230,17 +248,28 @@ mod tests {
 
     #[tokio::test]
     async fn test_init_and_clean_check() {
-        let temp_dir = std::env::temp_dir().join(format!("agentmesh_repo_test_{}", uuid::Uuid::new_v4()));
-        let id = RepositoryIdentity::init(&temp_dir, "main").await.expect("Failed to init repo");
+        let temp_dir =
+            std::env::temp_dir().join(format!("agentmesh_repo_test_{}", uuid::Uuid::new_v4()));
+        let id = RepositoryIdentity::init(&temp_dir, "main")
+            .await
+            .expect("Failed to init repo");
         assert_eq!(id.base_branch, "main");
         assert!(id.is_clean().await.unwrap());
 
         // Modify a file
-        tokio::fs::write(temp_dir.join("test.txt"), "hello").await.unwrap();
-        assert!(!id.is_clean().await.unwrap(), "Repo must not be clean after writing untracked file");
+        tokio::fs::write(temp_dir.join("test.txt"), "hello")
+            .await
+            .unwrap();
+        assert!(
+            !id.is_clean().await.unwrap(),
+            "Repo must not be clean after writing untracked file"
+        );
 
         // Commit change
-        let sha = id.commit_all("feat: add test file").await.expect("Commit should succeed");
+        let sha = id
+            .commit_all("feat: add test file")
+            .await
+            .expect("Commit should succeed");
         assert_eq!(sha.len(), 40);
         assert!(id.is_clean().await.unwrap());
 

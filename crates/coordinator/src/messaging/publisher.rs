@@ -16,9 +16,7 @@ impl TaskPublisher {
         spec: &TaskSpec,
     ) -> Result<u64> {
         let subject = format!("coordinator.tasks.assign.{agent_id}");
-        let message = CoordinatorMessage::TaskAssignment {
-            spec: spec.clone(),
-        };
+        let message = CoordinatorMessage::TaskAssignment { spec: spec.clone() };
         let payload = serde_json::to_vec(&message)
             .context("Failed to serialize CoordinatorMessage::TaskAssignment")?;
 
@@ -96,8 +94,10 @@ mod tests {
     #[tokio::test]
     async fn test_publish_task_assignment() {
         let _ = dotenvy::dotenv();
-        let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
-        let nats_token = std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
+        let nats_url =
+            std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+        let nats_token =
+            std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
 
         let Ok((_client, jetstream)) = connect(&nats_url, Some(&nats_token)).await else {
             eprintln!("Skipping test: NATS not reachable");

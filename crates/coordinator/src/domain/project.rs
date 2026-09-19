@@ -7,20 +7,15 @@ use uuid::Uuid;
 /// `#[sqlx(rename_all = "snake_case")]` maps Rust PascalCase variants to the
 /// corresponding PostgreSQL `project_status` enum values:
 ///   Draft → "draft",  Planning → "planning",  etc.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, sqlx::Type)]
 #[sqlx(type_name = "project_status", rename_all = "snake_case")]
 pub enum ProjectStatus {
+    #[default]
     Draft,
     Planning,
     Active,
     Paused,
     Completed,
-}
-
-impl Default for ProjectStatus {
-    fn default() -> Self {
-        Self::Draft
-    }
 }
 
 /// A coordinated software project.

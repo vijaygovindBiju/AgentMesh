@@ -1,7 +1,7 @@
-use std::collections::BTreeSet;
-use std::path::Path;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
+use std::path::Path;
 use tokio::process::Command;
 
 /// Report of cross-agent Git merge conflicts detected between two branches.
@@ -128,8 +128,16 @@ impl ConflictDetector {
                 }
 
                 // 2. Directory prefix / containment
-                let a_dir = if a.ends_with('/') { a.clone() } else { format!("{a}/") };
-                let b_dir = if b.ends_with('/') { b.clone() } else { format!("{b}/") };
+                let a_dir = if a.ends_with('/') {
+                    a.clone()
+                } else {
+                    format!("{a}/")
+                };
+                let b_dir = if b.ends_with('/') {
+                    b.clone()
+                } else {
+                    format!("{b}/")
+                };
 
                 if b.starts_with(&a_dir) {
                     shared.insert(b.clone());
@@ -179,7 +187,9 @@ impl ConflictDetector {
                 if parts.len() >= 4 {
                     current_file = Some(parts[3].trim_start_matches("b/").to_string());
                 }
-            } else if (line.contains("+<<<<<<<") || line.contains("changed in both")) && current_file.is_some() {
+            } else if (line.contains("+<<<<<<<") || line.contains("changed in both"))
+                && current_file.is_some()
+            {
                 if let Some(ref f) = current_file {
                     files.insert(f.clone());
                 }
@@ -230,7 +240,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_cross_agent_conflicts() {
-        let temp_dir = std::env::temp_dir().join(format!("agentmesh_conflict_test_{}", uuid::Uuid::new_v4()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("agentmesh_conflict_test_{}", uuid::Uuid::new_v4()));
         let id = RepositoryIdentity::init(&temp_dir, "main").await.unwrap();
 
         // 1. Create file in main
@@ -245,7 +256,9 @@ mod tests {
             .output()
             .await
             .unwrap();
-        tokio::fs::write(&file_path, "branch A conflicting edit\n").await.unwrap();
+        tokio::fs::write(&file_path, "branch A conflicting edit\n")
+            .await
+            .unwrap();
         id.commit_all("feat: edit in branch A").await.unwrap();
 
         // 3. Create Branch B from main with conflicting change to line 1
@@ -261,7 +274,9 @@ mod tests {
             .output()
             .await
             .unwrap();
-        tokio::fs::write(&file_path, "branch B conflicting edit\n").await.unwrap();
+        tokio::fs::write(&file_path, "branch B conflicting edit\n")
+            .await
+            .unwrap();
         id.commit_all("feat: edit in branch B").await.unwrap();
 
         // Switch back to main
@@ -285,7 +300,10 @@ mod tests {
         let rep = report.unwrap();
         assert_eq!(rep.branch_a, "agentmesh/branch-a");
         assert_eq!(rep.branch_b, "agentmesh/branch-b");
-        assert!(rep.conflicting_files.iter().any(|f| f.contains("conflict.txt") || f == "<conflict detected>"));
+        assert!(rep
+            .conflicting_files
+            .iter()
+            .any(|f| f.contains("conflict.txt") || f == "<conflict detected>"));
 
         let _ = tokio::fs::remove_dir_all(&temp_dir).await;
     }

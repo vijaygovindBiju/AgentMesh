@@ -6,11 +6,12 @@ use serde_json::json;
 use sqlx::PgPool;
 use tracing::{error, info, warn};
 
-use agent_protocol::AgentMessage;
 use crate::db::repositories::{
     AgentEventRepository, AgentRepository, TaskDeliveryRepository, TaskRepository,
 };
-use crate::domain::{AckKind, AgentEventType, AgentStatus, DeliveryStatus, NewAgentEvent, TaskStatus};
+use crate::domain::{
+    AckKind, AgentEventType, AgentStatus, DeliveryStatus, NewAgentEvent, TaskStatus,
+};
 use crate::git::{AgentWorkspace, GitCoordinator};
 use crate::messaging::publisher::TaskPublisher;
 use crate::messaging::streams::{AGENT_EVENTS_STREAM, AGENT_EVENTS_SUBJECT};
@@ -18,9 +19,11 @@ use crate::observability::CoordinatorEventRepository;
 use crate::security::audit::{AuditEvent, AuditLogger};
 use crate::security::task_auth::TaskAuthorizer;
 use crate::security::SecurityError;
+use agent_protocol::AgentMessage;
 use uuid::Uuid;
 
-static DEDUPLICATOR: std::sync::OnceLock<crate::reliability::EventDeduplicator> = std::sync::OnceLock::new();
+static DEDUPLICATOR: std::sync::OnceLock<crate::reliability::EventDeduplicator> =
+    std::sync::OnceLock::new();
 
 pub struct EventSubscriber;
 
@@ -30,11 +33,28 @@ impl EventSubscriber {
     }
 
     /// Validates that an agent has authority to act on a task before processing its events.
-    async fn check_task_auth(pool: &PgPool, agent_id: Uuid, task_id: Uuid, action: &str) -> Result<bool> {
+    async fn check_task_auth(
+        pool: &PgPool,
+        agent_id: Uuid,
+        task_id: Uuid,
+        action: &str,
+    ) -> Result<bool> {
         match TaskAuthorizer::authorize_agent_for_task(pool, agent_id, task_id, action).await {
             Ok(()) => Ok(true),
-            Err(SecurityError::TaskImpersonation { actor_agent_id, task_id, assigned_to, action }) => {
-                let _ = AuditLogger::log_task_impersonation(pool, actor_agent_id, task_id, assigned_to, &action).await;
+            Err(SecurityError::TaskImpersonation {
+                actor_agent_id,
+                task_id,
+                assigned_to,
+                action,
+            }) => {
+                let _ = AuditLogger::log_task_impersonation(
+                    pool,
+                    actor_agent_id,
+                    task_id,
+                    assigned_to,
+                    &action,
+                )
+                .await;
                 warn!(%actor_agent_id, %task_id, ?assigned_to, %action, "Rejected unauthorized task event: task is assigned to another agent");
                 Ok(false)
             }
@@ -50,7 +70,8 @@ impl EventSubscriber {
                         "denied",
                         json!({ "action": action }),
                     ),
-                ).await;
+                )
+                .await;
                 warn!(%agent_id, %task_id, %action, "Rejected task event: agent key is revoked");
                 Ok(false)
             }
@@ -95,21 +116,43 @@ impl EventSubscriber {
         jetstream: Option<&JetStreamContext>,
     ) -> Result<()> {
         let dedup_key = match &msg {
-            AgentMessage::TaskStarted { agent_id, task_id, .. } => {
-                Some(crate::reliability::EventDeduplicator::compute_event_key(*agent_id, *task_id, "TaskStarted", None))
-            }
-            AgentMessage::ProgressUpdate { agent_id, task_id, percent, .. } => {
-                Some(crate::reliability::EventDeduplicator::compute_event_key(*agent_id, *task_id, "ProgressUpdate", Some(&percent.to_string())))
-            }
-            AgentMessage::Completed { agent_id, task_id, .. } => {
-                Some(crate::reliability::EventDeduplicator::compute_event_key(*agent_id, *task_id, "Completed", None))
-            }
-            AgentMessage::Failed { agent_id, task_id, .. } => {
-                Some(crate::reliability::EventDeduplicator::compute_event_key(*agent_id, *task_id, "Failed", None))
-            }
-            AgentMessage::Blocked { agent_id, task_id, .. } => {
-                Some(crate::reliability::EventDeduplicator::compute_event_key(*agent_id, *task_id, "Blocked", None))
-            }
+            AgentMessage::TaskStarted {
+                agent_id, task_id, ..
+            } => Some(crate::reliability::EventDeduplicator::compute_event_key(
+                *agent_id,
+                *task_id,
+                "TaskStarted",
+                None,
+            )),
+            AgentMessage::ProgressUpdate {
+                agent_id,
+                task_id,
+                percent,
+                ..
+            } => Some(crate::reliability::EventDeduplicator::compute_event_key(
+                *agent_id,
+                *task_id,
+                "ProgressUpdate",
+                Some(&percent.to_string()),
+            )),
+            AgentMessage::Completed {
+                agent_id, task_id, ..
+            } => Some(crate::reliability::EventDeduplicator::compute_event_key(
+                *agent_id,
+                *task_id,
+                "Completed",
+                None,
+            )),
+            AgentMessage::Failed {
+                agent_id, task_id, ..
+            } => Some(crate::reliability::EventDeduplicator::compute_event_key(
+                *agent_id, *task_id, "Failed", None,
+            )),
+            AgentMessage::Blocked {
+                agent_id, task_id, ..
+            } => Some(crate::reliability::EventDeduplicator::compute_event_key(
+                *agent_id, *task_id, "Blocked", None,
+            )),
             _ => None,
         };
 
@@ -167,7 +210,10 @@ impl EventSubscriber {
                     .await?;
 
                 // 5. Record coordinator observability event
-                let task = TaskRepository::find_by_id(pool, task_id).await.ok().flatten();
+                let task = TaskRepository::find_by_id(pool, task_id)
+                    .await
+                    .ok()
+                    .flatten();
                 let short_id = task.as_ref().map(|t| t.short_id.as_str()).unwrap_or("TASK");
                 let project_id = task.as_ref().map(|t| t.project_id);
 
@@ -207,7 +253,10 @@ impl EventSubscriber {
                 )
                 .await?;
 
-                let task = TaskRepository::find_by_id(pool, task_id).await.ok().flatten();
+                let task = TaskRepository::find_by_id(pool, task_id)
+                    .await
+                    .ok()
+                    .flatten();
                 let short_id = task.as_ref().map(|t| t.short_id.as_str()).unwrap_or("TASK");
                 let project_id = task.as_ref().map(|t| t.project_id);
 
@@ -255,7 +304,10 @@ impl EventSubscriber {
                 // 3. Update Agent status to Blocked
                 AgentRepository::update_status(pool, agent_id, AgentStatus::Blocked).await?;
 
-                let task = TaskRepository::find_by_id(pool, task_id).await.ok().flatten();
+                let task = TaskRepository::find_by_id(pool, task_id)
+                    .await
+                    .ok()
+                    .flatten();
                 let short_id = task.as_ref().map(|t| t.short_id.as_str()).unwrap_or("TASK");
                 let project_id = task.as_ref().map(|t| t.project_id);
 
@@ -273,11 +325,7 @@ impl EventSubscriber {
                 // If agent is blocked on a dependency task, publish WaitForDependency over JetStream
                 if let (Some(blocker_id), Some(js)) = (blocking_task_id, jetstream) {
                     let _ = TaskPublisher::publish_wait_for_dependency(
-                        js,
-                        agent_id,
-                        task_id,
-                        blocker_id,
-                        &reason,
+                        js, agent_id, task_id, blocker_id, &reason,
                     )
                     .await;
                 }
@@ -315,15 +363,21 @@ impl EventSubscriber {
                 AgentRepository::set_current_task(pool, agent_id, None, AgentStatus::Idle).await?;
                 let _ = AgentRepository::record_task_completion(pool, agent_id).await?;
 
-                let task = TaskRepository::find_by_id(pool, task_id).await.ok().flatten();
+                let task = TaskRepository::find_by_id(pool, task_id)
+                    .await
+                    .ok()
+                    .flatten();
                 let short_id = task.as_ref().map(|t| t.short_id.as_str()).unwrap_or("TASK");
                 let project_id = task.as_ref().map(|t| t.project_id);
 
                 // Finalize Git workspace if worktree exists
                 if let Ok(Some(gc)) = TaskRepository::find_git_context(pool, task_id).await {
-                    if let (Some(ref repo_path_str), Some(ref task_branch)) = (gc.repo_path, gc.task_branch) {
+                    if let (Some(ref repo_path_str), Some(ref task_branch)) =
+                        (gc.repo_path, gc.task_branch)
+                    {
                         let repo_root = std::path::Path::new(&repo_path_str);
-                        let worktree_path = AgentWorkspace::expected_worktree_path(repo_root, short_id);
+                        let worktree_path =
+                            AgentWorkspace::expected_worktree_path(repo_root, short_id);
                         if worktree_path.exists() {
                             let ws = AgentWorkspace {
                                 task_id,
@@ -334,9 +388,15 @@ impl EventSubscriber {
                                 base_commit_sha: gc.base_commit_sha.unwrap_or_default(),
                             };
                             let base_branch = gc.base_branch.as_deref().unwrap_or("main");
-                            let title = task.as_ref().map(|t| t.title.as_str()).unwrap_or("completed task");
+                            let title = task
+                                .as_ref()
+                                .map(|t| t.title.as_str())
+                                .unwrap_or("completed task");
                             let git_coord = GitCoordinator::new(pool.clone());
-                            match git_coord.finalize_task(&ws, short_id, title, base_branch).await {
+                            match git_coord
+                                .finalize_task(&ws, short_id, title, base_branch)
+                                .await
+                            {
                                 Ok(git_res) => {
                                     info!(
                                         task_id = %task_id,
@@ -412,14 +472,19 @@ impl EventSubscriber {
 
                         if unsatisfied_deps == 0 {
                             info!(task_id = %bt.id, short_id = %bt.short_id, "Prerequisites complete; unblocking task to Approved");
-                            let _ = TaskRepository::update_status(pool, bt.id, TaskStatus::Approved).await;
+                            let _ =
+                                TaskRepository::update_status(pool, bt.id, TaskStatus::Approved)
+                                    .await;
                             let _ = CoordinatorEventRepository::record(
                                 pool,
                                 "task.unblocked",
                                 Some(proj_id),
                                 Some(bt.id),
                                 bt.assigned_agent_id,
-                                format!("Task {} unblocked after completion of prerequisite task {}", bt.short_id, short_id),
+                                format!(
+                                    "Task {} unblocked after completion of prerequisite task {}",
+                                    bt.short_id, short_id
+                                ),
                                 json!({ "unblocked_by": task_id }),
                             )
                             .await;
@@ -460,7 +525,10 @@ impl EventSubscriber {
                 AgentRepository::set_current_task(pool, agent_id, None, AgentStatus::Error).await?;
                 let _ = AgentRepository::record_task_failure(pool, agent_id, &error).await?;
 
-                let task = TaskRepository::find_by_id(pool, task_id).await.ok().flatten();
+                let task = TaskRepository::find_by_id(pool, task_id)
+                    .await
+                    .ok()
+                    .flatten();
                 let short_id = task.as_ref().map(|t| t.short_id.as_str()).unwrap_or("TASK");
                 let project_id = task.as_ref().map(|t| t.project_id);
 
@@ -487,18 +555,29 @@ impl EventSubscriber {
                     .as_ref()
                     .and_then(|h| h.heartbeat_latency_ms.map(|l| l as i64))
                     .or_else(|| {
-                        let elapsed = Utc::now().signed_duration_since(timestamp).num_milliseconds();
-                        if elapsed >= 0 { Some(elapsed) } else { None }
+                        let elapsed = Utc::now()
+                            .signed_duration_since(timestamp)
+                            .num_milliseconds();
+                        if elapsed >= 0 {
+                            Some(elapsed)
+                        } else {
+                            None
+                        }
                     });
 
                 AgentRepository::record_heartbeat_with_latency(pool, agent_id, latency_ms).await?;
-                let _ = AgentRepository::update_status(pool, agent_id, match status {
-                    agent_protocol::AgentStatus::Offline => AgentStatus::Offline,
-                    agent_protocol::AgentStatus::Idle => AgentStatus::Idle,
-                    agent_protocol::AgentStatus::Busy => AgentStatus::Busy,
-                    agent_protocol::AgentStatus::Blocked => AgentStatus::Blocked,
-                    agent_protocol::AgentStatus::Error => AgentStatus::Error,
-                }).await?;
+                let _ = AgentRepository::update_status(
+                    pool,
+                    agent_id,
+                    match status {
+                        agent_protocol::AgentStatus::Offline => AgentStatus::Offline,
+                        agent_protocol::AgentStatus::Idle => AgentStatus::Idle,
+                        agent_protocol::AgentStatus::Busy => AgentStatus::Busy,
+                        agent_protocol::AgentStatus::Blocked => AgentStatus::Blocked,
+                        agent_protocol::AgentStatus::Error => AgentStatus::Error,
+                    },
+                )
+                .await?;
 
                 if let Some(h) = health {
                     let _ = AgentRepository::update_health(
@@ -513,9 +592,14 @@ impl EventSubscriber {
                 }
             }
 
-            AgentMessage::UpdateCapabilities { agent_id, profile, timestamp: _ } => {
+            AgentMessage::UpdateCapabilities {
+                agent_id,
+                profile,
+                timestamp: _,
+            } => {
                 info!(%agent_id, "Agent reported updated capability profile");
-                let _ = AgentRepository::update_capability_profile(pool, agent_id, &profile).await?;
+                let _ =
+                    AgentRepository::update_capability_profile(pool, agent_id, &profile).await?;
             }
 
             AgentMessage::Register { .. } => {
@@ -534,14 +618,19 @@ impl EventSubscriber {
         update_tx: Option<&tokio::sync::mpsc::UnboundedSender<AgentMessage>>,
     ) -> Result<Option<AgentMessage>> {
         use futures::StreamExt;
-        let mut messages = consumer.messages().await.context("Failed to get message stream")?;
+        let mut messages = consumer
+            .messages()
+            .await
+            .context("Failed to get message stream")?;
 
         if let Some(msg_result) = messages.next().await {
             let msg = msg_result.context("Failed to receive message from stream")?;
             let agent_msg: AgentMessage = serde_json::from_slice(&msg.payload)
                 .context("Failed to deserialize AgentMessage payload")?;
 
-            msg.ack().await.map_err(|e| anyhow::anyhow!("Failed to ack message: {e}"))?;
+            msg.ack()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to ack message: {e}"))?;
 
             Self::handle_agent_message(pool, agent_msg.clone()).await?;
 
@@ -556,21 +645,21 @@ impl EventSubscriber {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
-    use uuid::Uuid;
     use crate::db::pool::{create_pool, run_migrations};
     use crate::db::repositories::projects::ProjectRepository;
     use crate::db::repositories::proposals::ProposalRepository;
     use crate::domain::{AdapterType, NewAgent, NewProject, NewProposal, NewTask};
+    use chrono::Utc;
+    use uuid::Uuid;
 
     async fn setup_pool() -> Option<PgPool> {
         let _ = dotenvy::dotenv();
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+        let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+        });
         let pool = create_pool(&url).await.ok()?;
         run_migrations(&pool).await.ok()?;
         Some(pool)
@@ -636,10 +725,18 @@ mod tests {
         .unwrap();
 
         // Put task into Assigned
-        TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview).await.unwrap();
-        TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-        TaskRepository::assign_agent(&pool, task.id, Some(agent.id)).await.unwrap();
-        TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned).await.unwrap();
+        TaskRepository::update_status(&pool, task.id, TaskStatus::HumanReview)
+            .await
+            .unwrap();
+        TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
+            .await
+            .unwrap();
+        TaskRepository::assign_agent(&pool, task.id, Some(agent.id))
+            .await
+            .unwrap();
+        TaskRepository::update_status(&pool, task.id, TaskStatus::Assigned)
+            .await
+            .unwrap();
 
         // 1. Send TaskStarted
         EventSubscriber::handle_agent_message(
@@ -654,10 +751,16 @@ mod tests {
         .await
         .unwrap();
 
-        let t = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+        let t = TaskRepository::find_by_id(&pool, task.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(t.status, TaskStatus::Executing);
 
-        let a = AgentRepository::find_by_id(&pool, agent.id).await.unwrap().unwrap();
+        let a = AgentRepository::find_by_id(&pool, agent.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(a.status, AgentStatus::Busy);
         assert_eq!(a.current_task_id, Some(task.id));
 
@@ -675,11 +778,16 @@ mod tests {
         .await
         .unwrap();
 
-        let t = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+        let t = TaskRepository::find_by_id(&pool, task.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(t.status, TaskStatus::Blocked);
 
         // Resume to Executing
-        TaskRepository::update_status(&pool, task.id, TaskStatus::Executing).await.unwrap();
+        TaskRepository::update_status(&pool, task.id, TaskStatus::Executing)
+            .await
+            .unwrap();
 
         // 3. Send Completed
         EventSubscriber::handle_agent_message(
@@ -694,10 +802,16 @@ mod tests {
         .await
         .unwrap();
 
-        let t = TaskRepository::find_by_id(&pool, task.id).await.unwrap().unwrap();
+        let t = TaskRepository::find_by_id(&pool, task.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(t.status, TaskStatus::Completed);
 
-        let a = AgentRepository::find_by_id(&pool, agent.id).await.unwrap().unwrap();
+        let a = AgentRepository::find_by_id(&pool, agent.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(a.status, AgentStatus::Idle);
         assert!(a.current_task_id.is_none());
 

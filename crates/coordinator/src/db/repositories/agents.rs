@@ -13,7 +13,10 @@ impl AgentRepository {
         let capabilities_json = json!(new_agent.capabilities);
         let profile_json = new_agent.profile.as_ref().map(|p| json!(p));
         let max_concurrency = new_agent.max_concurrency.unwrap_or(1);
-        let role = new_agent.role.clone().unwrap_or_else(|| "worker".to_string());
+        let role = new_agent
+            .role
+            .clone()
+            .unwrap_or_else(|| "worker".to_string());
         let permissions_json = json!(new_agent.permissions.clone().unwrap_or_default());
 
         let agent = sqlx::query_as!(
@@ -71,15 +74,14 @@ impl AgentRepository {
     }
 
     /// Registers a new agent with a pre-specified ID. Status defaults to `offline`.
-    pub async fn create_with_id(
-        pool: &PgPool,
-        id: Uuid,
-        new_agent: &NewAgent,
-    ) -> Result<Agent> {
+    pub async fn create_with_id(pool: &PgPool, id: Uuid, new_agent: &NewAgent) -> Result<Agent> {
         let capabilities_json = json!(new_agent.capabilities);
         let profile_json = new_agent.profile.as_ref().map(|p| json!(p));
         let max_concurrency = new_agent.max_concurrency.unwrap_or(1);
-        let role = new_agent.role.clone().unwrap_or_else(|| "worker".to_string());
+        let role = new_agent
+            .role
+            .clone()
+            .unwrap_or_else(|| "worker".to_string());
         let permissions_json = json!(new_agent.permissions.clone().unwrap_or_default());
 
         let agent = sqlx::query_as!(
@@ -636,11 +638,7 @@ impl AgentRepository {
     }
 
     /// Sets agent draining mode (when true, completes existing tasks without accepting new ones).
-    pub async fn set_draining(
-        pool: &PgPool,
-        id: Uuid,
-        draining: bool,
-    ) -> Result<Option<Agent>> {
+    pub async fn set_draining(pool: &PgPool, id: Uuid, draining: bool) -> Result<Option<Agent>> {
         let agent = sqlx::query_as!(
             Agent,
             r#"
@@ -954,14 +952,11 @@ impl AgentRepository {
 
     /// Deletes an agent by ID. Returns true if a row was deleted.
     pub async fn delete(pool: &PgPool, id: Uuid) -> Result<bool> {
-        let rows = sqlx::query!(
-            r#"DELETE FROM agents WHERE id = $1"#,
-            id
-        )
-        .execute(pool)
-        .await
-        .context("Failed to delete agent")?
-        .rows_affected();
+        let rows = sqlx::query!(r#"DELETE FROM agents WHERE id = $1"#, id)
+            .execute(pool)
+            .await
+            .context("Failed to delete agent")?
+            .rows_affected();
 
         Ok(rows > 0)
     }
@@ -974,8 +969,9 @@ mod tests {
 
     async fn setup_pool() -> Option<PgPool> {
         let _ = dotenvy::dotenv();
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+        let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+        });
         let pool = create_pool(&url).await.ok()?;
         run_migrations(&pool).await.ok()?;
         Some(pool)
@@ -1012,7 +1008,10 @@ mod tests {
         assert!(agent.current_task_id.is_none());
         assert_eq!(agent.health_status, HealthStatus::Healthy);
         assert!(!agent.is_draining);
-        assert!(!agent.is_available(), "Offline agent should not be available");
+        assert!(
+            !agent.is_available(),
+            "Offline agent should not be available"
+        );
 
         // 2. Find by id
         let found = AgentRepository::find_by_id(&pool, agent.id)
@@ -1027,7 +1026,10 @@ mod tests {
             .expect("Should update status")
             .expect("Agent returned");
         assert_eq!(idled.status, AgentStatus::Idle);
-        assert!(idled.is_available(), "Idle agent with no task should be available");
+        assert!(
+            idled.is_available(),
+            "Idle agent with no task should be available"
+        );
 
         // 4. List idle agents
         let idle_agents = AgentRepository::list_by_status(&pool, AgentStatus::Idle)
@@ -1041,26 +1043,43 @@ mod tests {
             .expect("Should list available agents");
         assert!(available.iter().any(|a| a.id == agent.id));
 
-        AgentRepository::set_draining(&pool, agent.id, true).await.unwrap();
+        AgentRepository::set_draining(&pool, agent.id, true)
+            .await
+            .unwrap();
         let avail_after_drain = AgentRepository::list_available(&pool).await.unwrap();
         assert!(!avail_after_drain.iter().any(|a| a.id == agent.id));
-        AgentRepository::set_draining(&pool, agent.id, false).await.unwrap();
+        AgentRepository::set_draining(&pool, agent.id, false)
+            .await
+            .unwrap();
 
         // 6. Test task completion and failure health tracking
-        AgentRepository::record_task_completion(&pool, agent.id).await.unwrap();
-        let agent_after_comp = AgentRepository::find_by_id(&pool, agent.id).await.unwrap().unwrap();
+        AgentRepository::record_task_completion(&pool, agent.id)
+            .await
+            .unwrap();
+        let agent_after_comp = AgentRepository::find_by_id(&pool, agent.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(agent_after_comp.tasks_completed_count, 1);
 
-        AgentRepository::record_task_failure(&pool, agent.id, "Syntax error").await.unwrap();
-        AgentRepository::record_task_failure(&pool, agent.id, "Type error").await.unwrap();
-        let agent_after_fail = AgentRepository::find_by_id(&pool, agent.id).await.unwrap().unwrap();
+        AgentRepository::record_task_failure(&pool, agent.id, "Syntax error")
+            .await
+            .unwrap();
+        AgentRepository::record_task_failure(&pool, agent.id, "Type error")
+            .await
+            .unwrap();
+        let agent_after_fail = AgentRepository::find_by_id(&pool, agent.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(agent_after_fail.consecutive_failures, 2);
         assert_eq!(agent_after_fail.health_status, HealthStatus::Degraded);
 
         // 7. Heartbeat with latency
-        let heartbeat_ok = AgentRepository::record_heartbeat_with_latency(&pool, agent.id, Some(45))
-            .await
-            .expect("Should record heartbeat");
+        let heartbeat_ok =
+            AgentRepository::record_heartbeat_with_latency(&pool, agent.id, Some(45))
+                .await
+                .expect("Should record heartbeat");
         assert!(heartbeat_ok);
 
         // 8. Delete

@@ -1,6 +1,6 @@
-use std::time::Duration;
 use anyhow::Result;
 use futures::StreamExt;
+use std::time::Duration;
 use tracing::{error, info};
 use uuid::Uuid;
 
@@ -11,10 +11,13 @@ use agent_protocol::CoordinatorMessage;
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
-    let nats_token = std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let nats_token =
+        std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
     let owner = std::env::var("MOCK_AGENT_OWNER").unwrap_or_else(|_| "MockDev".to_string());
-    let api_key = std::env::var("MOCK_AGENT_API_KEY").unwrap_or_else(|_| "agentmesh_mock_key".to_string());
+    let api_key =
+        std::env::var("MOCK_AGENT_API_KEY").unwrap_or_else(|_| "agentmesh_mock_key".to_string());
     let delay_ms: u64 = std::env::var("MOCK_TASK_DELAY_MS")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -72,21 +75,24 @@ async fn main() -> Result<()> {
                 match serde_json::from_slice::<CoordinatorMessage>(&msg.payload) {
                     Ok(CoordinatorMessage::TaskAssignment { spec }) => {
                         info!(task_id = %spec.task_id, short_id = %spec.short_id, "Received task assignment");
-                        if let Err(e) = MockAgentRunner::execute_task(
-                            &client,
-                            &agent,
-                            &spec,
-                            &event_subject,
-                        )
-                        .await
+                        if let Err(e) =
+                            MockAgentRunner::execute_task(&client, &agent, &spec, &event_subject)
+                                .await
                         {
                             error!(error = %e, "Task execution failed");
                         }
                     }
-                    Ok(CoordinatorMessage::TaskCancelled { task_id, reason, .. }) => {
+                    Ok(CoordinatorMessage::TaskCancelled {
+                        task_id, reason, ..
+                    }) => {
                         tracing::warn!(%task_id, %reason, "Received TaskCancelled instruction from coordinator");
                     }
-                    Ok(CoordinatorMessage::WaitForDependency { task_id, blocking_task_id, message, .. }) => {
+                    Ok(CoordinatorMessage::WaitForDependency {
+                        task_id,
+                        blocking_task_id,
+                        message,
+                        ..
+                    }) => {
                         tracing::info!(%task_id, %blocking_task_id, %message, "Received WaitForDependency notice from coordinator; pausing for blocker");
                     }
                     Ok(other) => {

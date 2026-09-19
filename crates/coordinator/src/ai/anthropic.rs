@@ -108,8 +108,9 @@ impl LlmProvider for AnthropicProvider {
             .context("Anthropic response content was empty")?;
 
         let cleaned = Self::clean_json_response(first_text);
-        let plan: PlanningResponse = serde_json::from_str(cleaned)
-            .with_context(|| format!("Failed to parse PlanningResponse from LLM text: {cleaned}"))?;
+        let plan: PlanningResponse = serde_json::from_str(cleaned).with_context(|| {
+            format!("Failed to parse PlanningResponse from LLM text: {cleaned}")
+        })?;
 
         Ok(plan)
     }

@@ -32,10 +32,7 @@ pub enum SecurityError {
     },
 
     #[error("Permission boundary violation: agent {agent_id} attempted to access denied paths: {paths:?}")]
-    PermissionBoundaryViolation {
-        agent_id: Uuid,
-        paths: Vec<String>,
-    },
+    PermissionBoundaryViolation { agent_id: Uuid, paths: Vec<String> },
 
     #[error("Task impersonation detected: agent {actor_agent_id} attempted action '{action}' on task {task_id}, but task is assigned to {assigned_to:?}")]
     TaskImpersonation {

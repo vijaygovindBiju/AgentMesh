@@ -40,7 +40,10 @@ impl ApiKeyManager {
 
         // 1. Check if stored is a matching SHA-256 hash
         let hash_matches = if stored_hash_or_key.len() == 64 {
-            computed_hash.as_bytes().ct_eq(stored_hash_or_key.as_bytes()).into()
+            computed_hash
+                .as_bytes()
+                .ct_eq(stored_hash_or_key.as_bytes())
+                .into()
         } else {
             false
         };
@@ -50,7 +53,10 @@ impl ApiKeyManager {
         }
 
         // 2. Fallback for backwards compatibility with plain test keys (e.g. "cap_key_123")
-        presented_key.as_bytes().ct_eq(stored_hash_or_key.as_bytes()).into()
+        presented_key
+            .as_bytes()
+            .ct_eq(stored_hash_or_key.as_bytes())
+            .into()
     }
 
     /// Generates an ephemeral session token for an authenticated agent.
@@ -84,7 +90,10 @@ mod tests {
         assert!(ApiKeyManager::verify_key(&raw_key, &hash));
 
         // Verification with invalid key
-        assert!(!ApiKeyManager::verify_key("am_ak_invalid_random_string", &hash));
+        assert!(!ApiKeyManager::verify_key(
+            "am_ak_invalid_random_string",
+            &hash
+        ));
     }
 
     #[test]

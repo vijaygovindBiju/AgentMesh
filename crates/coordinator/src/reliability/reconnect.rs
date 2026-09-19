@@ -1,9 +1,9 @@
 //! Reconnect handling and retry utilities for resilient operations.
 
-use std::future::Future;
-use std::time::Duration;
 use anyhow::{Context, Result};
 use sqlx::PgPool;
+use std::future::Future;
+use std::time::Duration;
 use tracing::{error, warn};
 
 /// Executes an asynchronous operation with exponential backoff retry.
@@ -57,10 +57,18 @@ impl ResilientConnection {
                 match event {
                     async_nats::Event::Connected => tracing::info!("NATS client connected"),
                     async_nats::Event::Disconnected => tracing::warn!("NATS client disconnected"),
-                    async_nats::Event::SlowConsumer(id) => tracing::warn!(consumer_id = id, "NATS slow consumer detected"),
-                    async_nats::Event::ServerError(err) => tracing::error!(error = %err, "NATS server error"),
-                    async_nats::Event::ClientError(err) => tracing::error!(error = %err, "NATS client error"),
-                    async_nats::Event::LameDuckMode => tracing::warn!("NATS server entered lame duck mode"),
+                    async_nats::Event::SlowConsumer(id) => {
+                        tracing::warn!(consumer_id = id, "NATS slow consumer detected")
+                    }
+                    async_nats::Event::ServerError(err) => {
+                        tracing::error!(error = %err, "NATS server error")
+                    }
+                    async_nats::Event::ClientError(err) => {
+                        tracing::error!(error = %err, "NATS client error")
+                    }
+                    async_nats::Event::LameDuckMode => {
+                        tracing::warn!("NATS server entered lame duck mode")
+                    }
                 }
             })
     }

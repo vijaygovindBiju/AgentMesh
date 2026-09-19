@@ -19,7 +19,9 @@ impl DiagnosticsScreen {
             .border_style(Style::default().fg(Color::Magenta))
             .title(Span::styled(
                 " System Observability & Diagnostics ",
-                Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         let inner_area = block.inner(area);
@@ -67,24 +69,99 @@ impl DiagnosticsScreen {
 
         let kpi_text = vec![
             Line::from(vec![
-                Span::styled(" [Tasks] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Tasks] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(format!("Total: {} | ", tasks_total)),
-                Span::styled(format!("Running: {} | ", tasks_executing), Style::default().fg(Color::Yellow)),
-                Span::styled(format!("Completed: {} | ", tasks_done), Style::default().fg(Color::Green)),
-                Span::styled(format!("Failed: {}   ", tasks_failed), if tasks_failed > 0 { Style::default().fg(Color::Red).add_modifier(Modifier::BOLD) } else { Style::default().fg(Color::DarkGray) }),
-                Span::styled(" [Deliveries] ", Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
-                Span::styled(format!("Success Rate: {:.1}%   ", delivery_rate), if delivery_rate >= 95.0 { Style::default().fg(Color::Green) } else { Style::default().fg(Color::Yellow) }),
-                Span::styled(" [Security & Conflicts] ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
-                Span::styled(format!("Overlaps: {} | Alerts: {}", conflicts, audit_alerts), if audit_alerts > 0 { Style::default().fg(Color::Red) } else { Style::default().fg(Color::White) }),
+                Span::styled(
+                    format!("Running: {} | ", tasks_executing),
+                    Style::default().fg(Color::Yellow),
+                ),
+                Span::styled(
+                    format!("Completed: {} | ", tasks_done),
+                    Style::default().fg(Color::Green),
+                ),
+                Span::styled(
+                    format!("Failed: {}   ", tasks_failed),
+                    if tasks_failed > 0 {
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::DarkGray)
+                    },
+                ),
+                Span::styled(
+                    " [Deliveries] ",
+                    Style::default()
+                        .fg(Color::Blue)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("Success Rate: {:.1}%   ", delivery_rate),
+                    if delivery_rate >= 95.0 {
+                        Style::default().fg(Color::Green)
+                    } else {
+                        Style::default().fg(Color::Yellow)
+                    },
+                ),
+                Span::styled(
+                    " [Security & Conflicts] ",
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("Overlaps: {} | Alerts: {}", conflicts, audit_alerts),
+                    if audit_alerts > 0 {
+                        Style::default().fg(Color::Red)
+                    } else {
+                        Style::default().fg(Color::White)
+                    },
+                ),
             ]),
             Line::from(vec![
-                Span::styled(" [Fleet] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Fleet] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(format!("Agents: {} | ", metrics.total_agents)),
-                Span::styled(format!("Healthy: {} | ", metrics.agents_healthy), Style::default().fg(Color::Green)),
-                Span::styled(format!("Degraded: {} | ", metrics.agents_degraded), Style::default().fg(Color::Yellow)),
-                Span::styled(format!("Unhealthy: {}   ", metrics.agents_unhealthy), if metrics.agents_unhealthy > 0 { Style::default().fg(Color::Red) } else { Style::default().fg(Color::DarkGray) }),
+                Span::styled(
+                    format!("Healthy: {} | ", metrics.agents_healthy),
+                    Style::default().fg(Color::Green),
+                ),
+                Span::styled(
+                    format!("Degraded: {} | ", metrics.agents_degraded),
+                    Style::default().fg(Color::Yellow),
+                ),
+                Span::styled(
+                    format!("Unhealthy: {}   ", metrics.agents_unhealthy),
+                    if metrics.agents_unhealthy > 0 {
+                        Style::default().fg(Color::Red)
+                    } else {
+                        Style::default().fg(Color::DarkGray)
+                    },
+                ),
                 Span::styled(" [Status] ", Style::default().fg(Color::DarkGray)),
-                Span::styled(if tasks_failed == 0 && audit_alerts == 0 { "MESH OPERATIONAL (NOMINAL)" } else { "ATTENTION REQUIRED" }, if tasks_failed == 0 && audit_alerts == 0 { Style::default().fg(Color::Green).add_modifier(Modifier::BOLD) } else { Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD) }),
+                Span::styled(
+                    if tasks_failed == 0 && audit_alerts == 0 {
+                        "MESH OPERATIONAL (NOMINAL)"
+                    } else {
+                        "ATTENTION REQUIRED"
+                    },
+                    if tasks_failed == 0 && audit_alerts == 0 {
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD)
+                    },
+                ),
             ]),
         ];
 
@@ -93,7 +170,9 @@ impl DiagnosticsScreen {
             .border_style(Style::default().fg(Color::DarkGray))
             .title(Span::styled(
                 " Operational KPI Metrics ",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         let p = Paragraph::new(kpi_text).block(block);
@@ -107,7 +186,9 @@ impl DiagnosticsScreen {
             .border_style(Style::default().fg(Color::DarkGray))
             .title(Span::styled(
                 " Fleet Health & Diagnostics ",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         let rows: Vec<Row> = if state.agents.is_empty() {
@@ -139,7 +220,8 @@ impl DiagnosticsScreen {
                         HealthStatus::Offline => ("OFFLINE", Color::DarkGray),
                     };
 
-                    let tasks_info = format!("{} / {}", a.tasks_completed_count, a.tasks_failed_count);
+                    let tasks_info =
+                        format!("{} / {}", a.tasks_completed_count, a.tasks_failed_count);
                     let err_rate = if a.tasks_completed_count + a.tasks_failed_count > 0 {
                         let total = (a.tasks_completed_count + a.tasks_failed_count) as f64;
                         format!("{:.1}%", (a.tasks_failed_count as f64 / total) * 100.0)
@@ -170,8 +252,11 @@ impl DiagnosticsScreen {
             ],
         )
         .header(
-            Row::new(vec!["Agent", "State", "Health", "Done/Fail", "Err Rate"])
-                .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Row::new(vec!["Agent", "State", "Health", "Done/Fail", "Err Rate"]).style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         )
         .block(block);
 
@@ -185,23 +270,47 @@ impl DiagnosticsScreen {
             .border_style(Style::default().fg(Color::DarkGray))
             .title(Span::styled(
                 " Task Timeline Drill-Down ",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         if let Some(timeline) = &state.selected_timeline {
             let mut lines = vec![
                 Line::from(vec![
-                    Span::styled(format!("[{}] ", timeline.short_id), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                    Span::styled(&timeline.title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format!("[{}] ", timeline.short_id),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        &timeline.title,
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw(" | Status: "),
-                    Span::styled(format!("{:?}", timeline.status), Style::default().fg(Color::Yellow)),
+                    Span::styled(
+                        format!("{:?}", timeline.status),
+                        Style::default().fg(Color::Yellow),
+                    ),
                 ]),
                 Line::from(vec![
                     Span::styled("Agent: ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(timeline.assigned_agent_name.as_deref().unwrap_or("Unassigned"), Style::default().fg(Color::Cyan)),
+                    Span::styled(
+                        timeline
+                            .assigned_agent_name
+                            .as_deref()
+                            .unwrap_or("Unassigned"),
+                        Style::default().fg(Color::Cyan),
+                    ),
                     Span::styled(" | Duration: ", Style::default().fg(Color::DarkGray)),
                     Span::styled(
-                        timeline.total_duration_ms.map(|d| format!("{}ms", d)).unwrap_or_else(|| "in-progress".to_string()),
+                        timeline
+                            .total_duration_ms
+                            .map(|d| format!("{}ms", d))
+                            .unwrap_or_else(|| "in-progress".to_string()),
                         Style::default().fg(Color::Green),
                     ),
                 ]),
@@ -209,14 +318,29 @@ impl DiagnosticsScreen {
             ];
 
             if timeline.events.is_empty() {
-                lines.push(Line::from(Span::styled("No timeline milestones recorded yet.", Style::default().fg(Color::DarkGray))));
+                lines.push(Line::from(Span::styled(
+                    "No timeline milestones recorded yet.",
+                    Style::default().fg(Color::DarkGray),
+                )));
             } else {
                 for item in &timeline.events {
-                    let elapsed_str = item.elapsed_since_start_ms.map(|ms| format!("+{}ms", ms)).unwrap_or_else(|| "0ms".to_string());
+                    let elapsed_str = item
+                        .elapsed_since_start_ms
+                        .map(|ms| format!("+{}ms", ms))
+                        .unwrap_or_else(|| "0ms".to_string());
                     lines.push(Line::from(vec![
-                        Span::styled(format!("[{:>7}] ", elapsed_str), Style::default().fg(Color::DarkGray)),
-                        Span::styled(format!("{:<14} ", item.stage), Style::default().fg(Color::Cyan)),
-                        Span::styled(format!("{:<16} ", item.actor), Style::default().fg(Color::Yellow)),
+                        Span::styled(
+                            format!("[{:>7}] ", elapsed_str),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled(
+                            format!("{:<14} ", item.stage),
+                            Style::default().fg(Color::Cyan),
+                        ),
+                        Span::styled(
+                            format!("{:<16} ", item.actor),
+                            Style::default().fg(Color::Yellow),
+                        ),
                         Span::raw(&item.message),
                     ]));
                 }
@@ -227,17 +351,33 @@ impl DiagnosticsScreen {
         } else if let Some(selected_task) = state.review_tasks.get(state.selected_task_index) {
             let lines = vec![
                 Line::from(vec![
-                    Span::styled(format!("[{}] ", selected_task.task.short_id), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                    Span::styled(&selected_task.task.title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format!("[{}] ", selected_task.task.short_id),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        &selected_task.task.title,
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                 ]),
                 Line::from(vec![
                     Span::styled("Status: ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(format!("{:?}", selected_task.task.status), Style::default().fg(Color::Yellow)),
+                    Span::styled(
+                        format!("{:?}", selected_task.task.status),
+                        Style::default().fg(Color::Yellow),
+                    ),
                     Span::styled(" | Description: ", Style::default().fg(Color::DarkGray)),
                     Span::raw(&selected_task.task.description),
                 ]),
                 Line::from(""),
-                Line::from(Span::styled("Press [Enter] or navigate to view full chronological lifecycle timeline.", Style::default().fg(Color::DarkGray))),
+                Line::from(Span::styled(
+                    "Press [Enter] or navigate to view full chronological lifecycle timeline.",
+                    Style::default().fg(Color::DarkGray),
+                )),
             ];
             let p = Paragraph::new(lines).block(block);
             frame.render_widget(p, area);
@@ -254,7 +394,9 @@ impl DiagnosticsScreen {
             .border_style(Style::default().fg(Color::DarkGray))
             .title(Span::styled(
                 " Coordinator Events Stream (Observability Log) ",
-                Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
             ));
 
         let rows: Vec<Row> = if state.recent_events.is_empty() {
@@ -262,7 +404,8 @@ impl DiagnosticsScreen {
                 "-".to_string(),
                 "INFO".to_string(),
                 "system.ready".to_string(),
-                "Observability event pipeline initialized. Waiting for coordinator events...".to_string(),
+                "Observability event pipeline initialized. Waiting for coordinator events..."
+                    .to_string(),
                 "-".to_string(),
             ])]
         } else {
@@ -272,19 +415,31 @@ impl DiagnosticsScreen {
                 .take(30)
                 .map(|ev| {
                     let ts_str = ev.timestamp.format("%H:%M:%S%.3f").to_string();
-                    let (level_str, level_col) = if ev.event_type.contains("failed") || ev.event_type.contains("error") || ev.event_type.contains("alert") {
+                    let (level_str, level_col) = if ev.event_type.contains("failed")
+                        || ev.event_type.contains("error")
+                        || ev.event_type.contains("alert")
+                    {
                         ("ERROR", Color::Red)
-                    } else if ev.event_type.contains("warn") || ev.event_type.contains("blocked") || ev.event_type.contains("degraded") {
+                    } else if ev.event_type.contains("warn")
+                        || ev.event_type.contains("blocked")
+                        || ev.event_type.contains("degraded")
+                    {
                         ("WARN", Color::Yellow)
-                    } else if ev.event_type.contains("completed") || ev.event_type.contains("registered") {
+                    } else if ev.event_type.contains("completed")
+                        || ev.event_type.contains("registered")
+                    {
                         ("OK", Color::Green)
                     } else {
                         ("INFO", Color::Cyan)
                     };
 
-                    let entity_id = ev.task_id
+                    let entity_id = ev
+                        .task_id
                         .map(|id| format!("task:{}", &id.to_string()[..8]))
-                        .or_else(|| ev.agent_id.map(|id| format!("agent:{}", &id.to_string()[..8])))
+                        .or_else(|| {
+                            ev.agent_id
+                                .map(|id| format!("agent:{}", &id.to_string()[..8]))
+                        })
                         .unwrap_or_else(|| "-".to_string());
 
                     Row::new(vec![
@@ -310,8 +465,11 @@ impl DiagnosticsScreen {
             ],
         )
         .header(
-            Row::new(vec!["Time", "Level", "Event Type", "Message", "Entity"])
-                .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Row::new(vec!["Time", "Level", "Event Type", "Message", "Entity"]).style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         )
         .block(block);
 

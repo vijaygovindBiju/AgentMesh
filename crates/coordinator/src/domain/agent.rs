@@ -132,7 +132,9 @@ impl Agent {
     /// Merges profile tags if a structured capability profile is present.
     pub fn capabilities_list(&self) -> Vec<String> {
         if let Some(ref profile_val) = self.capability_profile {
-            if let Ok(profile) = serde_json::from_value::<agent_protocol::AgentCapabilities>(profile_val.clone()) {
+            if let Ok(profile) =
+                serde_json::from_value::<agent_protocol::AgentCapabilities>(profile_val.clone())
+            {
                 return profile.all_tags();
             }
         }
@@ -154,7 +156,9 @@ impl Agent {
 
     /// Returns the agent's authorization role.
     pub fn role(&self) -> agent_protocol::security::AgentRole {
-        self.role.parse().unwrap_or(agent_protocol::security::AgentRole::Worker)
+        self.role
+            .parse()
+            .unwrap_or(agent_protocol::security::AgentRole::Worker)
     }
 
     /// Returns the agent's filesystem and action permission boundaries.
@@ -164,7 +168,7 @@ impl Agent {
 
     /// Checks if the agent's API key has passed its expiration time.
     pub fn is_key_expired(&self) -> bool {
-        self.api_key_expires_at.map_or(false, |exp| exp < Utc::now())
+        self.api_key_expires_at.is_some_and(|exp| exp < Utc::now())
     }
 
     /// Returns `true` if this agent can accept a new task assignment.
@@ -175,12 +179,18 @@ impl Agent {
             && matches!(self.status, AgentStatus::Idle)
             && self.current_task_id.is_none()
             && self.active_tasks_count < self.max_concurrency
-            && !matches!(self.health_status, HealthStatus::Unhealthy | HealthStatus::Offline)
+            && !matches!(
+                self.health_status,
+                HealthStatus::Unhealthy | HealthStatus::Offline
+            )
     }
 
     /// Returns `true` if this agent is in an acceptable health condition.
     pub fn is_healthy(&self) -> bool {
-        matches!(self.health_status, HealthStatus::Healthy | HealthStatus::Degraded)
+        matches!(
+            self.health_status,
+            HealthStatus::Healthy | HealthStatus::Degraded
+        )
     }
 
     /// Returns availability information snapshot.
@@ -299,7 +309,10 @@ impl NewAgent {
         self
     }
 
-    pub fn with_permissions(mut self, permissions: agent_protocol::security::PermissionBoundary) -> Self {
+    pub fn with_permissions(
+        mut self,
+        permissions: agent_protocol::security::PermissionBoundary,
+    ) -> Self {
         self.permissions = Some(permissions);
         self
     }

@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
 use anyhow::{Context, Result};
 use sqlx::PgPool;
+use std::collections::{HashMap, HashSet};
 use tracing::info;
 use uuid::Uuid;
 
@@ -38,10 +38,7 @@ impl OverlapDetector {
             for res in task.resources() {
                 let norm = res.trim().trim_matches('/').to_string();
                 if !norm.is_empty() {
-                    resource_to_tasks
-                        .entry(norm)
-                        .or_default()
-                        .push(task.id);
+                    resource_to_tasks.entry(norm).or_default().push(task.id);
                 }
             }
         }
@@ -77,8 +74,8 @@ impl OverlapDetector {
                     for j in (i + 1)..sharing_tasks.len() {
                         let t1 = sharing_tasks[i];
                         let t2 = sharing_tasks[j];
-                        let is_sequential = reachability.contains(&(t1, t2))
-                            || reachability.contains(&(t2, t1));
+                        let is_sequential =
+                            reachability.contains(&(t1, t2)) || reachability.contains(&(t2, t1));
                         if !is_sequential {
                             has_concurrent_pair = true;
                             break;
@@ -180,9 +177,9 @@ impl OverlapDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::TaskStatus;
     use chrono::Utc;
     use serde_json::json;
-    use crate::domain::TaskStatus;
 
     fn make_test_task(id: Uuid, project_id: Uuid, short_id: &str, resources: &[&str]) -> Task {
         Task {
@@ -217,7 +214,12 @@ mod tests {
         let t1_id = Uuid::new_v4();
         let t2_id = Uuid::new_v4();
         let t1 = make_test_task(t1_id, proj_id, "T1", &["src/models/user.rs", "src/auth.rs"]);
-        let t2 = make_test_task(t2_id, proj_id, "T2", &["src/models/user.rs", "src/billing.rs"]);
+        let t2 = make_test_task(
+            t2_id,
+            proj_id,
+            "T2",
+            &["src/models/user.rs", "src/billing.rs"],
+        );
 
         // No dependency between T1 and T2 -> Concurrent!
         let warnings = OverlapDetector::detect_overlaps(proj_id, &[t1, t2], &[]);

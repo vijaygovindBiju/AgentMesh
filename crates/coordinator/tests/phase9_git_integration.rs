@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use chrono::Utc;
 use futures::StreamExt;
 use sqlx::PgPool;
+use std::path::PathBuf;
 use tokio::process::Command;
 use uuid::Uuid;
 
@@ -12,15 +12,14 @@ use coordinator::db::repositories::{
     UnexpectedResourceRepository,
 };
 use coordinator::domain::{AdapterType, NewAgent, NewProject, NewProposal, NewTask, TaskStatus};
-use coordinator::git::{
-    ConcurrencySafety, ConflictDetector, GitCoordinator, RepositoryIdentity,
-};
+use coordinator::git::{ConcurrencySafety, ConflictDetector, GitCoordinator, RepositoryIdentity};
 use coordinator::messaging::{connect, ensure_streams, EventSubscriber, TaskPublisher};
 
 async fn setup_test_pool() -> Option<PgPool> {
     let _ = dotenvy::dotenv();
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
     let pool = create_pool(&db_url).await.ok()?;
     run_migrations(&pool).await.ok()?;
     Some(pool)
@@ -152,17 +151,31 @@ async fn test_phase9_parallel_agents_worktree_isolation_no_overwriting() {
     assert_ne!(ws_1.task_branch, ws_2.task_branch);
 
     // Verify task rows in DB recorded git branch and base commit
-    let ctx_1 = TaskRepository::find_git_context(&pool, task_1.id).await.unwrap().unwrap();
+    let ctx_1 = TaskRepository::find_git_context(&pool, task_1.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(ctx_1.task_branch.as_deref(), Some("agentmesh/task-001"));
-    assert_eq!(ctx_1.base_commit_sha.as_deref(), Some(repo_id.head_commit_sha.as_str()));
+    assert_eq!(
+        ctx_1.base_commit_sha.as_deref(),
+        Some(repo_id.head_commit_sha.as_str())
+    );
 
-    let ctx_2 = TaskRepository::find_git_context(&pool, task_2.id).await.unwrap().unwrap();
+    let ctx_2 = TaskRepository::find_git_context(&pool, task_2.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(ctx_2.task_branch.as_deref(), Some("agentmesh/task-002"));
-    assert_eq!(ctx_2.base_commit_sha.as_deref(), Some(repo_id.head_commit_sha.as_str()));
+    assert_eq!(
+        ctx_2.base_commit_sha.as_deref(),
+        Some(repo_id.head_commit_sha.as_str())
+    );
 
     // 4. Simultaneous Parallel Agent Editing
     // Agent 1 creates src/backend.rs in Workspace 1
-    tokio::fs::create_dir_all(ws_1.worktree_path.join("src")).await.unwrap();
+    tokio::fs::create_dir_all(ws_1.worktree_path.join("src"))
+        .await
+        .unwrap();
     tokio::fs::write(
         ws_1.worktree_path.join("src/backend.rs"),
         "pub fn serve_backend() -> &'static str { \"ok\" }\n",
@@ -171,7 +184,9 @@ async fn test_phase9_parallel_agents_worktree_isolation_no_overwriting() {
     .unwrap();
 
     // Agent 2 creates src/frontend.rs in Workspace 2
-    tokio::fs::create_dir_all(ws_2.worktree_path.join("src")).await.unwrap();
+    tokio::fs::create_dir_all(ws_2.worktree_path.join("src"))
+        .await
+        .unwrap();
     tokio::fs::write(
         ws_2.worktree_path.join("src/frontend.rs"),
         "export const app = () => 'rendered';\n",
@@ -188,13 +203,23 @@ async fn test_phase9_parallel_agents_worktree_isolation_no_overwriting() {
 
     // 6. Audit modified resources for both tasks
     let unexp_1 = git_coord
-        .audit_task_resources(task_1.id, &ws_1.worktree_path, &ws_1.base_commit_sha, &["src/backend.rs".to_string()])
+        .audit_task_resources(
+            task_1.id,
+            &ws_1.worktree_path,
+            &ws_1.base_commit_sha,
+            &["src/backend.rs".to_string()],
+        )
         .await
         .unwrap();
     assert!(unexp_1.is_empty(), "All changes in task 1 are expected");
 
     let unexp_2 = git_coord
-        .audit_task_resources(task_2.id, &ws_2.worktree_path, &ws_2.base_commit_sha, &["src/frontend.rs".to_string()])
+        .audit_task_resources(
+            task_2.id,
+            &ws_2.worktree_path,
+            &ws_2.base_commit_sha,
+            &["src/frontend.rs".to_string()],
+        )
         .await
         .unwrap();
     assert!(unexp_2.is_empty(), "All changes in task 2 are expected");
@@ -205,14 +230,18 @@ async fn test_phase9_parallel_agents_worktree_isolation_no_overwriting() {
         .await
         .expect("Finalize task 1 must succeed");
     assert!(fin_1.can_merge_cleanly);
-    assert!(fin_1.actual_modified_resources.contains(&"src/backend.rs".to_string()));
+    assert!(fin_1
+        .actual_modified_resources
+        .contains(&"src/backend.rs".to_string()));
 
     let fin_2 = git_coord
         .finalize_task(&ws_2, &task_2.short_id, &task_2.title, "main")
         .await
         .expect("Finalize task 2 must succeed");
     assert!(fin_2.can_merge_cleanly);
-    assert!(fin_2.actual_modified_resources.contains(&"src/frontend.rs".to_string()));
+    assert!(fin_2
+        .actual_modified_resources
+        .contains(&"src/frontend.rs".to_string()));
 
     // 8. Both worktrees are cleanly cleaned up
     assert!(!ws_1.worktree_path.exists());
@@ -233,7 +262,10 @@ async fn test_phase9_parallel_agents_worktree_isolation_no_overwriting() {
         .output()
         .await
         .unwrap();
-    assert!(merge_2.status.success(), "Merge of task 2 must succeed without conflict");
+    assert!(
+        merge_2.status.success(),
+        "Merge of task 2 must succeed without conflict"
+    );
 
     // 10. Verify both files exist simultaneously and intact on main!
     assert!(repo_id.repo_root.join("src/backend.rs").exists());
@@ -306,9 +338,15 @@ async fn test_phase9_unexpected_resource_modification_detection() {
         .unwrap();
 
     // Agent modifies planned file AND unplanned secret file
-    tokio::fs::create_dir_all(ws.worktree_path.join("src")).await.unwrap();
-    tokio::fs::write(ws.worktree_path.join("src/auth.rs"), "// auth code").await.unwrap();
-    tokio::fs::write(ws.worktree_path.join("credentials.env"), "SECRET=leak").await.unwrap();
+    tokio::fs::create_dir_all(ws.worktree_path.join("src"))
+        .await
+        .unwrap();
+    tokio::fs::write(ws.worktree_path.join("src/auth.rs"), "// auth code")
+        .await
+        .unwrap();
+    tokio::fs::write(ws.worktree_path.join("credentials.env"), "SECRET=leak")
+        .await
+        .unwrap();
 
     // Audit resources
     let unexpected = git_coord
@@ -325,14 +363,20 @@ async fn test_phase9_unexpected_resource_modification_detection() {
     assert_eq!(unexpected[0].resource_path, "credentials.env");
 
     // Verify stored in PostgreSQL unexpected_resource_changes table
-    let records = UnexpectedResourceRepository::list_by_task(&pool, task.id).await.unwrap();
+    let records = UnexpectedResourceRepository::list_by_task(&pool, task.id)
+        .await
+        .unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].resource_path, "credentials.env");
     assert!(!records[0].acknowledged);
 
     // Human acknowledges warning
-    UnexpectedResourceRepository::acknowledge(&pool, records[0].id).await.unwrap();
-    let records_after = UnexpectedResourceRepository::list_by_task(&pool, task.id).await.unwrap();
+    UnexpectedResourceRepository::acknowledge(&pool, records[0].id)
+        .await
+        .unwrap();
+    let records_after = UnexpectedResourceRepository::list_by_task(&pool, task.id)
+        .await
+        .unwrap();
     assert!(records_after[0].acknowledged);
 
     // Cleanup
@@ -354,8 +398,13 @@ async fn test_phase9_cross_agent_git_conflict_detection_and_recording() {
 
     // Create a base file in main
     let shared_file = repo_id.repo_root.join("shared_config.rs");
-    tokio::fs::write(&shared_file, "pub const TIMEOUT: u64 = 30;\n").await.unwrap();
-    repo_id.commit_all("feat: add shared_config.rs").await.unwrap();
+    tokio::fs::write(&shared_file, "pub const TIMEOUT: u64 = 30;\n")
+        .await
+        .unwrap();
+    repo_id
+        .commit_all("feat: add shared_config.rs")
+        .await
+        .unwrap();
 
     let project = ProjectRepository::create(
         &pool,
@@ -422,9 +471,12 @@ async fn test_phase9_cross_agent_git_conflict_detection_and_recording() {
         )
         .await
         .unwrap();
-    tokio::fs::write(ws_a.worktree_path.join("shared_config.rs"), "pub const TIMEOUT: u64 = 60;\n")
-        .await
-        .unwrap();
+    tokio::fs::write(
+        ws_a.worktree_path.join("shared_config.rs"),
+        "pub const TIMEOUT: u64 = 60;\n",
+    )
+    .await
+    .unwrap();
     let fin_a = git_coord
         .finalize_task(&ws_a, &task_a.short_id, &task_a.title, "main")
         .await
@@ -442,9 +494,12 @@ async fn test_phase9_cross_agent_git_conflict_detection_and_recording() {
         )
         .await
         .unwrap();
-    tokio::fs::write(ws_b.worktree_path.join("shared_config.rs"), "pub const TIMEOUT: u64 = 120;\n")
-        .await
-        .unwrap();
+    tokio::fs::write(
+        ws_b.worktree_path.join("shared_config.rs"),
+        "pub const TIMEOUT: u64 = 120;\n",
+    )
+    .await
+    .unwrap();
     let fin_b = git_coord
         .finalize_task(&ws_b, &task_b.short_id, &task_b.title, "main")
         .await
@@ -463,20 +518,32 @@ async fn test_phase9_cross_agent_git_conflict_detection_and_recording() {
         .await
         .expect("Conflict detection must run cleanly");
 
-    assert!(conflict_report.is_some(), "Conflict between branch A and branch B must be detected");
+    assert!(
+        conflict_report.is_some(),
+        "Conflict between branch A and branch B must be detected"
+    );
     let rep = conflict_report.unwrap();
-    assert!(rep.conflicting_files.iter().any(|f| f.contains("shared_config.rs") || f == "<conflict detected>"));
+    assert!(rep
+        .conflicting_files
+        .iter()
+        .any(|f| f.contains("shared_config.rs") || f == "<conflict detected>"));
 
     // Verify persisted in PostgreSQL git_conflicts table
-    let conflicts_in_db = GitConflictRepository::list_unresolved(&pool, project.id).await.unwrap();
+    let conflicts_in_db = GitConflictRepository::list_unresolved(&pool, project.id)
+        .await
+        .unwrap();
     assert!(!conflicts_in_db.is_empty());
     assert_eq!(conflicts_in_db[0].project_id, project.id);
     assert_eq!(conflicts_in_db[0].task_id_a, task_a.id);
     assert_eq!(conflicts_in_db[0].task_id_b, task_b.id);
 
     // Resolve conflict
-    GitConflictRepository::mark_resolved(&pool, conflicts_in_db[0].id).await.unwrap();
-    let unresolved_after = GitConflictRepository::list_unresolved(&pool, project.id).await.unwrap();
+    GitConflictRepository::mark_resolved(&pool, conflicts_in_db[0].id)
+        .await
+        .unwrap();
+    let unresolved_after = GitConflictRepository::list_unresolved(&pool, project.id)
+        .await
+        .unwrap();
     assert!(unresolved_after.is_empty());
 
     // Cleanup
@@ -493,8 +560,14 @@ fn test_phase9_concurrency_safety_guard() {
         ConcurrencySafety::Safe
     );
 
-    let conflicting_a = vec!["src/database/schema.rs".to_string(), "Cargo.lock".to_string()];
-    let conflicting_b = vec!["src/database/schema.rs".to_string(), "Cargo.toml".to_string()];
+    let conflicting_a = vec![
+        "src/database/schema.rs".to_string(),
+        "Cargo.lock".to_string(),
+    ];
+    let conflicting_b = vec![
+        "src/database/schema.rs".to_string(),
+        "Cargo.toml".to_string(),
+    ];
     match ConflictDetector::check_concurrency_safety(&conflicting_a, &conflicting_b) {
         ConcurrencySafety::OverlapRisk { shared_resources } => {
             assert_eq!(shared_resources, vec!["src/database/schema.rs"]);
@@ -506,10 +579,13 @@ fn test_phase9_concurrency_safety_guard() {
 #[tokio::test]
 async fn test_phase9_two_agents_parallel_git_workflow_over_jetstream() {
     let _ = dotenvy::dotenv();
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
-    let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
-    let nats_token = std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let nats_token =
+        std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
 
     let Ok(pool) = create_pool(&db_url).await else {
         eprintln!("Skipping test: DB unreachable");
@@ -613,12 +689,26 @@ async fn test_phase9_two_agents_parallel_git_workflow_over_jetstream() {
 
     // 4. Coordinator prepares worktrees for both tasks
     let ws_1 = git_coord
-        .prepare_task_workspace(&repo_id.repo_root, project.id, task_1.id, &task_1.short_id, "main", None)
+        .prepare_task_workspace(
+            &repo_id.repo_root,
+            project.id,
+            task_1.id,
+            &task_1.short_id,
+            "main",
+            None,
+        )
         .await
         .unwrap();
 
     let ws_2 = git_coord
-        .prepare_task_workspace(&repo_id.repo_root, project.id, task_2.id, &task_2.short_id, "main", None)
+        .prepare_task_workspace(
+            &repo_id.repo_root,
+            project.id,
+            task_2.id,
+            &task_2.short_id,
+            "main",
+            None,
+        )
         .await
         .unwrap();
 
@@ -645,7 +735,11 @@ async fn test_phase9_two_agents_parallel_git_workflow_over_jetstream() {
         vec![],
         format!("{}:1", task_1.id),
     )
-    .with_git_context(ws_1.worktree_path.to_string_lossy(), "main", &ws_1.task_branch);
+    .with_git_context(
+        ws_1.worktree_path.to_string_lossy(),
+        "main",
+        &ws_1.task_branch,
+    );
 
     let spec_2 = TaskSpec::new(
         task_2.id,
@@ -656,20 +750,40 @@ async fn test_phase9_two_agents_parallel_git_workflow_over_jetstream() {
         vec![],
         format!("{}:1", task_2.id),
     )
-    .with_git_context(ws_2.worktree_path.to_string_lossy(), "main", &ws_2.task_branch);
+    .with_git_context(
+        ws_2.worktree_path.to_string_lossy(),
+        "main",
+        &ws_2.task_branch,
+    );
 
     // Update tasks to Assigned
-    TaskRepository::update_status(&pool, task_1.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, task_1.id, Some(agent_1.id)).await.unwrap();
-    TaskRepository::update_status(&pool, task_1.id, TaskStatus::Assigned).await.unwrap();
+    TaskRepository::update_status(&pool, task_1.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task_1.id, Some(agent_1.id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task_1.id, TaskStatus::Assigned)
+        .await
+        .unwrap();
 
-    TaskRepository::update_status(&pool, task_2.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, task_2.id, Some(agent_2.id)).await.unwrap();
-    TaskRepository::update_status(&pool, task_2.id, TaskStatus::Assigned).await.unwrap();
+    TaskRepository::update_status(&pool, task_2.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task_2.id, Some(agent_2.id))
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task_2.id, TaskStatus::Assigned)
+        .await
+        .unwrap();
 
     // Publish assignments to JetStream
-    TaskPublisher::publish_assignment(&jetstream, agent_1.id, &spec_1).await.unwrap();
-    TaskPublisher::publish_assignment(&jetstream, agent_2.id, &spec_2).await.unwrap();
+    TaskPublisher::publish_assignment(&jetstream, agent_1.id, &spec_1)
+        .await
+        .unwrap();
+    TaskPublisher::publish_assignment(&jetstream, agent_2.id, &spec_2)
+        .await
+        .unwrap();
 
     // 6. Simulate parallel agent execution working inside their respective workspaces
     let client_1 = client.clone();
@@ -680,32 +794,45 @@ async fn test_phase9_two_agents_parallel_git_workflow_over_jetstream() {
     let agent_1_handle = tokio::spawn(async move {
         let ev_subject = format!("agents.{agent_1_id}.events");
         // Started
-        let _ = client_1.publish(
-            ev_subject.clone(),
-            serde_json::to_vec(&AgentMessage::TaskStarted {
-                agent_id: agent_1_id,
-                task_id: task_1_id,
-                idempotency_key: format!("{}:1", task_1_id),
-                timestamp: Utc::now(),
-            }).unwrap().into(),
-        ).await;
+        let _ = client_1
+            .publish(
+                ev_subject.clone(),
+                serde_json::to_vec(&AgentMessage::TaskStarted {
+                    agent_id: agent_1_id,
+                    task_id: task_1_id,
+                    idempotency_key: format!("{}:1", task_1_id),
+                    timestamp: Utc::now(),
+                })
+                .unwrap()
+                .into(),
+            )
+            .await;
 
         // Perform work in isolated workspace
-        tokio::fs::create_dir_all(ws_1_path.join("src")).await.unwrap();
-        tokio::fs::write(ws_1_path.join("src/api.rs"), "pub fn api_route() -> &'static str { \"v1\" }\n")
+        tokio::fs::create_dir_all(ws_1_path.join("src"))
             .await
             .unwrap();
+        tokio::fs::write(
+            ws_1_path.join("src/api.rs"),
+            "pub fn api_route() -> &'static str { \"v1\" }\n",
+        )
+        .await
+        .unwrap();
 
         // Completed
-        let _ = client_1.publish(
-            ev_subject,
-            serde_json::to_vec(&AgentMessage::Completed {
-                agent_id: agent_1_id,
-                task_id: task_1_id,
-                summary: "API implemented successfully".to_string(),
-                timestamp: Utc::now(),
-            }).unwrap().into(),
-        ).await;
+        let _ = client_1
+            .publish(
+                ev_subject,
+                serde_json::to_vec(&AgentMessage::Completed {
+                    agent_id: agent_1_id,
+                    task_id: task_1_id,
+                    summary: "API implemented successfully".to_string(),
+                    timestamp: Utc::now(),
+                })
+                .unwrap()
+                .into(),
+            )
+            .await;
     });
 
     let client_2 = client.clone();
@@ -716,32 +843,45 @@ async fn test_phase9_two_agents_parallel_git_workflow_over_jetstream() {
     let agent_2_handle = tokio::spawn(async move {
         let ev_subject = format!("agents.{agent_2_id}.events");
         // Started
-        let _ = client_2.publish(
-            ev_subject.clone(),
-            serde_json::to_vec(&AgentMessage::TaskStarted {
-                agent_id: agent_2_id,
-                task_id: task_2_id,
-                idempotency_key: format!("{}:1", task_2_id),
-                timestamp: Utc::now(),
-            }).unwrap().into(),
-        ).await;
+        let _ = client_2
+            .publish(
+                ev_subject.clone(),
+                serde_json::to_vec(&AgentMessage::TaskStarted {
+                    agent_id: agent_2_id,
+                    task_id: task_2_id,
+                    idempotency_key: format!("{}:1", task_2_id),
+                    timestamp: Utc::now(),
+                })
+                .unwrap()
+                .into(),
+            )
+            .await;
 
         // Perform work in isolated workspace
-        tokio::fs::create_dir_all(ws_2_path.join("src")).await.unwrap();
-        tokio::fs::write(ws_2_path.join("src/ui.rs"), "export const view = 'dashboard';\n")
+        tokio::fs::create_dir_all(ws_2_path.join("src"))
             .await
             .unwrap();
+        tokio::fs::write(
+            ws_2_path.join("src/ui.rs"),
+            "export const view = 'dashboard';\n",
+        )
+        .await
+        .unwrap();
 
         // Completed
-        let _ = client_2.publish(
-            ev_subject,
-            serde_json::to_vec(&AgentMessage::Completed {
-                agent_id: agent_2_id,
-                task_id: task_2_id,
-                summary: "UI implemented successfully".to_string(),
-                timestamp: Utc::now(),
-            }).unwrap().into(),
-        ).await;
+        let _ = client_2
+            .publish(
+                ev_subject,
+                serde_json::to_vec(&AgentMessage::Completed {
+                    agent_id: agent_2_id,
+                    task_id: task_2_id,
+                    summary: "UI implemented successfully".to_string(),
+                    timestamp: Utc::now(),
+                })
+                .unwrap()
+                .into(),
+            )
+            .await;
     });
 
     let (res_1, res_2) = tokio::join!(agent_1_handle, agent_2_handle);
@@ -753,14 +893,26 @@ async fn test_phase9_two_agents_parallel_git_workflow_over_jetstream() {
     sub_handle.abort();
 
     // 7. Verify both tasks reached Completed status in DB
-    let t1 = TaskRepository::find_by_id(&pool, task_1.id).await.unwrap().unwrap();
-    let t2 = TaskRepository::find_by_id(&pool, task_2.id).await.unwrap().unwrap();
+    let t1 = TaskRepository::find_by_id(&pool, task_1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let t2 = TaskRepository::find_by_id(&pool, task_2.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t1.status, TaskStatus::Completed);
     assert_eq!(t2.status, TaskStatus::Completed);
 
     // 8. Finalize both tasks in Git via coordinator
-    let fin_1 = git_coord.finalize_task(&ws_1, &task_1.short_id, &task_1.title, "main").await.unwrap();
-    let fin_2 = git_coord.finalize_task(&ws_2, &task_2.short_id, &task_2.title, "main").await.unwrap();
+    let fin_1 = git_coord
+        .finalize_task(&ws_1, &task_1.short_id, &task_1.title, "main")
+        .await
+        .unwrap();
+    let fin_2 = git_coord
+        .finalize_task(&ws_2, &task_2.short_id, &task_2.title, "main")
+        .await
+        .unwrap();
 
     assert!(fin_1.can_merge_cleanly);
     assert!(fin_2.can_merge_cleanly);

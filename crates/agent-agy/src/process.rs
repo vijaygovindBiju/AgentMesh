@@ -1,5 +1,5 @@
-use std::process::Stdio;
 use anyhow::{Context, Result};
+use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc;
@@ -35,10 +35,7 @@ impl AgyProcess {
     ///
     /// The function emits events through the returned channel receiver and enforces
     /// the configured execution timeout.
-    pub async fn run(
-        agent: &AgyAgent,
-        prompt: &str,
-    ) -> Result<mpsc::Receiver<AgyProcessEvent>> {
+    pub async fn run(agent: &AgyAgent, prompt: &str) -> Result<mpsc::Receiver<AgyProcessEvent>> {
         let (tx, rx) = mpsc::channel(100);
 
         let mut cmd = Command::new(&agent.agy_path);
@@ -83,7 +80,10 @@ impl AgyProcess {
                         tokio::time::sleep(std::time::Duration::from_millis(25)).await;
                     }
                     Err(e) => {
-                        return Err(anyhow::Error::from(e).context(format!("Failed to spawn agy process: {}", agent.agy_path.display())));
+                        return Err(anyhow::Error::from(e).context(format!(
+                            "Failed to spawn agy process: {}",
+                            agent.agy_path.display()
+                        )));
                     }
                 }
             }
@@ -263,7 +263,9 @@ mod tests {
 
         while let Some(evt) = rx.recv().await {
             match evt {
-                AgyProcessEvent::Stream(AgyStreamEvent::Init { conversation_id, .. }) => {
+                AgyProcessEvent::Stream(AgyStreamEvent::Init {
+                    conversation_id, ..
+                }) => {
                     assert_eq!(conversation_id.as_deref(), Some("test-123"));
                     received_init = true;
                 }
@@ -301,7 +303,12 @@ mod tests {
 
         let mut received_failed = false;
         while let Some(evt) = rx.recv().await {
-            if let AgyProcessEvent::Failed { reason, exit_code, stderr } = evt {
+            if let AgyProcessEvent::Failed {
+                reason,
+                exit_code,
+                stderr,
+            } = evt
+            {
                 assert_eq!(exit_code, Some(42));
                 assert!(reason.contains("42"));
                 assert!(stderr.contains("Fatal CLI error"));
@@ -309,7 +316,10 @@ mod tests {
             }
         }
 
-        assert!(received_failed, "Must receive Failed event on non-zero exit");
+        assert!(
+            received_failed,
+            "Must receive Failed event on non-zero exit"
+        );
     }
 
     #[tokio::test]
@@ -338,5 +348,3 @@ mod tests {
         assert!(received_timeout, "Must report timeout failure");
     }
 }
-
-

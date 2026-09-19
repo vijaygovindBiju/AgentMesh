@@ -124,18 +124,19 @@ impl AgentEventRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
     use crate::db::pool::{create_pool, run_migrations};
     use crate::db::repositories::agents::AgentRepository;
     use crate::db::repositories::projects::ProjectRepository;
     use crate::db::repositories::proposals::ProposalRepository;
     use crate::db::repositories::tasks::TaskRepository;
     use crate::domain::{AdapterType, NewAgent, NewProject, NewProposal, NewTask};
+    use serde_json::json;
 
     async fn setup_pool() -> Option<PgPool> {
         let _ = dotenvy::dotenv();
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+        let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+        });
         let pool = create_pool(&url).await.ok()?;
         run_migrations(&pool).await.ok()?;
         Some(pool)
@@ -242,10 +243,11 @@ mod tests {
         assert_eq!(agent_events.len(), 2);
 
         // 5. Latest for task
-        let latest_progress = AgentEventRepository::latest_for_task(&pool, task.id, AgentEventType::ProgressUpdate)
-            .await
-            .expect("Query latest failed")
-            .expect("Should find latest progress event");
+        let latest_progress =
+            AgentEventRepository::latest_for_task(&pool, task.id, AgentEventType::ProgressUpdate)
+                .await
+                .expect("Query latest failed")
+                .expect("Should find latest progress event");
         assert_eq!(latest_progress.message, Some("50% complete".to_string()));
 
         // Clean up
@@ -253,4 +255,3 @@ mod tests {
         AgentRepository::delete(&pool, agent.id).await.unwrap();
     }
 }
-

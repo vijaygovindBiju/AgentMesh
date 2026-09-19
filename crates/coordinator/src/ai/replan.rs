@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::ai::matcher::AgentCapabilityMatcher;
 use crate::ai::complexity::ComplexityEstimator;
+use crate::ai::matcher::AgentCapabilityMatcher;
 use crate::ai::provider::LlmProvider;
 use crate::ai::repo_scanner::RepositoryContext;
 use crate::ai::schema::{
@@ -15,9 +15,7 @@ use crate::db::repositories::{
     AgentRepository, GitConflictRepository, ProjectRepository, ProposalRepository, TaskRepository,
     UnexpectedResourceRepository,
 };
-use crate::domain::{
-    DependencyKind, NewProposal, NewTask, NewTaskDependency, TaskStatus,
-};
+use crate::domain::{DependencyKind, NewProposal, NewTask, NewTaskDependency, TaskStatus};
 
 /// Orchestrates re-planning when a task completes, fails, or when project state changes.
 pub struct ReplanEngine;
@@ -58,7 +56,9 @@ impl ReplanEngine {
         for t in tasks {
             match t.status {
                 TaskStatus::Completed => {
-                    let git_ctx = TaskRepository::find_git_context(pool, t.id).await.unwrap_or(None);
+                    let git_ctx = TaskRepository::find_git_context(pool, t.id)
+                        .await
+                        .unwrap_or(None);
                     let actual_mods = git_ctx
                         .map(|g| g.actual_modified_resources)
                         .unwrap_or_else(|| t.resources());
@@ -102,7 +102,9 @@ impl ReplanEngine {
         }
 
         // Fetch unresolved conflicts
-        let conflicts = GitConflictRepository::list_unresolved(pool, project_id).await.unwrap_or_default();
+        let conflicts = GitConflictRepository::list_unresolved(pool, project_id)
+            .await
+            .unwrap_or_default();
         let cross_agent_conflicts = conflicts
             .into_iter()
             .map(|c| format!("Conflict on '{}': {}", c.conflicting_path, c.description))
@@ -165,8 +167,13 @@ impl ReplanEngine {
 
             if pt.estimated_size.is_none() {
                 pt.estimated_size = Some(
-                    ComplexityEstimator::estimate(&pt.title, &pt.description, &pt.affected_resources, 0)
-                        .estimated_size,
+                    ComplexityEstimator::estimate(
+                        &pt.title,
+                        &pt.description,
+                        &pt.affected_resources,
+                        0,
+                    )
+                    .estimated_size,
                 );
             }
         }

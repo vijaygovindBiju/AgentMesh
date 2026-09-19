@@ -1,26 +1,27 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
 use anyhow::{Context, Result};
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::Context as JetStreamContext;
 use async_nats::Client;
 use chrono::Utc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use agent_protocol::{
-    AgentAdapter, AgentMessage, AgentStatus, CoordinatorMessage, TaskSpec,
-};
 use crate::adapter::AgyAgent;
 use crate::parser::AgyStreamEvent;
 use crate::process::{AgyProcess, AgyProcessEvent};
+use agent_protocol::{AgentAdapter, AgentMessage, AgentStatus, CoordinatorMessage, TaskSpec};
 
 pub struct AgyAgentRunner;
 
 impl AgyAgentRunner {
     /// Connects to the NATS broker with optional authentication token.
-    pub async fn connect(nats_url: &str, token: Option<&str>) -> Result<(Client, JetStreamContext)> {
+    pub async fn connect(
+        nats_url: &str,
+        token: Option<&str>,
+    ) -> Result<(Client, JetStreamContext)> {
         let mut options = async_nats::ConnectOptions::new();
         if let Some(tok) = token {
             if !tok.is_empty() {
@@ -115,7 +116,9 @@ impl AgyAgentRunner {
         msg: &AgentMessage,
     ) -> Result<()> {
         let payload = serde_json::to_vec(msg)?;
-        client.publish(event_subject.to_string(), payload.into()).await?;
+        client
+            .publish(event_subject.to_string(), payload.into())
+            .await?;
         Ok(())
     }
 
@@ -182,7 +185,7 @@ impl AgyAgentRunner {
         prompt.push_str(
             "\nINSTRUCTIONS:\n\
              Execute and implement the requested changes for this task. \
-             Ensure all code is written to disk and verified before completion."
+             Ensure all code is written to disk and verified before completion.",
         );
 
         prompt
@@ -219,7 +222,9 @@ impl AgyAgentRunner {
         while let Some(proc_event) = event_rx.recv().await {
             match proc_event {
                 AgyProcessEvent::Stream(stream_event) => match stream_event {
-                    AgyStreamEvent::Init { conversation_id, .. } => {
+                    AgyStreamEvent::Init {
+                        conversation_id, ..
+                    } => {
                         if !started_reported.swap(true, Ordering::SeqCst) {
                             info!(
                                 task_id = %spec.task_id,
@@ -334,9 +339,9 @@ impl AgyAgentRunner {
                             final_reported = true;
                         } else if result.status == "SUCCESS" {
                             info!(task_id = %spec.task_id, "agy returned SUCCESS result");
-                            let summary = result
-                                .response
-                                .unwrap_or_else(|| "Task completed successfully by agy".to_string());
+                            let summary = result.response.unwrap_or_else(|| {
+                                "Task completed successfully by agy".to_string()
+                            });
 
                             Self::publish_event(
                                 client,
@@ -357,10 +362,9 @@ impl AgyAgentRunner {
                                 error = ?result.error,
                                 "agy returned non-success result"
                             );
-                            let raw_err = result
-                                .error
-                                .or(result.response)
-                                .unwrap_or_else(|| format!("agy failed with status {}", result.status));
+                            let raw_err = result.error.or(result.response).unwrap_or_else(|| {
+                                format!("agy failed with status {}", result.status)
+                            });
                             let error = agent_protocol::security::SecretRedactor::redact(&raw_err);
 
                             Self::publish_event(
@@ -385,7 +389,10 @@ impl AgyAgentRunner {
                     debug!(task_id = %spec.task_id, %line, "agy stderr");
                 }
 
-                AgyProcessEvent::Completed { exit_code: _, result } => {
+                AgyProcessEvent::Completed {
+                    exit_code: _,
+                    result,
+                } => {
                     if !final_reported && !is_blocked {
                         if let Some(ref res) = result {
                             if res.status != "SUCCESS" {
@@ -394,8 +401,14 @@ impl AgyAgentRunner {
                                     .as_ref()
                                     .or(res.response.as_ref())
                                     .cloned()
-                                    .unwrap_or_else(|| format!("agy process completed with non-success status {}", res.status));
-                                let error = agent_protocol::security::SecretRedactor::redact(&raw_err);
+                                    .unwrap_or_else(|| {
+                                        format!(
+                                            "agy process completed with non-success status {}",
+                                            res.status
+                                        )
+                                    });
+                                let error =
+                                    agent_protocol::security::SecretRedactor::redact(&raw_err);
 
                                 Self::publish_event(
                                     client,

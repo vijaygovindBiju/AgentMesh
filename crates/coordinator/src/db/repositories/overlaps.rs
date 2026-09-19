@@ -10,7 +10,11 @@ pub struct OverlapWarningRepository;
 impl OverlapWarningRepository {
     /// Records a detected resource overlap between two or more tasks.
     pub async fn create(pool: &PgPool, new: &NewOverlapWarning) -> Result<OverlapWarning> {
-        let task_ids_json = json!(new.task_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>());
+        let task_ids_json = json!(new
+            .task_ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>());
 
         let warning = sqlx::query_as!(
             OverlapWarning,
@@ -64,10 +68,7 @@ impl OverlapWarningRepository {
     }
 
     /// Lists all overlap warnings for a project ordered by severity (critical first).
-    pub async fn list_by_project(
-        pool: &PgPool,
-        project_id: Uuid,
-    ) -> Result<Vec<OverlapWarning>> {
+    pub async fn list_by_project(pool: &PgPool, project_id: Uuid) -> Result<Vec<OverlapWarning>> {
         let warnings = sqlx::query_as!(
             OverlapWarning,
             r#"
@@ -192,8 +193,9 @@ mod tests {
 
     async fn setup_pool() -> Option<PgPool> {
         let _ = dotenvy::dotenv();
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
+        let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+        });
         let pool = create_pool(&url).await.ok()?;
         run_migrations(&pool).await.ok()?;
         Some(pool)
@@ -277,4 +279,3 @@ mod tests {
         ProjectRepository::delete(&pool, project.id).await.unwrap();
     }
 }
-

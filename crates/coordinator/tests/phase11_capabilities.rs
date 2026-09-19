@@ -18,10 +18,11 @@ use coordinator::messaging::{connect, ensure_streams, RegistrationHandler};
 
 async fn setup_test_env() -> Option<(PgPool, async_nats::Client, async_nats::jetstream::Context)> {
     let _ = dotenvy::dotenv();
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string());
-    let nats_url = std::env::var("NATS_URL")
-        .unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
+    });
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
 
     let pool = create_pool(&db_url).await.ok()?;
     run_migrations(&pool).await.ok()?;
@@ -102,7 +103,9 @@ async fn test_phase11_2_detect_runtime_languages_tools() {
 
     let profile = CapabilityDetector::detect_all("Agy", &["custom_worker".to_string()]);
     assert!(profile.has_tag("custom_worker"));
-    assert!(profile.has_tag("backend") || profile.has_tag("systems") || profile.has_language("rust"));
+    assert!(
+        profile.has_tag("backend") || profile.has_tag("systems") || profile.has_language("rust")
+    );
 }
 
 #[tokio::test]
@@ -121,7 +124,11 @@ async fn test_phase11_3_register_capabilities_via_protocol() {
         cpu_count: 8,
         memory_mb: Some(16384),
     })
-    .with_language(LanguageCapability::new("rust", Some("1.79.0".to_string()), vec!["tokio".to_string()]))
+    .with_language(LanguageCapability::new(
+        "rust",
+        Some("1.79.0".to_string()),
+        vec!["tokio".to_string()],
+    ))
     .with_tool(ToolCapability::new("cargo", None, None))
     .with_tag("backend");
 
@@ -139,7 +146,11 @@ async fn test_phase11_3_register_capabilities_via_protocol() {
         .expect("Registration must succeed");
 
     match resp {
-        CoordinatorMessage::RegisterResponse { status, nats_subject, .. } => {
+        CoordinatorMessage::RegisterResponse {
+            status,
+            nats_subject,
+            ..
+        } => {
             assert_eq!(status, "ok");
             assert_eq!(nats_subject, Some(format!("agents.{agent_id}.events")));
         }
@@ -153,9 +164,14 @@ async fn test_phase11_3_register_capabilities_via_protocol() {
 
     assert_eq!(agent.human_owner, "CapabilityTester");
     assert_eq!(agent.adapter_type, AdapterType::Agy);
-    assert_eq!(agent.health_status, coordinator::domain::HealthStatus::Healthy);
+    assert_eq!(
+        agent.health_status,
+        coordinator::domain::HealthStatus::Healthy
+    );
 
-    let stored_profile = agent.capabilities_profile().expect("Profile must be parsed from JSONB");
+    let stored_profile = agent
+        .capabilities_profile()
+        .expect("Profile must be parsed from JSONB");
     assert_eq!(stored_profile.runtime.os, "linux");
     assert!(stored_profile.has_language("rust"));
     assert!(stored_profile.has_tool("cargo"));
@@ -181,7 +197,11 @@ async fn test_phase11_4_spec_example_capability_matching() {
         cpu_count: 8,
         memory_mb: None,
     })
-    .with_language(LanguageCapability::new("rust", Some("1.80.0".to_string()), vec![]))
+    .with_language(LanguageCapability::new(
+        "rust",
+        Some("1.80.0".to_string()),
+        vec![],
+    ))
     .with_tool(ToolCapability::new("cargo", None, None))
     .with_tag("backend");
 
@@ -193,7 +213,11 @@ async fn test_phase11_4_spec_example_capability_matching() {
         cpu_count: 8,
         memory_mb: None,
     })
-    .with_language(LanguageCapability::new("dart", Some("3.4.0".to_string()), vec!["flutter".to_string()]))
+    .with_language(LanguageCapability::new(
+        "dart",
+        Some("3.4.0".to_string()),
+        vec!["flutter".to_string()],
+    ))
     .with_tag("frontend");
 
     let candidates = vec![
@@ -241,7 +265,10 @@ async fn test_phase11_4_spec_example_capability_matching() {
     assert_eq!(flutter_ranking[0].agent_id, agent_b_id);
     assert!(flutter_ranking[0].is_eligible);
     assert!(flutter_ranking[0].score > 50);
-    assert!(!flutter_ranking[1].is_eligible, "Agent A lacks dart/flutter");
+    assert!(
+        !flutter_ranking[1].is_eligible,
+        "Agent A lacks dart/flutter"
+    );
 }
 
 #[tokio::test]
@@ -290,7 +317,9 @@ async fn test_phase11_5_availability_state_and_concurrency_gating() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     let task = TaskRepository::create(
         &pool,
@@ -306,26 +335,46 @@ async fn test_phase11_5_availability_state_and_concurrency_gating() {
     )
     .await
     .unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent.id)).await.unwrap();
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task.id, Some(agent.id))
+        .await
+        .unwrap();
 
     // 1. Set agent to draining
-    AgentRepository::set_draining(&pool, agent.id, true).await.unwrap();
+    AgentRepository::set_draining(&pool, agent.id, true)
+        .await
+        .unwrap();
     let available = AgentRepository::list_available(&pool).await.unwrap();
-    assert!(!available.iter().any(|a| a.id == agent.id), "Draining agent must not be listed as available");
+    assert!(
+        !available.iter().any(|a| a.id == agent.id),
+        "Draining agent must not be listed as available"
+    );
 
     // Coordinator assignment attempt: draining agent must not be claimed
-    let assignments = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
-        .await
-        .unwrap();
-    assert!(assignments.is_empty(), "Task must not be assigned to draining agent");
+    let assignments =
+        AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+            .await
+            .unwrap();
+    assert!(
+        assignments.is_empty(),
+        "Task must not be assigned to draining agent"
+    );
 
     // 2. Disable draining -> now agent is eligible and assigned
-    AgentRepository::set_draining(&pool, agent.id, false).await.unwrap();
-    let assignments = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+    AgentRepository::set_draining(&pool, agent.id, false)
         .await
         .unwrap();
-    assert_eq!(assignments.len(), 1, "Agent should now be assigned the approved task");
+    let assignments =
+        AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+            .await
+            .unwrap();
+    assert_eq!(
+        assignments.len(),
+        1,
+        "Agent should now be assigned the approved task"
+    );
     assert_eq!(assignments[0].agent_id, agent.id);
 
     // Clean up
@@ -378,33 +427,68 @@ async fn test_phase11_6_agent_health_metrics_and_unhealthy_gating() {
     )
     .await
     .unwrap();
-    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle).await.unwrap();
+    AgentRepository::update_status(&pool, agent.id, AgentStatus::Idle)
+        .await
+        .unwrap();
 
     // Verify initial health is Healthy
-    let agent_init = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
-    assert_eq!(agent_init.health_status, coordinator::domain::HealthStatus::Healthy);
+    let agent_init = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        agent_init.health_status,
+        coordinator::domain::HealthStatus::Healthy
+    );
     assert_eq!(agent_init.consecutive_failures, 0);
 
     // Record repeated task failures: 1 failure
-    AgentRepository::record_task_failure(&pool, agent_id, "Compiler error").await.unwrap();
-    let agent_f1 = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
+    AgentRepository::record_task_failure(&pool, agent_id, "Compiler error")
+        .await
+        .unwrap();
+    let agent_f1 = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(agent_f1.consecutive_failures, 1);
-    assert_eq!(agent_f1.health_status, coordinator::domain::HealthStatus::Healthy);
+    assert_eq!(
+        agent_f1.health_status,
+        coordinator::domain::HealthStatus::Healthy
+    );
 
     // 2 consecutive failures -> Degraded
-    AgentRepository::record_task_failure(&pool, agent_id, "Timeout error").await.unwrap();
-    let agent_f2 = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
+    AgentRepository::record_task_failure(&pool, agent_id, "Timeout error")
+        .await
+        .unwrap();
+    let agent_f2 = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(agent_f2.consecutive_failures, 2);
-    assert_eq!(agent_f2.health_status, coordinator::domain::HealthStatus::Degraded);
+    assert_eq!(
+        agent_f2.health_status,
+        coordinator::domain::HealthStatus::Degraded
+    );
 
     // 5 consecutive failures -> Unhealthy
     for _ in 0..3 {
-        AgentRepository::record_task_failure(&pool, agent_id, "Critical failure").await.unwrap();
+        AgentRepository::record_task_failure(&pool, agent_id, "Critical failure")
+            .await
+            .unwrap();
     }
-    let agent_f5 = AgentRepository::find_by_id(&pool, agent_id).await.unwrap().unwrap();
+    let agent_f5 = AgentRepository::find_by_id(&pool, agent_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(agent_f5.consecutive_failures, 5);
-    assert_eq!(agent_f5.health_status, coordinator::domain::HealthStatus::Unhealthy);
-    assert!(!agent_f5.is_available(), "Unhealthy agent must not be available");
+    assert_eq!(
+        agent_f5.health_status,
+        coordinator::domain::HealthStatus::Unhealthy
+    );
+    assert!(
+        !agent_f5.is_available(),
+        "Unhealthy agent must not be available"
+    );
 
     // Create an approved task targeted to this agent
     let task = TaskRepository::create(
@@ -421,19 +505,35 @@ async fn test_phase11_6_agent_health_metrics_and_unhealthy_gating() {
     )
     .await
     .unwrap();
-    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved).await.unwrap();
-    TaskRepository::assign_agent(&pool, task.id, Some(agent.id)).await.unwrap();
-
-    // Attempt assignment: unhealthy agent must NOT be assigned the task
-    let assignments = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+    TaskRepository::update_status(&pool, task.id, TaskStatus::Approved)
         .await
         .unwrap();
-    assert!(assignments.is_empty(), "Coordinator must not assign tasks to unhealthy agents");
+    TaskRepository::assign_agent(&pool, task.id, Some(agent.id))
+        .await
+        .unwrap();
+
+    // Attempt assignment: unhealthy agent must NOT be assigned the task
+    let assignments =
+        AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+            .await
+            .unwrap();
+    assert!(
+        assignments.is_empty(),
+        "Coordinator must not assign tasks to unhealthy agents"
+    );
 
     // Success resets consecutive failures and restores Healthy status
-    AgentRepository::record_task_completion(&pool, agent.id).await.unwrap();
-    let agent_restored = AgentRepository::find_by_id(&pool, agent.id).await.unwrap().unwrap();
-    assert_eq!(agent_restored.health_status, coordinator::domain::HealthStatus::Healthy);
+    AgentRepository::record_task_completion(&pool, agent.id)
+        .await
+        .unwrap();
+    let agent_restored = AgentRepository::find_by_id(&pool, agent.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        agent_restored.health_status,
+        coordinator::domain::HealthStatus::Healthy
+    );
     assert_eq!(agent_restored.consecutive_failures, 0);
     assert_eq!(agent_restored.tasks_completed_count, 1);
 

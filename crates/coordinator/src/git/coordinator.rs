@@ -1,6 +1,6 @@
-use std::path::Path;
 use anyhow::{Context, Result};
 use sqlx::PgPool;
+use std::path::Path;
 use uuid::Uuid;
 
 use crate::db::repositories::{
@@ -79,13 +79,15 @@ impl GitCoordinator {
         base_commit_sha: &str,
         planned_affected_resources: &[String],
     ) -> Result<Vec<UnexpectedChange>> {
-        let modified = ResourceTracker::detect_modified_resources(worktree_path, base_commit_sha).await?;
+        let modified =
+            ResourceTracker::detect_modified_resources(worktree_path, base_commit_sha).await?;
 
         // Persist actual modified resources to database
         TaskRepository::update_actual_modified_resources(&self.pool, task_id, &modified).await?;
 
         // Detect unexpected changes
-        let unexpected = ResourceTracker::detect_unexpected_changes(&modified, planned_affected_resources);
+        let unexpected =
+            ResourceTracker::detect_unexpected_changes(&modified, planned_affected_resources);
 
         // Persist unexpected changes
         for item in &unexpected {
@@ -113,13 +115,9 @@ impl GitCoordinator {
         task_title: &str,
         base_branch: &str,
     ) -> Result<CompletionGitResult> {
-        let result = CompletionManager::finalize_task_git_state(
-            worktree,
-            short_id,
-            task_title,
-            base_branch,
-        )
-        .await?;
+        let result =
+            CompletionManager::finalize_task_git_state(worktree, short_id, task_title, base_branch)
+                .await?;
 
         // Persist completion state in PostgreSQL
         TaskRepository::record_completion_git_state(
@@ -145,12 +143,9 @@ impl GitCoordinator {
         task_id_b: Uuid,
         task_branch_b: &str,
     ) -> Result<Option<GitConflictReport>> {
-        let report = ConflictDetector::detect_cross_agent_conflicts(
-            repo_root,
-            task_branch_a,
-            task_branch_b,
-        )
-        .await?;
+        let report =
+            ConflictDetector::detect_cross_agent_conflicts(repo_root, task_branch_a, task_branch_b)
+                .await?;
 
         if let Some(ref rep) = report {
             for file in &rep.conflicting_files {

@@ -140,7 +140,10 @@ impl PermissionBoundary {
 
         // 2. If allowed_paths list is non-empty, path must match at least one allowed pattern
         if !self.allowed_paths.is_empty() {
-            let matches_allowed = self.allowed_paths.iter().any(|allowed| glob_matches(allowed, &normalized));
+            let matches_allowed = self
+                .allowed_paths
+                .iter()
+                .any(|allowed| glob_matches(allowed, &normalized));
             if !matches_allowed {
                 return false;
             }
@@ -270,7 +273,9 @@ impl SecretRedactor {
         }
 
         // 3. Redact passwords in connection URLs: postgres://user:password@host
-        while let Some(proto_pos) = result.find("://") {
+        let mut search_start = 0;
+        while let Some(rel_proto_pos) = result[search_start..].find("://") {
+            let proto_pos = search_start + rel_proto_pos;
             let user_start = proto_pos + 3;
             if let Some(at_pos) = result[user_start..].find('@') {
                 let user_slice = &result[user_start..user_start + at_pos];
@@ -278,10 +283,12 @@ impl SecretRedactor {
                     let pw_start = user_start + colon_pos + 1;
                     let pw_end = user_start + at_pos;
                     result.replace_range(pw_start..pw_end, "[REDACTED]");
+                    search_start = pw_start + "[REDACTED]".len();
+                } else {
+                    search_start = user_start + at_pos;
                 }
-                break;
             } else {
-                break;
+                search_start = user_start;
             }
         }
 
@@ -314,7 +321,10 @@ impl SecretRedactor {
                         || k_lower.contains("api_key")
                         || k_lower.contains("token")
                     {
-                        redacted_map.insert(k.clone(), serde_json::Value::String("[REDACTED]".to_string()));
+                        redacted_map.insert(
+                            k.clone(),
+                            serde_json::Value::String("[REDACTED]".to_string()),
+                        );
                     } else {
                         redacted_map.insert(k.clone(), Self::redact_json(v));
                     }
@@ -335,8 +345,14 @@ mod tests {
         assert!(glob_matches(".env*", ".env.production"));
         assert!(glob_matches("*.env", "local.env"));
         assert!(glob_matches("*secret*", "my_secret_keys.json"));
-        assert!(glob_matches("crates/frontend/*", "crates/frontend/src/App.tsx"));
-        assert!(!glob_matches("crates/frontend/*", "crates/backend/src/main.rs"));
+        assert!(glob_matches(
+            "crates/frontend/*",
+            "crates/frontend/src/App.tsx"
+        ));
+        assert!(!glob_matches(
+            "crates/frontend/*",
+            "crates/backend/src/main.rs"
+        ));
     }
 
     #[test]

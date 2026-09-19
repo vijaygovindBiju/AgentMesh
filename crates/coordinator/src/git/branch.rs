@@ -1,5 +1,5 @@
-use std::path::Path;
 use anyhow::{Context, Result};
+use std::path::Path;
 use tokio::process::Command;
 
 /// Branch naming strategy and branch lifecycle operations for AgentMesh tasks.
@@ -24,7 +24,11 @@ impl BranchStrategy {
     /// Checks if a local branch exists in the repository.
     pub async fn branch_exists(repo_root: &Path, branch_name: &str) -> Result<bool> {
         let output = Command::new("git")
-            .args(["rev-parse", "--verify", &format!("refs/heads/{branch_name}")])
+            .args([
+                "rev-parse",
+                "--verify",
+                &format!("refs/heads/{branch_name}"),
+            ])
             .current_dir(repo_root)
             .output()
             .await
@@ -53,7 +57,12 @@ impl BranchStrategy {
     /// Lists all AgentMesh task branches currently present in the repository.
     pub async fn list_task_branches(repo_root: &Path) -> Result<Vec<String>> {
         let output = Command::new("git")
-            .args(["branch", "--list", "agentmesh/*", "--format=%(refname:short)"])
+            .args([
+                "branch",
+                "--list",
+                "agentmesh/*",
+                "--format=%(refname:short)",
+            ])
             .current_dir(repo_root)
             .output()
             .await
@@ -99,19 +108,28 @@ mod tests {
 
     #[test]
     fn test_task_branch_naming() {
-        assert_eq!(BranchStrategy::task_branch_name("TASK-001"), "agentmesh/task-001");
-        assert_eq!(BranchStrategy::task_branch_name("feat: auth"), "agentmesh/feat--auth");
+        assert_eq!(
+            BranchStrategy::task_branch_name("TASK-001"),
+            "agentmesh/task-001"
+        );
+        assert_eq!(
+            BranchStrategy::task_branch_name("feat: auth"),
+            "agentmesh/feat--auth"
+        );
         assert!(BranchStrategy::is_agentmesh_branch("agentmesh/task-001"));
         assert!(!BranchStrategy::is_agentmesh_branch("main"));
     }
 
     #[tokio::test]
     async fn test_branch_lifecycle() {
-        let temp_dir = std::env::temp_dir().join(format!("agentmesh_branch_test_{}", uuid::Uuid::new_v4()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("agentmesh_branch_test_{}", uuid::Uuid::new_v4()));
         let id = RepositoryIdentity::init(&temp_dir, "main").await.unwrap();
 
         let branch = BranchStrategy::task_branch_name("TASK-999");
-        assert!(!BranchStrategy::branch_exists(&id.repo_root, &branch).await.unwrap());
+        assert!(!BranchStrategy::branch_exists(&id.repo_root, &branch)
+            .await
+            .unwrap());
 
         // Create branch
         Command::new("git")
@@ -121,16 +139,26 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(BranchStrategy::branch_exists(&id.repo_root, &branch).await.unwrap());
-        let sha = BranchStrategy::get_branch_sha(&id.repo_root, &branch).await.unwrap();
+        assert!(BranchStrategy::branch_exists(&id.repo_root, &branch)
+            .await
+            .unwrap());
+        let sha = BranchStrategy::get_branch_sha(&id.repo_root, &branch)
+            .await
+            .unwrap();
         assert_eq!(sha, id.head_commit_sha);
 
-        let list = BranchStrategy::list_task_branches(&id.repo_root).await.unwrap();
+        let list = BranchStrategy::list_task_branches(&id.repo_root)
+            .await
+            .unwrap();
         assert!(list.contains(&branch));
 
         // Delete branch
-        BranchStrategy::delete_branch(&id.repo_root, &branch, true).await.unwrap();
-        assert!(!BranchStrategy::branch_exists(&id.repo_root, &branch).await.unwrap());
+        BranchStrategy::delete_branch(&id.repo_root, &branch, true)
+            .await
+            .unwrap();
+        assert!(!BranchStrategy::branch_exists(&id.repo_root, &branch)
+            .await
+            .unwrap());
 
         let _ = tokio::fs::remove_dir_all(&temp_dir).await;
     }

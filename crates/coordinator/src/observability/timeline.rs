@@ -127,13 +127,17 @@ impl TimelineService {
                 crate::domain::AgentEventType::Failed => "failed".to_string(),
             };
 
-            let elapsed = first_start_time.map(|st| ev.received_at.signed_duration_since(st).num_milliseconds());
+            let elapsed = first_start_time
+                .map(|st| ev.received_at.signed_duration_since(st).num_milliseconds());
 
             timeline_items.push(TaskTimelineItem {
                 timestamp: ev.received_at,
                 stage,
                 actor: format!("agent:{}", ev.agent_id),
-                message: ev.message.clone().unwrap_or_else(|| format!("{:?}", ev.event_type)),
+                message: ev
+                    .message
+                    .clone()
+                    .unwrap_or_else(|| format!("{:?}", ev.event_type)),
                 details: ev.payload.clone(),
                 elapsed_since_start_ms: elapsed,
             });

@@ -1,10 +1,10 @@
-use std::time::Duration;
 use chrono::Utc;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use serde_json::json;
 use sqlx::PgPool;
+use std::time::Duration;
 use uuid::Uuid;
 
 use agent_protocol::AgentMessage;
@@ -15,14 +15,13 @@ use coordinator::db::repositories::{
     TaskRepository,
 };
 use coordinator::domain::{
-    AdapterType, DependencyKind, NewAgent, NewProject, NewProposal, NewTask,
-    NewTaskDependency, OverlapSeverity, TaskStatus,
+    AdapterType, DependencyKind, NewAgent, NewProject, NewProposal, NewTask, NewTaskDependency,
+    OverlapSeverity, TaskStatus,
 };
 use coordinator::messaging::{connect, ensure_streams, EventSubscriber};
 use coordinator::tui::{
     render, AppState, CurrentScreen, ReviewTaskState, TuiAction, TuiUpdateEvent,
 };
-
 
 async fn setup_pool() -> Option<PgPool> {
     let _ = dotenvy::dotenv();
@@ -243,8 +242,12 @@ async fn test_warning_visible_in_plan_review_and_blocks_approval_until_acknowled
     .unwrap();
 
     // Advance to HumanReview
-    TaskRepository::update_status(&pool, task1.id, TaskStatus::HumanReview).await.unwrap();
-    TaskRepository::update_status(&pool, task2.id, TaskStatus::HumanReview).await.unwrap();
+    TaskRepository::update_status(&pool, task1.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
+    TaskRepository::update_status(&pool, task2.id, TaskStatus::HumanReview)
+        .await
+        .unwrap();
 
     // Detect and persist overlaps
     let warnings = OverlapDetector::detect_and_persist_for_project(&pool, project.id)
@@ -256,7 +259,10 @@ async fn test_warning_visible_in_plan_review_and_blocks_approval_until_acknowled
 
     // Attempting to approve Task 1 MUST FAIL due to unacknowledged critical overlap
     let approve_res = CommandHandler::execute_approve_task(&pool, task1.id, "Alice").await;
-    assert!(approve_res.is_err(), "Approval must be blocked by unacknowledged critical overlap");
+    assert!(
+        approve_res.is_err(),
+        "Approval must be blocked by unacknowledged critical overlap"
+    );
 
     // Initialize TUI AppState
     let mut state = AppState::new();
@@ -270,18 +276,22 @@ async fn test_warning_visible_in_plan_review_and_blocks_approval_until_acknowled
     // Verify warnings populated on task states
     assert_eq!(review_tasks[0].overlap_warnings.len(), 1);
     assert!(!review_tasks[0].overlap_warnings[0].acknowledged);
-    assert_eq!(review_tasks[0].overlap_warnings[0].resource, "crates/config.rs");
+    assert_eq!(
+        review_tasks[0].overlap_warnings[0].resource,
+        "crates/config.rs"
+    );
 
     state.review_tasks = review_tasks;
     state.active_overlaps = warnings.clone();
     state.current_screen = CurrentScreen::PlanReview;
     state.selected_task_index = 0;
 
-
     // Render headless Plan Review screen to ensure card & details pane render warnings without panic
     let backend = TestBackend::new(120, 40);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|f| render(f, &state)).expect("Render PlanReview");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render PlanReview");
 
     // Operator presses 'a' to acknowledge the overlap warning on Task 1
     let action = state.handle_key(make_key(KeyCode::Char('a')));
@@ -290,7 +300,9 @@ async fn test_warning_visible_in_plan_review_and_blocks_approval_until_acknowled
     assert!(state.active_overlaps.is_empty());
 
     // Outer handler processes acknowledgment in PostgreSQL
-    CommandHandler::execute_acknowledge_overlap(&pool, warning_id).await.unwrap();
+    CommandHandler::execute_acknowledge_overlap(&pool, warning_id)
+        .await
+        .unwrap();
 
     // Now approving Task 1 succeeds!
     let approved_task = CommandHandler::execute_approve_task(&pool, task1.id, "Alice")
@@ -320,15 +332,24 @@ async fn test_warning_visible_in_dashboard_for_unacknowledged_overlaps() {
     // Render Dashboard in headless test terminal
     let backend = TestBackend::new(120, 40);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|f| render(f, &state)).expect("Render Dashboard with active overlap");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render Dashboard with active overlap");
 
     // Operator acknowledges overlap directly from Dashboard via 'a'
     let action = state.handle_key(make_key(KeyCode::Char('a')));
-    assert_eq!(action, Some(TuiAction::AcknowledgeOverlap { warning_id: warn_id }));
+    assert_eq!(
+        action,
+        Some(TuiAction::AcknowledgeOverlap {
+            warning_id: warn_id
+        })
+    );
     assert!(state.active_overlaps.is_empty());
 
     // Render again — verify clean display with 0 active overlaps
-    terminal.draw(|f| render(f, &state)).expect("Render Dashboard with zero overlaps");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render Dashboard with zero overlaps");
 }
 
 /// Acceptance Criteria:
@@ -377,13 +398,18 @@ async fn test_dashboard_updates_live_from_agent_events_channel() {
     state.current_screen = CurrentScreen::Dashboard;
 
     // Verify initial dashboard state: Agent is IDLE, Task is Approved
-    assert_eq!(state.agents[0].status, coordinator::domain::AgentStatus::Idle);
+    assert_eq!(
+        state.agents[0].status,
+        coordinator::domain::AgentStatus::Idle
+    );
     assert_eq!(state.review_tasks[0].task.status, TaskStatus::Approved);
     assert_eq!(state.agents[0].current_task_id, None);
 
     let backend = TestBackend::new(140, 45);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|f| render(f, &state)).expect("Render initial dashboard");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render initial dashboard");
 
     // Setup async update channel into TUI state
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<TuiUpdateEvent>();
@@ -403,11 +429,16 @@ async fn test_dashboard_updates_live_from_agent_events_channel() {
     }
 
     // Verify state projected live
-    assert_eq!(state.agents[0].status, coordinator::domain::AgentStatus::Busy);
+    assert_eq!(
+        state.agents[0].status,
+        coordinator::domain::AgentStatus::Busy
+    );
     assert_eq!(state.agents[0].current_task_id, Some(task_id));
     assert_eq!(state.review_tasks[0].task.status, TaskStatus::Executing);
     assert_eq!(state.review_tasks[0].task.assigned_agent_id, Some(agent_id));
-    terminal.draw(|f| render(f, &state)).expect("Render Executing dashboard");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render Executing dashboard");
 
     // 2. Incoming event: ProgressUpdate
     tx.send(TuiUpdateEvent::AgentMessage(AgentMessage::ProgressUpdate {
@@ -424,7 +455,9 @@ async fn test_dashboard_updates_live_from_agent_events_channel() {
     }
 
     assert!(state.status_message.as_ref().unwrap().contains("75%"));
-    terminal.draw(|f| render(f, &state)).expect("Render Progress dashboard");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render Progress dashboard");
 
     // 3. Incoming event: Blocked
     tx.send(TuiUpdateEvent::AgentMessage(AgentMessage::Blocked {
@@ -440,9 +473,14 @@ async fn test_dashboard_updates_live_from_agent_events_channel() {
         state.apply_update(update);
     }
 
-    assert_eq!(state.agents[0].status, coordinator::domain::AgentStatus::Blocked);
+    assert_eq!(
+        state.agents[0].status,
+        coordinator::domain::AgentStatus::Blocked
+    );
     assert_eq!(state.review_tasks[0].task.status, TaskStatus::Blocked);
-    terminal.draw(|f| render(f, &state)).expect("Render Blocked dashboard");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render Blocked dashboard");
 
     // 4. Incoming event: Completed
     tx.send(TuiUpdateEvent::AgentMessage(AgentMessage::Completed {
@@ -457,10 +495,15 @@ async fn test_dashboard_updates_live_from_agent_events_channel() {
         state.apply_update(update);
     }
 
-    assert_eq!(state.agents[0].status, coordinator::domain::AgentStatus::Idle);
+    assert_eq!(
+        state.agents[0].status,
+        coordinator::domain::AgentStatus::Idle
+    );
     assert_eq!(state.agents[0].current_task_id, None);
     assert_eq!(state.review_tasks[0].task.status, TaskStatus::Completed);
-    terminal.draw(|f| render(f, &state)).expect("Render Completed dashboard");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render Completed dashboard");
 }
 
 /// Acceptance Criteria:
@@ -472,7 +515,8 @@ async fn test_nats_subscriber_ingestion_and_channel_forwarding() {
         return;
     };
 
-    let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
     let (client, jetstream) = match connect(&nats_url, None).await {
         Ok(res) => res,
         Err(_) => {
@@ -481,7 +525,6 @@ async fn test_nats_subscriber_ingestion_and_channel_forwarding() {
         }
     };
     ensure_streams(&jetstream).await.unwrap();
-
 
     let consumer = EventSubscriber::create_consumer(&jetstream).await.unwrap();
 
@@ -523,7 +566,6 @@ async fn test_nats_subscriber_ingestion_and_channel_forwarding() {
         .await
         .unwrap();
 
-
     // Process event using subscriber with channel forwarder
     let processed = tokio::time::timeout(
         Duration::from_secs(5),
@@ -536,7 +578,11 @@ async fn test_nats_subscriber_ingestion_and_channel_forwarding() {
     assert!(processed.is_some());
     let received_channel_msg = rx.try_recv().expect("Channel should receive AgentMessage");
     match received_channel_msg {
-        AgentMessage::TaskStarted { agent_id: recv_agent, task_id: recv_task, .. } => {
+        AgentMessage::TaskStarted {
+            agent_id: recv_agent,
+            task_id: recv_task,
+            ..
+        } => {
             assert_eq!(recv_agent, agent_id);
             assert_eq!(recv_task, task_id);
         }

@@ -60,9 +60,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
 
-        let ctx = TraceContext::new()
-            .with_task(task_id)
-            .with_agent(agent_id);
+        let ctx = TraceContext::new().with_task(task_id).with_agent(agent_id);
 
         let span = ctx.span("execute_task");
         let _enter = span.enter();

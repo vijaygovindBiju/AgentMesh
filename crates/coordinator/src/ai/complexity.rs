@@ -38,7 +38,9 @@ impl ComplexityEstimator {
             risk_factors.push(format!("Modifies {resource_count} separate resource files"));
         } else {
             score += 65;
-            risk_factors.push(format!("Broad architectural footprint: {resource_count} resources"));
+            risk_factors.push(format!(
+                "Broad architectural footprint: {resource_count} resources"
+            ));
         }
 
         // 2. Check for directory-wide impacts
@@ -53,19 +55,35 @@ impl ComplexityEstimator {
         // 3. Keyword and domain risk factors
         let full_text = format!("{} {}", title, description).to_lowercase();
 
-        if full_text.contains("migration") || full_text.contains("schema") || full_text.contains("database") {
+        if full_text.contains("migration")
+            || full_text.contains("schema")
+            || full_text.contains("database")
+        {
             score += 20;
             risk_factors.push("Involves database schema or migration alterations".to_string());
         }
-        if full_text.contains("refactor") || full_text.contains("rewrite") || full_text.contains("redesign") {
+        if full_text.contains("refactor")
+            || full_text.contains("rewrite")
+            || full_text.contains("redesign")
+        {
             score += 25;
-            risk_factors.push("Contains major code refactoring or architectural redesign".to_string());
+            risk_factors
+                .push("Contains major code refactoring or architectural redesign".to_string());
         }
-        if full_text.contains("security") || full_text.contains("auth") || full_text.contains("crypto") || full_text.contains("token") {
+        if full_text.contains("security")
+            || full_text.contains("auth")
+            || full_text.contains("crypto")
+            || full_text.contains("token")
+        {
             score += 15;
-            risk_factors.push("Security-critical component (authentication / cryptography)".to_string());
+            risk_factors
+                .push("Security-critical component (authentication / cryptography)".to_string());
         }
-        if full_text.contains("protocol") || full_text.contains("concurrency") || full_text.contains("lock") || full_text.contains("async") {
+        if full_text.contains("protocol")
+            || full_text.contains("concurrency")
+            || full_text.contains("lock")
+            || full_text.contains("async")
+        {
             score += 15;
             risk_factors.push("Complex concurrency or messaging protocol interaction".to_string());
         }
@@ -73,7 +91,9 @@ impl ComplexityEstimator {
         // 4. Dependency graph density
         if dependency_count >= 3 {
             score += 15;
-            risk_factors.push(format!("High dependency gating: {dependency_count} prerequisites"));
+            risk_factors.push(format!(
+                "High dependency gating: {dependency_count} prerequisites"
+            ));
         }
 
         // Normalize score between 1 and 100

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::path::Path;
 use anyhow::{Context, Result};
 use sqlx::PgPool;
+use std::collections::HashMap;
+use std::path::Path;
 use tracing::info;
 use uuid::Uuid;
 
@@ -12,9 +12,7 @@ use crate::ai::replan::ReplanEngine;
 use crate::ai::repo_scanner::RepositoryScanner;
 use crate::ai::schema::PlanningRequest;
 use crate::ai::validator::PlanValidator;
-use crate::db::repositories::{
-    OverlapWarningRepository, ProposalRepository, TaskRepository,
-};
+use crate::db::repositories::{OverlapWarningRepository, ProposalRepository, TaskRepository};
 use crate::domain::{
     DependencyKind, NewOverlapWarning, NewProposal, NewTask, NewTaskDependency, TaskStatus,
 };
@@ -47,7 +45,8 @@ impl PlanningService {
             None => None,
         };
 
-        let replan_req = ReplanEngine::gather_replan_context(pool, project_id, repo_context).await?;
+        let replan_req =
+            ReplanEngine::gather_replan_context(pool, project_id, repo_context).await?;
         ReplanEngine::execute_replan(pool, provider, &replan_req).await
     }
 
@@ -103,8 +102,13 @@ impl PlanningService {
                     .filter(|d| d.dependent_short_id == pt.short_id)
                     .count();
                 pt.estimated_size = Some(
-                    ComplexityEstimator::estimate(&pt.title, &pt.description, &pt.affected_resources, dep_count)
-                        .estimated_size,
+                    ComplexityEstimator::estimate(
+                        &pt.title,
+                        &pt.description,
+                        &pt.affected_resources,
+                        dep_count,
+                    )
+                    .estimated_size,
                 );
             }
         }

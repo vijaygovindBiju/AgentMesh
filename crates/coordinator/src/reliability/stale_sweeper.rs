@@ -68,7 +68,9 @@ impl StaleTaskSweeper {
             );
 
             // Fetch delivery attempts to check retry threshold
-            let deliveries = TaskDeliveryRepository::list_by_task(pool, task_id).await.unwrap_or_default();
+            let deliveries = TaskDeliveryRepository::list_by_task(pool, task_id)
+                .await
+                .unwrap_or_default();
             let attempts = deliveries.len();
 
             let target_status = if attempts >= 3 {

@@ -3,9 +3,7 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 use coordinator::domain::ApprovalStatus;
-use coordinator::tui::{
-    render, AppState, CurrentScreen, InputMode, TuiAction,
-};
+use coordinator::tui::{render, AppState, CurrentScreen, InputMode, TuiAction};
 
 fn press_key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -34,7 +32,10 @@ fn test_tui_human_review_keybindings_and_action_emission() {
         emitted_actions[0],
         TuiAction::ApproveTask { task_id: task0_id }
     );
-    assert_eq!(state.review_tasks[0].human_decision, Some(ApprovalStatus::Approved));
+    assert_eq!(
+        state.review_tasks[0].human_decision,
+        Some(ApprovalStatus::Approved)
+    );
     // Automatically advanced selection to task 1
     assert_eq!(state.selected_task_index, 1);
 
@@ -47,7 +48,10 @@ fn test_tui_human_review_keybindings_and_action_emission() {
         emitted_actions[1],
         TuiAction::RejectTask { task_id: task1_id }
     );
-    assert_eq!(state.review_tasks[1].human_decision, Some(ApprovalStatus::Rejected));
+    assert_eq!(
+        state.review_tasks[1].human_decision,
+        Some(ApprovalStatus::Rejected)
+    );
     // Automatically advanced selection to task 2
     assert_eq!(state.selected_task_index, 2);
 
@@ -68,7 +72,10 @@ fn test_tui_human_review_keybindings_and_action_emission() {
     assert_eq!(state.input_mode, InputMode::Normal);
     assert_eq!(emitted_actions.len(), 3);
     match &emitted_actions[2] {
-        TuiAction::EditTaskDescription { task_id, new_description } => {
+        TuiAction::EditTaskDescription {
+            task_id,
+            new_description,
+        } => {
             assert_eq!(*task_id, task2_id);
             assert!(new_description.ends_with("- verified by operator"));
         }
@@ -103,17 +110,23 @@ fn test_tui_rendering_headless_all_modes() {
     let mut state = AppState::new().with_mock_data();
 
     // Render Plan Review
-    terminal.draw(|f| render(f, &state)).expect("Render PlanReview");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render PlanReview");
 
     // Render Details toggle off
     state.show_details_pane = false;
-    terminal.draw(|f| render(f, &state)).expect("Render PlanReview full width");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render PlanReview full width");
     state.show_details_pane = true;
 
     // Render Description Editing mode
     state.input_mode = InputMode::EditingDescription;
     state.edit_buffer = "Inline editing buffer text".to_string();
-    terminal.draw(|f| render(f, &state)).expect("Render Inline Editor");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render Inline Editor");
     state.input_mode = InputMode::Normal;
 
     // Render Project Input mode
@@ -121,10 +134,14 @@ fn test_tui_rendering_headless_all_modes() {
     state.input_mode = InputMode::EnteringProject;
     state.project_name_input = "Mesh Project".to_string();
     state.project_desc_input = "Distributed mesh network".to_string();
-    terminal.draw(|f| render(f, &state)).expect("Render ProjectInput");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render ProjectInput");
     state.input_mode = InputMode::Normal;
 
     // Render Dashboard
     state.current_screen = CurrentScreen::Dashboard;
-    terminal.draw(|f| render(f, &state)).expect("Render Dashboard");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render Dashboard");
 }

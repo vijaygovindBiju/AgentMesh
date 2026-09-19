@@ -23,26 +23,64 @@ impl FooterWidget {
         // Keybinding hints based on screen and input mode
         let spans = match state.input_mode {
             InputMode::EditingDescription => vec![
-                Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Enter] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Confirm & Approve  "),
-                Span::styled(" [Esc] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Esc] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Cancel Edit  "),
             ],
             InputMode::EnteringProject => vec![
-                Span::styled(" [Tab] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Tab] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Switch Field  "),
-                Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Enter] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Submit  "),
-                Span::styled(" [Esc] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Esc] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Cancel  "),
             ],
             InputMode::Normal => match state.current_screen {
                 CurrentScreen::PlanReview => vec![
-                    Span::styled(" [Y] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        " [Y] ",
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("Approve "),
-                    Span::styled(" [N] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        " [N] ",
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("Reject "),
-                    Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        " [E] ",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("Edit "),
                     Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
                     Span::raw("Nav "),
@@ -54,7 +92,12 @@ impl FooterWidget {
                     Span::raw("Quit"),
                 ],
                 CurrentScreen::ProjectInput => vec![
-                    Span::styled(" [Enter/i] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        " [Enter/i] ",
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("Start Input  "),
                     Span::styled(" [Tab] ", Style::default().fg(Color::Blue)),
                     Span::raw("Next Screen  "),

@@ -15,4 +15,6 @@ pub use diagnostics::{FailureDiagnostics, RemediationAdvice};
 pub use events::{CoordinatorEvent, CoordinatorEventRepository};
 pub use logging::TraceContext;
 pub use metrics::{MetricsCollector, SystemMetrics};
-pub use timeline::{AgentActivityItem, AgentTimeline, TaskTimeline, TaskTimelineItem, TimelineService};
+pub use timeline::{
+    AgentActivityItem, AgentTimeline, TaskTimeline, TaskTimelineItem, TimelineService,
+};
