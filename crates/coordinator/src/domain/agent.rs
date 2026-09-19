@@ -115,6 +115,16 @@ pub struct Agent {
     pub active_tasks_count: i32,
     /// When true, agent will complete running tasks but accept no new assignments.
     pub is_draining: bool,
+    /// Authorization role (e.g. "worker", "reviewer", "readonly", "admin").
+    pub role: String,
+    /// JSONB permission boundaries (allowed paths, denied paths, can_modify_code, etc.).
+    pub permissions: Value,
+    /// Whether this agent's API key has been revoked by an administrator.
+    pub is_revoked: bool,
+    /// When the current API key was issued.
+    pub api_key_created_at: DateTime<Utc>,
+    /// Optional expiration timestamp for the agent's API key.
+    pub api_key_expires_at: Option<DateTime<Utc>>,
 }
 
 impl Agent {
@@ -142,9 +152,26 @@ impl Agent {
             .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 
+    /// Returns the agent's authorization role.
+    pub fn role(&self) -> agent_protocol::security::AgentRole {
+        self.role.parse().unwrap_or(agent_protocol::security::AgentRole::Worker)
+    }
+
+    /// Returns the agent's filesystem and action permission boundaries.
+    pub fn permissions_boundary(&self) -> agent_protocol::security::PermissionBoundary {
+        serde_json::from_value(self.permissions.clone()).unwrap_or_default()
+    }
+
+    /// Checks if the agent's API key has passed its expiration time.
+    pub fn is_key_expired(&self) -> bool {
+        self.api_key_expires_at.map_or(false, |exp| exp < Utc::now())
+    }
+
     /// Returns `true` if this agent can accept a new task assignment.
     pub fn is_available(&self) -> bool {
         !self.is_draining
+            && !self.is_revoked
+            && !self.is_key_expired()
             && matches!(self.status, AgentStatus::Idle)
             && self.current_task_id.is_none()
             && self.active_tasks_count < self.max_concurrency
@@ -202,6 +229,11 @@ impl Agent {
             max_concurrency: 1,
             active_tasks_count: 0,
             is_draining: false,
+            role: "worker".to_string(),
+            permissions: serde_json::json!(agent_protocol::security::PermissionBoundary::default()),
+            is_revoked: false,
+            api_key_created_at: Utc::now(),
+            api_key_expires_at: None,
         }
     }
 }
@@ -222,6 +254,12 @@ pub struct NewAgent {
     pub profile: Option<agent_protocol::AgentCapabilities>,
     #[serde(default)]
     pub max_concurrency: Option<i32>,
+    #[serde(default)]
+    pub role: Option<String>,
+    #[serde(default)]
+    pub permissions: Option<agent_protocol::security::PermissionBoundary>,
+    #[serde(default)]
+    pub api_key_expires_at: Option<DateTime<Utc>>,
 }
 
 impl NewAgent {
@@ -240,6 +278,9 @@ impl NewAgent {
             nats_subject: nats_subject.into(),
             profile: None,
             max_concurrency: None,
+            role: None,
+            permissions: None,
+            api_key_expires_at: None,
         }
     }
 
@@ -250,6 +291,21 @@ impl NewAgent {
 
     pub fn with_max_concurrency(mut self, max: i32) -> Self {
         self.max_concurrency = Some(max);
+        self
+    }
+
+    pub fn with_role(mut self, role: impl Into<String>) -> Self {
+        self.role = Some(role.into());
+        self
+    }
+
+    pub fn with_permissions(mut self, permissions: agent_protocol::security::PermissionBoundary) -> Self {
+        self.permissions = Some(permissions);
+        self
+    }
+
+    pub fn with_expiration(mut self, expires_at: DateTime<Utc>) -> Self {
+        self.api_key_expires_at = Some(expires_at);
         self
     }
 }
@@ -264,6 +320,9 @@ impl Default for NewAgent {
             nats_subject: String::new(),
             profile: None,
             max_concurrency: None,
+            role: None,
+            permissions: None,
+            api_key_expires_at: None,
         }
     }
 }

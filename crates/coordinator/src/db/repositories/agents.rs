@@ -13,15 +13,17 @@ impl AgentRepository {
         let capabilities_json = json!(new_agent.capabilities);
         let profile_json = new_agent.profile.as_ref().map(|p| json!(p));
         let max_concurrency = new_agent.max_concurrency.unwrap_or(1);
+        let role = new_agent.role.clone().unwrap_or_else(|| "worker".to_string());
+        let permissions_json = json!(new_agent.permissions.clone().unwrap_or_default());
 
         let agent = sqlx::query_as!(
             Agent,
             r#"
             INSERT INTO agents (
                 human_owner, api_key_hash, adapter_type, capabilities, nats_subject, status,
-                capability_profile, max_concurrency
+                capability_profile, max_concurrency, role, permissions, api_key_expires_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING
                 id,
                 human_owner,
@@ -42,7 +44,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             "#,
             new_agent.human_owner,
             new_agent.api_key_hash,
@@ -52,6 +59,9 @@ impl AgentRepository {
             AgentStatus::Offline as AgentStatus,
             profile_json,
             max_concurrency,
+            role,
+            permissions_json,
+            new_agent.api_key_expires_at,
         )
         .fetch_one(pool)
         .await
@@ -69,15 +79,17 @@ impl AgentRepository {
         let capabilities_json = json!(new_agent.capabilities);
         let profile_json = new_agent.profile.as_ref().map(|p| json!(p));
         let max_concurrency = new_agent.max_concurrency.unwrap_or(1);
+        let role = new_agent.role.clone().unwrap_or_else(|| "worker".to_string());
+        let permissions_json = json!(new_agent.permissions.clone().unwrap_or_default());
 
         let agent = sqlx::query_as!(
             Agent,
             r#"
             INSERT INTO agents (
                 id, human_owner, api_key_hash, adapter_type, capabilities, nats_subject, status,
-                capability_profile, max_concurrency
+                capability_profile, max_concurrency, role, permissions, api_key_expires_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING
                 id,
                 human_owner,
@@ -98,7 +110,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             "#,
             id,
             new_agent.human_owner,
@@ -109,6 +126,9 @@ impl AgentRepository {
             AgentStatus::Offline as AgentStatus,
             profile_json,
             max_concurrency,
+            role,
+            permissions_json,
+            new_agent.api_key_expires_at,
         )
         .fetch_one(pool)
         .await
@@ -142,7 +162,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             FROM agents
             WHERE id = $1
             "#,
@@ -180,7 +205,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             FROM agents
             ORDER BY created_at ASC
             "#
@@ -217,7 +247,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             FROM agents
             WHERE status = $1
             ORDER BY created_at ASC
@@ -256,11 +291,18 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             FROM agents
             WHERE status = 'idle'
               AND current_task_id IS NULL
               AND is_draining = FALSE
+              AND is_revoked = FALSE
+              AND (api_key_expires_at IS NULL OR api_key_expires_at > NOW())
               AND active_tasks_count < max_concurrency
               AND health_status IN ('healthy', 'degraded')
             ORDER BY created_at ASC
@@ -305,7 +347,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             "#,
             id,
             status as AgentStatus,
@@ -355,7 +402,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             "#,
             id,
             task_id,
@@ -405,7 +457,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             "#,
             id,
             profile_json,
@@ -456,7 +513,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             "#,
             id,
             health_status as HealthStatus,
@@ -501,7 +563,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             "#,
             id
         )
@@ -551,7 +618,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             "#,
             id,
             error_msg,
@@ -595,7 +667,12 @@ impl AgentRepository {
                 heartbeat_latency_ms,
                 max_concurrency,
                 active_tasks_count,
-                is_draining
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
             "#,
             id,
             draining,
@@ -603,6 +680,241 @@ impl AgentRepository {
         .fetch_optional(pool)
         .await
         .context("Failed to set agent draining status")?;
+
+        Ok(agent)
+    }
+
+    /// Revokes an agent's access immediately.
+    pub async fn revoke_agent(pool: &PgPool, id: Uuid) -> Result<Option<Agent>> {
+        let agent = sqlx::query_as!(
+            Agent,
+            r#"
+            UPDATE agents
+            SET is_revoked = TRUE,
+                status = 'offline'
+            WHERE id = $1
+            RETURNING
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
+            "#,
+            id
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to revoke agent")?;
+
+        Ok(agent)
+    }
+
+    /// Un-revokes an agent's access.
+    pub async fn unrevoke_agent(pool: &PgPool, id: Uuid) -> Result<Option<Agent>> {
+        let agent = sqlx::query_as!(
+            Agent,
+            r#"
+            UPDATE agents
+            SET is_revoked = FALSE
+            WHERE id = $1
+            RETURNING
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
+            "#,
+            id
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to unrevoke agent")?;
+
+        Ok(agent)
+    }
+
+    /// Updates agent role (e.g. worker, reviewer, readonly, admin).
+    pub async fn update_role(pool: &PgPool, id: Uuid, role: &str) -> Result<Option<Agent>> {
+        let agent = sqlx::query_as!(
+            Agent,
+            r#"
+            UPDATE agents
+            SET role = $2
+            WHERE id = $1
+            RETURNING
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
+            "#,
+            id,
+            role,
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to update agent role")?;
+
+        Ok(agent)
+    }
+
+    /// Updates agent permission boundary.
+    pub async fn update_permissions(
+        pool: &PgPool,
+        id: Uuid,
+        permissions: &agent_protocol::security::PermissionBoundary,
+    ) -> Result<Option<Agent>> {
+        let perms_json = json!(permissions);
+        let agent = sqlx::query_as!(
+            Agent,
+            r#"
+            UPDATE agents
+            SET permissions = $2
+            WHERE id = $1
+            RETURNING
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
+            "#,
+            id,
+            perms_json,
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to update agent permissions")?;
+
+        Ok(agent)
+    }
+
+    /// Rotates an agent's API key with a new hash.
+    pub async fn rotate_api_key(
+        pool: &PgPool,
+        id: Uuid,
+        new_api_key_hash: &str,
+    ) -> Result<Option<Agent>> {
+        let agent = sqlx::query_as!(
+            Agent,
+            r#"
+            UPDATE agents
+            SET api_key_hash = $2,
+                api_key_created_at = NOW(),
+                is_revoked = FALSE
+            WHERE id = $1
+            RETURNING
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining,
+                role,
+                permissions,
+                is_revoked,
+                api_key_created_at,
+                api_key_expires_at
+            "#,
+            id,
+            new_api_key_hash,
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to rotate agent API key")?;
 
         Ok(agent)
     }
@@ -685,6 +997,9 @@ mod tests {
             nats_subject: "agents.alice-mock.events".to_string(),
             profile: None,
             max_concurrency: Some(1),
+            role: Some("worker".to_string()),
+            permissions: None,
+            api_key_expires_at: None,
         };
         let agent = AgentRepository::create(&pool, &new_agent)
             .await

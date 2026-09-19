@@ -15,6 +15,7 @@ pub mod adapter;
 pub mod capabilities;
 pub mod discovery;
 pub mod messages;
+pub mod security;
 pub mod spec;
 pub mod status;
 
@@ -25,5 +26,6 @@ pub use capabilities::{
 };
 pub use discovery::CapabilityDetector;
 pub use messages::{AgentMessage, CoordinatorMessage};
+pub use security::{AgentRole, PermissionBoundary};
 pub use spec::TaskSpec;
 pub use status::{AckKind, AgentStatus, DeliveryAck};

@@ -1,6 +1,7 @@
 //! Entity repositories for PostgreSQL operations.
 
 pub mod agents;
+pub mod audit;
 pub mod deliveries;
 pub mod events;
 pub mod git_conflicts;
@@ -11,6 +12,7 @@ pub mod tasks;
 pub mod unexpected_resources;
 
 pub use agents::AgentRepository;
+pub use audit::AuditRepository;
 pub use deliveries::TaskDeliveryRepository;
 pub use events::AgentEventRepository;
 pub use git_conflicts::{GitConflictRecord, GitConflictRepository};

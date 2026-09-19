@@ -6,6 +6,8 @@ use tracing::{error, info, warn};
 use agent_protocol::{AgentMessage, CoordinatorMessage};
 use crate::db::repositories::AgentRepository;
 use crate::domain::{AdapterType, NewAgent};
+use crate::security::audit::{AuditEvent, AuditLogger};
+use crate::security::auth::ApiKeyManager;
 
 pub const REGISTRATION_SUBJECT: &str = "coordinator.agents.register";
 
@@ -52,9 +54,53 @@ impl RegistrationHandler {
         // Check if agent already exists
         match AgentRepository::find_by_id(pool, agent_id).await? {
             Some(existing) => {
-                // Verify API key against stored hash
-                // In dev/test: direct check or hash comparison
-                if existing.api_key_hash != api_key {
+                // Check if agent is revoked
+                if existing.is_revoked {
+                    let _ = AuditLogger::record(
+                        pool,
+                        &AuditEvent::new(
+                            "agent",
+                            Some(agent_id.to_string()),
+                            "agent_register",
+                            "agent",
+                            Some(agent_id.to_string()),
+                            "denied",
+                            serde_json::json!({ "reason": "Agent key is revoked" }),
+                        ),
+                    ).await;
+                    warn!(%agent_id, "Registration failed: agent key is revoked");
+                    return Ok(CoordinatorMessage::RegisterResponse {
+                        status: "error".to_string(),
+                        nats_subject: None,
+                        error: Some("Agent key is revoked".to_string()),
+                    });
+                }
+
+                // Check if agent key is expired
+                if existing.is_key_expired() {
+                    let _ = AuditLogger::record(
+                        pool,
+                        &AuditEvent::new(
+                            "agent",
+                            Some(agent_id.to_string()),
+                            "agent_register",
+                            "agent",
+                            Some(agent_id.to_string()),
+                            "denied",
+                            serde_json::json!({ "reason": "Agent key has expired" }),
+                        ),
+                    ).await;
+                    warn!(%agent_id, "Registration failed: agent key has expired");
+                    return Ok(CoordinatorMessage::RegisterResponse {
+                        status: "error".to_string(),
+                        nats_subject: None,
+                        error: Some("Agent key has expired".to_string()),
+                    });
+                }
+
+                // Verify API key against stored hash using constant-time check
+                if !ApiKeyManager::verify_key(&api_key, &existing.api_key_hash) {
+                    let _ = AuditLogger::log_auth_failure(pool, agent_id, "Invalid API key during re-registration").await;
                     warn!(%agent_id, "Registration failed: invalid API key");
                     return Ok(CoordinatorMessage::RegisterResponse {
                         status: "error".to_string(),
@@ -62,23 +108,59 @@ impl RegistrationHandler {
                         error: Some("Invalid API key".to_string()),
                     });
                 }
+
                 // Update profile if supplied
                 if let Some(ref prof) = profile {
                     let _ = AgentRepository::update_capability_profile(pool, agent_id, prof).await;
                 }
+
+                let _ = AuditLogger::record(
+                    pool,
+                    &AuditEvent::new(
+                        "agent",
+                        Some(agent_id.to_string()),
+                        "agent_register",
+                        "agent",
+                        Some(agent_id.to_string()),
+                        "success",
+                        serde_json::json!({ "re_registration": true }),
+                    ),
+                ).await;
             }
             None => {
-                // Register new agent
+                // Register new agent: hash API key if not already hashed
+                let api_key_hash = if api_key.starts_with("am_ak_") {
+                    ApiKeyManager::hash_key(&api_key)
+                } else {
+                    api_key
+                };
+
                 let new_agent = NewAgent {
-                    human_owner,
-                    api_key_hash: api_key,
+                    human_owner: human_owner.clone(),
+                    api_key_hash,
                     adapter_type: adapter,
                     capabilities,
                     nats_subject: nats_subject.clone(),
                     profile,
                     max_concurrency: Some(1),
+                    role: Some("worker".to_string()),
+                    permissions: Some(agent_protocol::security::PermissionBoundary::default()),
+                    api_key_expires_at: None,
                 };
                 AgentRepository::create_with_id(pool, agent_id, &new_agent).await?;
+
+                let _ = AuditLogger::record(
+                    pool,
+                    &AuditEvent::new(
+                        "agent",
+                        Some(agent_id.to_string()),
+                        "agent_register",
+                        "agent",
+                        Some(agent_id.to_string()),
+                        "success",
+                        serde_json::json!({ "human_owner": human_owner }),
+                    ),
+                ).await;
             }
         }
 

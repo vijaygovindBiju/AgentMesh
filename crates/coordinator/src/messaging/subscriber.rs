@@ -12,10 +12,46 @@ use crate::db::repositories::{
 };
 use crate::domain::{AckKind, AgentEventType, AgentStatus, DeliveryStatus, NewAgentEvent, TaskStatus};
 use crate::messaging::streams::{AGENT_EVENTS_STREAM, AGENT_EVENTS_SUBJECT};
+use crate::security::audit::{AuditEvent, AuditLogger};
+use crate::security::task_auth::TaskAuthorizer;
+use crate::security::SecurityError;
+use uuid::Uuid;
 
 pub struct EventSubscriber;
 
 impl EventSubscriber {
+    /// Validates that an agent has authority to act on a task before processing its events.
+    async fn check_task_auth(pool: &PgPool, agent_id: Uuid, task_id: Uuid, action: &str) -> Result<bool> {
+        match TaskAuthorizer::authorize_agent_for_task(pool, agent_id, task_id, action).await {
+            Ok(()) => Ok(true),
+            Err(SecurityError::TaskImpersonation { actor_agent_id, task_id, assigned_to, action }) => {
+                let _ = AuditLogger::log_task_impersonation(pool, actor_agent_id, task_id, assigned_to, &action).await;
+                warn!(%actor_agent_id, %task_id, ?assigned_to, %action, "Rejected unauthorized task event: task is assigned to another agent");
+                Ok(false)
+            }
+            Err(SecurityError::AgentRevoked(agent_id)) => {
+                let _ = AuditLogger::record(
+                    pool,
+                    &AuditEvent::new(
+                        "agent",
+                        Some(agent_id.to_string()),
+                        "revoked_agent_action",
+                        "task",
+                        Some(task_id.to_string()),
+                        "denied",
+                        json!({ "action": action }),
+                    ),
+                ).await;
+                warn!(%agent_id, %task_id, %action, "Rejected task event: agent key is revoked");
+                Ok(false)
+            }
+            Err(e) => {
+                warn!(%agent_id, %task_id, error = %e, "Security authorization error");
+                Ok(false)
+            }
+        }
+    }
+
     /// Creates or retrieves a durable consumer for the AGENT_EVENTS stream.
     pub async fn create_consumer(jetstream: &JetStreamContext) -> Result<PullConsumer> {
         let stream = jetstream
@@ -47,6 +83,10 @@ impl EventSubscriber {
                 idempotency_key,
                 timestamp: _,
             } => {
+                if !Self::check_task_auth(pool, agent_id, task_id, "task_started").await? {
+                    return Ok(());
+                }
+
                 info!(%agent_id, %task_id, %idempotency_key, "Agent reported TaskStarted");
 
                 // 1. Record event
@@ -90,6 +130,10 @@ impl EventSubscriber {
                 percent,
                 timestamp: _,
             } => {
+                if !Self::check_task_auth(pool, agent_id, task_id, "progress_update").await? {
+                    return Ok(());
+                }
+
                 info!(%agent_id, %task_id, percent, %message, "Agent reported ProgressUpdate");
                 AgentEventRepository::create(
                     pool,
@@ -111,6 +155,10 @@ impl EventSubscriber {
                 blocking_task_id,
                 timestamp: _,
             } => {
+                if !Self::check_task_auth(pool, agent_id, task_id, "blocked").await? {
+                    return Ok(());
+                }
+
                 warn!(%agent_id, %task_id, %reason, ?blocking_task_id, "Agent reported Blocked");
 
                 // 1. Record event
@@ -139,6 +187,10 @@ impl EventSubscriber {
                 summary,
                 timestamp: _,
             } => {
+                if !Self::check_task_auth(pool, agent_id, task_id, "completed").await? {
+                    return Ok(());
+                }
+
                 info!(%agent_id, %task_id, %summary, "Agent reported Completed");
 
                 // 1. Record event
@@ -168,6 +220,10 @@ impl EventSubscriber {
                 error,
                 timestamp: _,
             } => {
+                if !Self::check_task_auth(pool, agent_id, task_id, "failed").await? {
+                    return Ok(());
+                }
+
                 error!(%agent_id, %task_id, %error, "Agent reported Failed");
 
                 // 1. Record event

@@ -91,11 +91,14 @@ impl AssignmentService {
                            current_task_id, last_seen, created_at,
                            capability_profile, health_status AS "health_status: HealthStatus",
                            consecutive_failures, tasks_completed_count, tasks_failed_count,
-                           last_error, heartbeat_latency_ms, max_concurrency, active_tasks_count, is_draining
+                           last_error, heartbeat_latency_ms, max_concurrency, active_tasks_count, is_draining,
+                           role, permissions, is_revoked, api_key_created_at, api_key_expires_at
                     FROM agents
                     WHERE id = $1
                       AND status = 'idle'
                       AND is_draining = FALSE
+                      AND is_revoked = FALSE
+                      AND (api_key_expires_at IS NULL OR api_key_expires_at > NOW())
                       AND active_tasks_count < max_concurrency
                       AND health_status IN ('healthy', 'degraded')
                     FOR UPDATE SKIP LOCKED
@@ -120,10 +123,13 @@ impl AssignmentService {
                                a.current_task_id, a.last_seen, a.created_at,
                                a.capability_profile, a.health_status AS "health_status: HealthStatus",
                                a.consecutive_failures, a.tasks_completed_count, a.tasks_failed_count,
-                               a.last_error, a.heartbeat_latency_ms, a.max_concurrency, a.active_tasks_count, a.is_draining
+                               a.last_error, a.heartbeat_latency_ms, a.max_concurrency, a.active_tasks_count, a.is_draining,
+                               a.role, a.permissions, a.is_revoked, a.api_key_created_at, a.api_key_expires_at
                         FROM agents a
                         WHERE a.status = 'idle'
                           AND a.is_draining = FALSE
+                          AND a.is_revoked = FALSE
+                          AND (a.api_key_expires_at IS NULL OR a.api_key_expires_at > NOW())
                           AND a.active_tasks_count < a.max_concurrency
                           AND a.health_status IN ('healthy', 'degraded')
                           AND NOT EXISTS (
@@ -147,6 +153,19 @@ impl AssignmentService {
                 // No available idle agent for this task in this cycle
                 continue;
             };
+
+            // Enforce permission boundary and role constraints
+            let affected = task.resources();
+            if let Err(sec_err) = crate::security::permissions::PermissionEnforcer::validate_task_assignment(
+                agent.id,
+                agent.role(),
+                &agent.permissions_boundary(),
+                agent.is_revoked,
+                &affected,
+            ) {
+                tracing::warn!(%task.id, agent_id = %agent.id, error = %sec_err, "Task assignment blocked by security permission boundary");
+                continue;
+            }
 
             // 3. Compute attempt number (increments on reassignment)
             let attempt_row = sqlx::query!(

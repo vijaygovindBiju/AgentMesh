@@ -78,7 +78,8 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Phase 9 — Real Repository / Git Coordination (DONE)
 - [x] Phase 10 — Intelligent Planning v1 (DONE)
 - [x] Phase 11 — Agent Capability System (DONE)
-- [ ] Phase 12 — Security (NEXT)
+- [x] Phase 12 — Security (DONE)
+- [ ] Phase 13 — Observability (NEXT)
 
 ---
 
@@ -379,20 +380,23 @@ Coordinator: assigns tasks based on requirements + availability.
 
 ---
 
-## Phase 12 — Security
+## Phase 12 — Security [x] DONE
 
 **Goal:** Make remote agents safe to operate.
 
-- [ ] 12.1 Agent authentication
-- [ ] 12.2 Agent authorization
-- [ ] 12.3 Secure NATS configuration
-- [ ] 12.4 TLS
-- [ ] 12.5 Credential management
-- [ ] 12.6 Secret isolation
-- [ ] 12.7 Agent permission boundaries
-- [ ] 12.8 Task authorization
-- [ ] 12.9 Audit security-sensitive actions
-- [ ] 12.10 Security testing
+- [x] 12.1 Agent authentication (`ApiKeyManager` generates `am_ak_` keys, SHA-256 hashing, constant-time verification, session tokens)
+- [x] 12.2 Agent authorization (`AgentRole` enum: Worker, Reviewer, ReadOnly, Admin; enforced at task assignment and completion)
+- [x] 12.3 Secure NATS configuration (`NatsSecurityConfig` auth tokens, user/pass credentials, subject gating in `NatsSubjectAuthorizer`)
+- [x] 12.4 TLS (TLS connection support, root CA verification, and mTLS client cert configuration in `connect_secure`)
+- [x] 12.5 Credential management (Secure key generation, key rotation via `AgentRepository::rotate_api_key`, key revocation via `revoke_agent`)
+- [x] 12.6 Secret isolation (`SecretScoper` isolates execution environments; `SecretRedactor` redacts keys, passwords, private keys in logs/JSON)
+- [x] 12.7 Agent permission boundaries (`PermissionBoundary` glob paths denylists/allowlists, code modification flags, enforced in `PermissionEnforcer`)
+- [x] 12.8 Task authorization (`TaskAuthorizer` enforces task ownership, rejects impersonation, prevents unauthorized task events in subscriber)
+- [x] 12.9 Audit security-sensitive actions (`AuditLogger` and `AuditRepository` record alerts and auth events in `audit_logs` table)
+- [x] 12.10 Security testing (`crates/coordinator/tests/phase12_security.rs`: 8 passing integration tests verifying full security matrix)
+
+### Acceptance Criteria — Phase 12
+Remote agents operate within strict authentication, authorization, and permission boundaries without secret leakage or impersonation. ✓ Verified in `phase12_security.rs` and workspace test suite.
 
 ---
 
