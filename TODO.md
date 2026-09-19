@@ -79,7 +79,8 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Phase 10 — Intelligent Planning v1 (DONE)
 - [x] Phase 11 — Agent Capability System (DONE)
 - [x] Phase 12 — Security (DONE)
-- [ ] Phase 13 — Observability (NEXT)
+- [x] Phase 13 — Observability (DONE)
+- [ ] Phase 14 — Production-Quality Reliability (NEXT)
 
 ---
 
@@ -404,15 +405,18 @@ Remote agents operate within strict authentication, authorization, and permissio
 
 **Goal:** Understand everything happening in the system.
 
-- [ ] 13.1 Structured logs
-- [ ] 13.2 Task execution timeline
-- [ ] 13.3 Agent activity timeline
-- [ ] 13.4 NATS delivery visibility
-- [ ] 13.5 Failure diagnostics
-- [ ] 13.6 Coordinator events
-- [ ] 13.7 Persistent audit log
-- [ ] 13.8 Execution metrics
-- [ ] 13.9 TUI diagnostics
+- [x] 13.1 Structured logs (`TraceContext`, task/agent/project correlation spans in `crates/coordinator/src/observability/logging.rs`)
+- [x] 13.2 Task execution timeline (`TimelineService::build_task_timeline` with milestones, elapsed duration, stages in `timeline.rs`)
+- [x] 13.3 Agent activity timeline (`TimelineService::build_agent_timeline` with registration, task deliveries, events stream in `timeline.rs`)
+- [x] 13.4 NATS delivery visibility (`DeliveryDiagnostics::inspect` with attempt history, expiry detection, redelivery visibility)
+- [x] 13.5 Failure diagnostics (`FailureDiagnostics::diagnose_task` with merge collision detection, unexpected resources, and `RemediationAdvice`)
+- [x] 13.6 Coordinator events (`CoordinatorEvent`, `CoordinatorEventRepository`, schema migration `005_observability_and_events.sql`)
+- [x] 13.7 Persistent audit log (integrated query and audit alert aggregation across security & observability subsystems)
+- [x] 13.8 Execution metrics (`MetricsCollector::collect`, `SystemMetrics` real-time status and throughput tracking)
+- [x] 13.9 TUI diagnostics (`CurrentScreen::Diagnostics`, `DiagnosticsScreen`, operational KPI bar, fleet health, task drill-down, live event stream)
+
+### Acceptance Criteria:
+Full observability over tasks, agents, and NATS JetStream messaging. Chronological timelines, automated failure diagnostics, real-time KPI metrics, and TUI diagnostics view. ✓ Verified in `phase13_observability.rs` (7/7 passed) and full workspace test suite (160/160 passed).
 
 ---
 

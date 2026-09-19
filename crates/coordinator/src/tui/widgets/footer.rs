@@ -69,6 +69,16 @@ impl FooterWidget {
                     Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
                     Span::raw("Quit"),
                 ],
+                CurrentScreen::Diagnostics => vec![
+                    Span::styled(" [R] ", Style::default().fg(Color::Green)),
+                    Span::raw("Refresh  "),
+                    Span::styled(" [Tab] ", Style::default().fg(Color::Blue)),
+                    Span::raw("Next Screen  "),
+                    Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
+                    Span::raw("Nav  "),
+                    Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
+                    Span::raw("Quit"),
+                ],
             },
         };
 

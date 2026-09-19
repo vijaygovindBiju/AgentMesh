@@ -4,5 +4,6 @@ pub mod db;
 pub mod domain;
 pub mod git;
 pub mod messaging;
+pub mod observability;
 pub mod security;
 pub mod tui;

@@ -40,6 +40,9 @@ pub enum TuiUpdateEvent {
     Agents(Vec<Agent>),
     Overlaps(Vec<OverlapWarning>),
     StatusMessage(String),
+    Metrics(crate::observability::SystemMetrics),
+    Timeline(crate::observability::TaskTimeline),
+    ObservabilityEvent(crate::observability::CoordinatorEvent),
 }
 
 
@@ -50,6 +53,7 @@ pub enum CurrentScreen {
     ProjectInput,
     PlanReview,
     Dashboard,
+    Diagnostics,
 }
 
 impl CurrentScreen {
@@ -58,6 +62,7 @@ impl CurrentScreen {
             CurrentScreen::ProjectInput => "1. Project Input",
             CurrentScreen::PlanReview => "2. Plan Review",
             CurrentScreen::Dashboard => "3. Dashboard",
+            CurrentScreen::Diagnostics => "4. Diagnostics",
         }
     }
 }
@@ -120,6 +125,12 @@ pub struct AppState {
     pub active_overlaps: Vec<OverlapWarning>,
     pub selected_overlap_index: usize,
 
+    // Diagnostics / Observability
+    pub metrics: Option<crate::observability::SystemMetrics>,
+    pub recent_events: Vec<crate::observability::CoordinatorEvent>,
+    pub selected_timeline: Option<crate::observability::TaskTimeline>,
+    pub selected_event_index: usize,
+
     // Status bar & messaging
     pub status_message: Option<String>,
     pub should_quit: bool,
@@ -153,6 +164,11 @@ impl AppState {
             agents: Vec::new(),
             active_overlaps: Vec::new(),
             selected_overlap_index: 0,
+
+            metrics: None,
+            recent_events: Vec::new(),
+            selected_timeline: None,
+            selected_event_index: 0,
 
             status_message: Some("Welcome to AgentMesh Coordinator. Press [Tab] to switch screens.".to_string()),
             should_quit: false,
@@ -270,6 +286,49 @@ impl AppState {
         review3.overlap_warnings = vec![warning];
 
         self.review_tasks = vec![review1, review2, review3];
+        self.metrics = Some(crate::observability::SystemMetrics {
+            total_tasks: 3,
+            tasks_proposed: 2,
+            tasks_approved: 1,
+            tasks_executing: 1,
+            tasks_completed: 0,
+            tasks_failed: 0,
+            tasks_blocked: 0,
+            total_agents: 2,
+            agents_idle: 1,
+            agents_busy: 1,
+            agents_offline: 0,
+            agents_healthy: 2,
+            agents_degraded: 0,
+            agents_unhealthy: 0,
+            total_deliveries: 1,
+            successful_deliveries: 1,
+            delivery_success_rate_percent: 100.0,
+            total_conflicts: 1,
+            total_audit_alerts: 0,
+        });
+        self.recent_events = vec![
+            crate::observability::CoordinatorEvent {
+                id: Uuid::new_v4(),
+                timestamp: chrono::Utc::now(),
+                event_type: "coordinator.started".to_string(),
+                project_id: Some(proj_id),
+                task_id: None,
+                agent_id: None,
+                message: "Coordinator engine started successfully.".to_string(),
+                payload: serde_json::json!({ "version": "0.1.0" }),
+            },
+            crate::observability::CoordinatorEvent {
+                id: Uuid::new_v4(),
+                timestamp: chrono::Utc::now(),
+                event_type: "task.overlap_detected".to_string(),
+                project_id: Some(proj_id),
+                task_id: Some(task1_id),
+                agent_id: None,
+                message: "Conflict warning detected on crates/db".to_string(),
+                payload: serde_json::json!({ "resource": "crates/db" }),
+            },
+        ];
         self.current_screen = CurrentScreen::PlanReview;
         self
     }
@@ -316,6 +375,10 @@ impl AppState {
                 self.current_screen = CurrentScreen::Dashboard;
                 None
             }
+            KeyCode::Char('4') => {
+                self.current_screen = CurrentScreen::Diagnostics;
+                None
+            }
             KeyCode::Char('r') | KeyCode::Char('R') => {
                 self.status_message = Some("Refreshed data.".to_string());
                 Some(TuiAction::RefreshData)
@@ -330,6 +393,7 @@ impl AppState {
                     None
                 }
                 CurrentScreen::Dashboard => self.handle_dashboard_key(key),
+                CurrentScreen::Diagnostics => self.handle_diagnostics_key(key),
             },
         }
     }
@@ -374,6 +438,26 @@ impl AppState {
                 } else {
                     None
                 }
+            }
+            _ => None,
+        }
+    }
+
+    fn handle_diagnostics_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.selected_event_index > 0 {
+                    self.selected_event_index -= 1;
+                }
+                None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !self.recent_events.is_empty()
+                    && self.selected_event_index + 1 < self.recent_events.len()
+                {
+                    self.selected_event_index += 1;
+                }
+                None
             }
             _ => None,
         }
@@ -557,7 +641,8 @@ impl AppState {
         self.current_screen = match self.current_screen {
             CurrentScreen::ProjectInput => CurrentScreen::PlanReview,
             CurrentScreen::PlanReview => CurrentScreen::Dashboard,
-            CurrentScreen::Dashboard => CurrentScreen::ProjectInput,
+            CurrentScreen::Dashboard => CurrentScreen::Diagnostics,
+            CurrentScreen::Diagnostics => CurrentScreen::ProjectInput,
         };
     }
 
@@ -739,6 +824,14 @@ impl AppState {
             TuiUpdateEvent::Agents(agents) => self.agents = agents,
             TuiUpdateEvent::Overlaps(overlaps) => self.active_overlaps = overlaps,
             TuiUpdateEvent::StatusMessage(msg) => self.status_message = Some(msg),
+            TuiUpdateEvent::Metrics(m) => self.metrics = Some(m),
+            TuiUpdateEvent::Timeline(tl) => self.selected_timeline = Some(tl),
+            TuiUpdateEvent::ObservabilityEvent(ev) => {
+                self.recent_events.insert(0, ev);
+                if self.recent_events.len() > 100 {
+                    self.recent_events.truncate(100);
+                }
+            }
         }
     }
 }
@@ -772,6 +865,9 @@ mod tests {
         assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 
         state.handle_key(make_key(KeyCode::Tab));
+        assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
+
+        state.handle_key(make_key(KeyCode::Tab));
         assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
 
         // Direct number keys
@@ -780,6 +876,9 @@ mod tests {
 
         state.handle_key(make_key(KeyCode::Char('3')));
         assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+
+        state.handle_key(make_key(KeyCode::Char('4')));
+        assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
         state.handle_key(make_key(KeyCode::Char('1')));
         assert_eq!(state.current_screen, CurrentScreen::ProjectInput);

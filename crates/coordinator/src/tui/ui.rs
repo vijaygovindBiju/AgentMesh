@@ -3,7 +3,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::tui::screens::{DashboardScreen, PlanReviewScreen, ProjectInputScreen};
+use crate::tui::screens::{DashboardScreen, DiagnosticsScreen, PlanReviewScreen, ProjectInputScreen};
 use crate::tui::state::{AppState, CurrentScreen};
 use crate::tui::widgets::{FooterWidget, HeaderWidget};
 
@@ -28,6 +28,7 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         CurrentScreen::ProjectInput => ProjectInputScreen::render(frame, chunks[1], state),
         CurrentScreen::PlanReview => PlanReviewScreen::render(frame, chunks[1], state),
         CurrentScreen::Dashboard => DashboardScreen::render(frame, chunks[1], state),
+        CurrentScreen::Diagnostics => DiagnosticsScreen::render(frame, chunks[1], state),
     }
 
     // 3. Footer

@@ -15,9 +15,9 @@ impl HeaderWidget {
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Length(28), // Title & version
+                Constraint::Length(26), // Title & version
                 Constraint::Min(20),    // Active project info
-                Constraint::Length(45), // Screen tabs
+                Constraint::Length(58), // Screen tabs
             ])
             .split(area);
 
@@ -55,11 +55,13 @@ impl HeaderWidget {
             Line::from("1: Input"),
             Line::from("2: Review"),
             Line::from("3: Dashboard"),
+            Line::from("4: Diagnostics"),
         ];
         let selected_idx = match state.current_screen {
             CurrentScreen::ProjectInput => 0,
             CurrentScreen::PlanReview => 1,
             CurrentScreen::Dashboard => 2,
+            CurrentScreen::Diagnostics => 3,
         };
 
         let tabs = Tabs::new(titles)

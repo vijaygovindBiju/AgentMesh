@@ -70,6 +70,28 @@ impl GitConflictRepository {
         Ok(records)
     }
 
+    /// Lists unresolved Git conflicts for a specific task.
+    pub async fn list_by_task(
+        pool: &PgPool,
+        task_id: Uuid,
+    ) -> Result<Vec<GitConflictRecord>> {
+        let records = sqlx::query_as!(
+            GitConflictRecord,
+            r#"
+            SELECT id, project_id, task_id_a, task_id_b, conflicting_path, description, resolved, created_at
+            FROM git_conflicts
+            WHERE (task_id_a = $1 OR task_id_b = $1) AND resolved = FALSE
+            ORDER BY created_at DESC
+            "#,
+            task_id
+        )
+        .fetch_all(pool)
+        .await
+        .context("Failed to list git conflicts by task")?;
+
+        Ok(records)
+    }
+
     /// Marks a conflict as resolved.
     pub async fn mark_resolved(pool: &PgPool, conflict_id: Uuid) -> Result<()> {
         sqlx::query!(

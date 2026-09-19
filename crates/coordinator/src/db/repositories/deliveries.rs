@@ -157,6 +157,40 @@ impl TaskDeliveryRepository {
         Ok(deliveries)
     }
 
+    /// Lists all deliveries for a given agent ordered by delivered_at ascending.
+    pub async fn list_by_agent(pool: &PgPool, agent_id: Uuid) -> Result<Vec<TaskDelivery>> {
+        let deliveries = sqlx::query_as!(
+            TaskDelivery,
+            r#"
+            SELECT
+                id,
+                task_id,
+                agent_id,
+                attempt,
+                nats_stream,
+                nats_subject,
+                nats_sequence,
+                idempotency_key,
+                delivered_at,
+                acknowledged_at,
+                ack_kind AS "ack_kind: AckKind",
+                expires_at,
+                status AS "status: DeliveryStatus",
+                failure_reason,
+                reassigned_to
+            FROM task_deliveries
+            WHERE agent_id = $1
+            ORDER BY delivered_at ASC
+            "#,
+            agent_id
+        )
+        .fetch_all(pool)
+        .await
+        .context("Failed to list task deliveries by agent")?;
+
+        Ok(deliveries)
+    }
+
     /// Records that the NATS message was published; advances status to `Delivered`.
     pub async fn mark_delivered(
         pool: &PgPool,
