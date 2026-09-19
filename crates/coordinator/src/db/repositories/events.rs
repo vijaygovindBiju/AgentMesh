@@ -179,6 +179,7 @@ mod tests {
                 adapter_type: AdapterType::Mock,
                 capabilities: vec!["rust".to_string()],
                 nats_subject: "agents.dave.events".to_string(),
+                ..Default::default()
             },
         )
         .await

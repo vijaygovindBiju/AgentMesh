@@ -350,18 +350,13 @@ async fn test_dashboard_updates_live_from_agent_events_channel() {
         updated_at: Utc::now(),
     });
 
-    state.agents = vec![coordinator::domain::Agent {
-        id: agent_id,
-        human_owner: "agent-backend (Alice)".to_string(),
-        api_key_hash: "hash".to_string(),
-        adapter_type: AdapterType::Agy,
-        capabilities: json!(["rust"]),
-        nats_subject: format!("agents.{agent_id}.events"),
-        status: coordinator::domain::AgentStatus::Idle,
-        current_task_id: None,
-        last_seen: Some(Utc::now()),
-        created_at: Utc::now(),
-    }];
+    state.agents = vec![coordinator::domain::Agent::mock(
+        agent_id,
+        "agent-backend (Alice)",
+        AdapterType::Agy,
+        vec!["rust".to_string()],
+        coordinator::domain::AgentStatus::Idle,
+    )];
 
     let task = coordinator::domain::Task {
         id: task_id,
@@ -503,6 +498,7 @@ async fn test_nats_subscriber_ingestion_and_channel_forwarding() {
             adapter_type: AdapterType::Mock,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{agent_id}.events"),
+            ..Default::default()
         },
     )
     .await

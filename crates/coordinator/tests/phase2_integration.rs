@@ -53,6 +53,7 @@ async fn test_mock_agent_registration_and_full_lifecycle() {
         human_owner: mock_agent.human_owner.clone(),
         adapter_type: "Mock".to_string(),
         capabilities: mock_agent.capabilities.clone(),
+        profile: None,
         api_key: mock_agent.api_key.clone(),
     };
 
@@ -258,6 +259,7 @@ async fn test_mock_agent_blocked_and_resumed_lifecycle() {
         human_owner: mock_agent.human_owner.clone(),
         adapter_type: "Mock".to_string(),
         capabilities: mock_agent.capabilities.clone(),
+        profile: None,
         api_key: mock_agent.api_key.clone(),
     };
     RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();

@@ -12,11 +12,18 @@
 //! - The coordinator imports this crate to construct and parse messages.
 
 pub mod adapter;
+pub mod capabilities;
+pub mod discovery;
 pub mod messages;
 pub mod spec;
 pub mod status;
 
 pub use adapter::AgentAdapter;
+pub use capabilities::{
+    AgentAvailability, AgentCapabilities, AgentHealth, HealthStatus, LanguageCapability,
+    RuntimeCapability, TaskRequirements, ToolCapability,
+};
+pub use discovery::CapabilityDetector;
 pub use messages::{AgentMessage, CoordinatorMessage};
 pub use spec::TaskSpec;
 pub use status::{AckKind, AgentStatus, DeliveryAck};

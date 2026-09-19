@@ -6,7 +6,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use agent_agy::{AgyAgent, AgyAgentRunner};
-use agent_protocol::{AgentMessage, CoordinatorMessage, TaskSpec};
+use agent_protocol::{AgentAdapter, AgentMessage, CoordinatorMessage, TaskSpec};
 use coordinator::db::pool::{create_pool, run_migrations};
 use coordinator::db::repositories::{
     AgentEventRepository, AgentRepository, ProjectRepository, ProposalRepository,
@@ -78,6 +78,7 @@ async fn test_agy_agent_registration() {
         human_owner: agy_agent.human_owner.clone(),
         adapter_type: "Agy".to_string(),
         capabilities: agy_agent.capabilities.clone(),
+        profile: agy_agent.capability_profile(),
         api_key: agy_agent.api_key.clone(),
     };
 
@@ -136,6 +137,7 @@ async fn test_agy_task_lifecycle_execution() {
         human_owner: agy_agent.human_owner.clone(),
         adapter_type: "Agy".to_string(),
         capabilities: agy_agent.capabilities.clone(),
+        profile: agy_agent.capability_profile(),
         api_key: agy_agent.api_key.clone(),
     };
     RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
@@ -305,6 +307,7 @@ async fn test_agy_task_failure_lifecycle() {
         human_owner: agy_agent.human_owner.clone(),
         adapter_type: "Agy".to_string(),
         capabilities: agy_agent.capabilities.clone(),
+        profile: agy_agent.capability_profile(),
         api_key: agy_agent.api_key.clone(),
     };
     RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
@@ -456,6 +459,7 @@ async fn test_agy_task_blocked_lifecycle() {
         human_owner: agy_agent.human_owner.clone(),
         adapter_type: "Agy".to_string(),
         capabilities: agy_agent.capabilities.clone(),
+        profile: agy_agent.capability_profile(),
         api_key: agy_agent.api_key.clone(),
     };
     RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
@@ -625,6 +629,7 @@ async fn test_two_agy_instances_parallel_execution() {
             human_owner: agent.human_owner.clone(),
             adapter_type: "Agy".to_string(),
             capabilities: agent.capabilities.clone(),
+            profile: agent.capability_profile(),
             api_key: agent.api_key.clone(),
         };
         RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();
@@ -791,6 +796,7 @@ async fn test_one_real_agy_binary_instance() {
         human_owner: agy_agent.human_owner.clone(),
         adapter_type: "Agy".to_string(),
         capabilities: agy_agent.capabilities.clone(),
+        profile: agy_agent.capability_profile(),
         api_key: agy_agent.api_key.clone(),
     };
     RegistrationHandler::process_registration(&pool, reg_msg).await.unwrap();

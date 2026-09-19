@@ -304,6 +304,7 @@ async fn test_repo_aware_plan_service_integration() {
             adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string(), "backend".to_string()],
             nats_subject: format!("agents.{rust_agent_id}.events"),
+            ..Default::default()
         },
     )
     .await
@@ -448,6 +449,7 @@ async fn test_dynamic_replanning_on_failure_and_state_change() {
             adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string(), "backend".to_string()],
             nats_subject: format!("agents.{agent_id}.events"),
+            ..Default::default()
         },
     )
     .await

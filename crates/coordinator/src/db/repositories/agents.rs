@@ -3,7 +3,7 @@ use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::{AdapterType, Agent, AgentStatus, NewAgent};
+use crate::domain::{AdapterType, Agent, AgentStatus, HealthStatus, NewAgent};
 
 pub struct AgentRepository;
 
@@ -11,12 +11,17 @@ impl AgentRepository {
     /// Registers a new agent. Status defaults to `offline`.
     pub async fn create(pool: &PgPool, new_agent: &NewAgent) -> Result<Agent> {
         let capabilities_json = json!(new_agent.capabilities);
+        let profile_json = new_agent.profile.as_ref().map(|p| json!(p));
+        let max_concurrency = new_agent.max_concurrency.unwrap_or(1);
 
         let agent = sqlx::query_as!(
             Agent,
             r#"
-            INSERT INTO agents (human_owner, api_key_hash, adapter_type, capabilities, nats_subject, status)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO agents (
+                human_owner, api_key_hash, adapter_type, capabilities, nats_subject, status,
+                capability_profile, max_concurrency
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING
                 id,
                 human_owner,
@@ -27,7 +32,17 @@ impl AgentRepository {
                 status AS "status: AgentStatus",
                 current_task_id,
                 last_seen,
-                created_at
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
             "#,
             new_agent.human_owner,
             new_agent.api_key_hash,
@@ -35,6 +50,8 @@ impl AgentRepository {
             capabilities_json,
             new_agent.nats_subject,
             AgentStatus::Offline as AgentStatus,
+            profile_json,
+            max_concurrency,
         )
         .fetch_one(pool)
         .await
@@ -50,12 +67,17 @@ impl AgentRepository {
         new_agent: &NewAgent,
     ) -> Result<Agent> {
         let capabilities_json = json!(new_agent.capabilities);
+        let profile_json = new_agent.profile.as_ref().map(|p| json!(p));
+        let max_concurrency = new_agent.max_concurrency.unwrap_or(1);
 
         let agent = sqlx::query_as!(
             Agent,
             r#"
-            INSERT INTO agents (id, human_owner, api_key_hash, adapter_type, capabilities, nats_subject, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO agents (
+                id, human_owner, api_key_hash, adapter_type, capabilities, nats_subject, status,
+                capability_profile, max_concurrency
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING
                 id,
                 human_owner,
@@ -66,7 +88,17 @@ impl AgentRepository {
                 status AS "status: AgentStatus",
                 current_task_id,
                 last_seen,
-                created_at
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
             "#,
             id,
             new_agent.human_owner,
@@ -75,6 +107,8 @@ impl AgentRepository {
             capabilities_json,
             new_agent.nats_subject,
             AgentStatus::Offline as AgentStatus,
+            profile_json,
+            max_concurrency,
         )
         .fetch_one(pool)
         .await
@@ -98,7 +132,17 @@ impl AgentRepository {
                 status AS "status: AgentStatus",
                 current_task_id,
                 last_seen,
-                created_at
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
             FROM agents
             WHERE id = $1
             "#,
@@ -126,7 +170,17 @@ impl AgentRepository {
                 status AS "status: AgentStatus",
                 current_task_id,
                 last_seen,
-                created_at
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
             FROM agents
             ORDER BY created_at ASC
             "#
@@ -153,7 +207,17 @@ impl AgentRepository {
                 status AS "status: AgentStatus",
                 current_task_id,
                 last_seen,
-                created_at
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
             FROM agents
             WHERE status = $1
             ORDER BY created_at ASC
@@ -163,6 +227,48 @@ impl AgentRepository {
         .fetch_all(pool)
         .await
         .context("Failed to list agents by status")?;
+
+        Ok(agents)
+    }
+
+    /// Lists all agents that are available to accept new tasks.
+    pub async fn list_available(pool: &PgPool) -> Result<Vec<Agent>> {
+        let agents = sqlx::query_as!(
+            Agent,
+            r#"
+            SELECT
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
+            FROM agents
+            WHERE status = 'idle'
+              AND current_task_id IS NULL
+              AND is_draining = FALSE
+              AND active_tasks_count < max_concurrency
+              AND health_status IN ('healthy', 'degraded')
+            ORDER BY created_at ASC
+            "#
+        )
+        .fetch_all(pool)
+        .await
+        .context("Failed to list available agents")?;
 
         Ok(agents)
     }
@@ -189,7 +295,17 @@ impl AgentRepository {
                 status AS "status: AgentStatus",
                 current_task_id,
                 last_seen,
-                created_at
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
             "#,
             id,
             status as AgentStatus,
@@ -209,11 +325,15 @@ impl AgentRepository {
         task_id: Option<Uuid>,
         status: AgentStatus,
     ) -> Result<Option<Agent>> {
+        let active_count: i32 = if task_id.is_some() { 1 } else { 0 };
+
         let agent = sqlx::query_as!(
             Agent,
             r#"
             UPDATE agents
-            SET current_task_id = $2, status = $3
+            SET current_task_id = $2,
+                status = $3,
+                active_tasks_count = $4
             WHERE id = $1
             RETURNING
                 id,
@@ -225,11 +345,22 @@ impl AgentRepository {
                 status AS "status: AgentStatus",
                 current_task_id,
                 last_seen,
-                created_at
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
             "#,
             id,
             task_id,
             status as AgentStatus,
+            active_count,
         )
         .fetch_optional(pool)
         .await
@@ -238,15 +369,268 @@ impl AgentRepository {
         Ok(agent)
     }
 
-    /// Records the agent's heartbeat (updates `last_seen` to now).
+    /// Updates agent structured capability profile.
+    pub async fn update_capability_profile(
+        pool: &PgPool,
+        id: Uuid,
+        profile: &agent_protocol::AgentCapabilities,
+    ) -> Result<Option<Agent>> {
+        let profile_json = json!(profile);
+        let tags_json = json!(profile.all_tags());
+
+        let agent = sqlx::query_as!(
+            Agent,
+            r#"
+            UPDATE agents
+            SET capability_profile = $2,
+                capabilities = $3
+            WHERE id = $1
+            RETURNING
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
+            "#,
+            id,
+            profile_json,
+            tags_json,
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to update capability profile")?;
+
+        Ok(agent)
+    }
+
+    /// Updates health status and diagnostic metrics for an agent.
+    pub async fn update_health(
+        pool: &PgPool,
+        id: Uuid,
+        health_status: HealthStatus,
+        consecutive_failures: i32,
+        last_error: Option<&str>,
+        latency_ms: Option<i64>,
+    ) -> Result<Option<Agent>> {
+        let agent = sqlx::query_as!(
+            Agent,
+            r#"
+            UPDATE agents
+            SET health_status = $2,
+                consecutive_failures = $3,
+                last_error = $4,
+                heartbeat_latency_ms = $5
+            WHERE id = $1
+            RETURNING
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
+            "#,
+            id,
+            health_status as HealthStatus,
+            consecutive_failures,
+            last_error,
+            latency_ms,
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to update agent health")?;
+
+        Ok(agent)
+    }
+
+    /// Records successful task completion by this agent.
+    pub async fn record_task_completion(pool: &PgPool, id: Uuid) -> Result<Option<Agent>> {
+        let agent = sqlx::query_as!(
+            Agent,
+            r#"
+            UPDATE agents
+            SET tasks_completed_count = tasks_completed_count + 1,
+                consecutive_failures = 0,
+                health_status = 'healthy'
+            WHERE id = $1
+            RETURNING
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
+            "#,
+            id
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to record task completion for agent")?;
+
+        Ok(agent)
+    }
+
+    /// Records task failure by this agent and recalculates health status.
+    pub async fn record_task_failure(
+        pool: &PgPool,
+        id: Uuid,
+        error_msg: &str,
+    ) -> Result<Option<Agent>> {
+        let agent = sqlx::query_as!(
+            Agent,
+            r#"
+            UPDATE agents
+            SET tasks_failed_count = tasks_failed_count + 1,
+                consecutive_failures = consecutive_failures + 1,
+                last_error = $2,
+                health_status = CASE
+                    WHEN consecutive_failures + 1 >= 5 THEN 'unhealthy'::agent_health_status
+                    WHEN consecutive_failures + 1 >= 2 THEN 'degraded'::agent_health_status
+                    ELSE health_status
+                END
+            WHERE id = $1
+            RETURNING
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
+            "#,
+            id,
+            error_msg,
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to record task failure for agent")?;
+
+        Ok(agent)
+    }
+
+    /// Sets agent draining mode (when true, completes existing tasks without accepting new ones).
+    pub async fn set_draining(
+        pool: &PgPool,
+        id: Uuid,
+        draining: bool,
+    ) -> Result<Option<Agent>> {
+        let agent = sqlx::query_as!(
+            Agent,
+            r#"
+            UPDATE agents
+            SET is_draining = $2
+            WHERE id = $1
+            RETURNING
+                id,
+                human_owner,
+                api_key_hash,
+                adapter_type AS "adapter_type: AdapterType",
+                capabilities,
+                nats_subject,
+                status AS "status: AgentStatus",
+                current_task_id,
+                last_seen,
+                created_at,
+                capability_profile,
+                health_status AS "health_status: HealthStatus",
+                consecutive_failures,
+                tasks_completed_count,
+                tasks_failed_count,
+                last_error,
+                heartbeat_latency_ms,
+                max_concurrency,
+                active_tasks_count,
+                is_draining
+            "#,
+            id,
+            draining,
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to set agent draining status")?;
+
+        Ok(agent)
+    }
+
+    /// Records the agent's heartbeat (updates `last_seen` to now and optionally latency).
     pub async fn record_heartbeat(pool: &PgPool, id: Uuid) -> Result<bool> {
+        Self::record_heartbeat_with_latency(pool, id, None).await
+    }
+
+    /// Records heartbeat with measured latency.
+    pub async fn record_heartbeat_with_latency(
+        pool: &PgPool,
+        id: Uuid,
+        latency_ms: Option<i64>,
+    ) -> Result<bool> {
         let rows = sqlx::query!(
             r#"
             UPDATE agents
-            SET last_seen = NOW()
+            SET last_seen = NOW(),
+                heartbeat_latency_ms = COALESCE($2, heartbeat_latency_ms),
+                health_status = CASE
+                    WHEN health_status = 'offline' THEN 'healthy'::agent_health_status
+                    ELSE health_status
+                END
             WHERE id = $1
             "#,
-            id
+            id,
+            latency_ms
         )
         .execute(pool)
         .await
@@ -299,6 +683,8 @@ mod tests {
             adapter_type: AdapterType::Mock,
             capabilities: vec!["rust".to_string(), "python".to_string()],
             nats_subject: "agents.alice-mock.events".to_string(),
+            profile: None,
+            max_concurrency: Some(1),
         };
         let agent = AgentRepository::create(&pool, &new_agent)
             .await
@@ -309,6 +695,8 @@ mod tests {
         assert_eq!(agent.adapter_type, AdapterType::Mock);
         assert_eq!(agent.capabilities_list(), vec!["rust", "python"]);
         assert!(agent.current_task_id.is_none());
+        assert_eq!(agent.health_status, HealthStatus::Healthy);
+        assert!(!agent.is_draining);
         assert!(!agent.is_available(), "Offline agent should not be available");
 
         // 2. Find by id
@@ -332,13 +720,35 @@ mod tests {
             .expect("Should list idle agents");
         assert!(idle_agents.iter().any(|a| a.id == agent.id));
 
-        // 5. Heartbeat
-        let heartbeat_ok = AgentRepository::record_heartbeat(&pool, agent.id)
+        // 5. Test availability & draining
+        let available = AgentRepository::list_available(&pool)
+            .await
+            .expect("Should list available agents");
+        assert!(available.iter().any(|a| a.id == agent.id));
+
+        AgentRepository::set_draining(&pool, agent.id, true).await.unwrap();
+        let avail_after_drain = AgentRepository::list_available(&pool).await.unwrap();
+        assert!(!avail_after_drain.iter().any(|a| a.id == agent.id));
+        AgentRepository::set_draining(&pool, agent.id, false).await.unwrap();
+
+        // 6. Test task completion and failure health tracking
+        AgentRepository::record_task_completion(&pool, agent.id).await.unwrap();
+        let agent_after_comp = AgentRepository::find_by_id(&pool, agent.id).await.unwrap().unwrap();
+        assert_eq!(agent_after_comp.tasks_completed_count, 1);
+
+        AgentRepository::record_task_failure(&pool, agent.id, "Syntax error").await.unwrap();
+        AgentRepository::record_task_failure(&pool, agent.id, "Type error").await.unwrap();
+        let agent_after_fail = AgentRepository::find_by_id(&pool, agent.id).await.unwrap().unwrap();
+        assert_eq!(agent_after_fail.consecutive_failures, 2);
+        assert_eq!(agent_after_fail.health_status, HealthStatus::Degraded);
+
+        // 7. Heartbeat with latency
+        let heartbeat_ok = AgentRepository::record_heartbeat_with_latency(&pool, agent.id, Some(45))
             .await
             .expect("Should record heartbeat");
         assert!(heartbeat_ok);
 
-        // 6. Delete
+        // 8. Delete
         let deleted = AgentRepository::delete(&pool, agent.id)
             .await
             .expect("Should delete agent");

@@ -17,4 +17,9 @@ pub trait AgentAdapter: Send + Sync {
 
     /// Raw API key for registration authentication.
     fn api_key(&self) -> &str;
+
+    /// Optional structured capabilities profile.
+    fn capability_profile(&self) -> Option<crate::capabilities::AgentCapabilities> {
+        None
+    }
 }

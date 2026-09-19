@@ -22,6 +22,7 @@ impl RegistrationHandler {
             human_owner,
             adapter_type,
             capabilities,
+            profile,
             api_key,
         } = msg else {
             return Ok(CoordinatorMessage::RegisterResponse {
@@ -61,6 +62,10 @@ impl RegistrationHandler {
                         error: Some("Invalid API key".to_string()),
                     });
                 }
+                // Update profile if supplied
+                if let Some(ref prof) = profile {
+                    let _ = AgentRepository::update_capability_profile(pool, agent_id, prof).await;
+                }
             }
             None => {
                 // Register new agent
@@ -70,6 +75,8 @@ impl RegistrationHandler {
                     adapter_type: adapter,
                     capabilities,
                     nats_subject: nats_subject.clone(),
+                    profile,
+                    max_concurrency: Some(1),
                 };
                 AgentRepository::create_with_id(pool, agent_id, &new_agent).await?;
             }
@@ -154,6 +161,7 @@ mod tests {
             human_owner: "RegTestOwner".to_string(),
             adapter_type: "Mock".to_string(),
             capabilities: vec!["rust".to_string()],
+            profile: None,
             api_key: "my_api_key_123".to_string(),
         };
 

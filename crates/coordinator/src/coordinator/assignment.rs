@@ -10,7 +10,7 @@ use crate::db::repositories::{
     AgentRepository, TaskDeliveryRepository, TaskRepository,
 };
 use crate::domain::{
-    AdapterType, Agent, AgentStatus, DeliveryStatus, Task, TaskStatus,
+    AdapterType, Agent, AgentStatus, DeliveryStatus, HealthStatus, Task, TaskStatus,
 };
 use crate::messaging::publisher::TaskPublisher;
 
@@ -88,9 +88,16 @@ impl AssignmentService {
                     r#"
                     SELECT id, human_owner, api_key_hash, adapter_type AS "adapter_type: AdapterType",
                            capabilities, nats_subject, status AS "status: AgentStatus",
-                           current_task_id, last_seen, created_at
+                           current_task_id, last_seen, created_at,
+                           capability_profile, health_status AS "health_status: HealthStatus",
+                           consecutive_failures, tasks_completed_count, tasks_failed_count,
+                           last_error, heartbeat_latency_ms, max_concurrency, active_tasks_count, is_draining
                     FROM agents
-                    WHERE id = $1 AND status = 'idle'
+                    WHERE id = $1
+                      AND status = 'idle'
+                      AND is_draining = FALSE
+                      AND active_tasks_count < max_concurrency
+                      AND health_status IN ('healthy', 'degraded')
                     FOR UPDATE SKIP LOCKED
                     "#,
                     target_agent_id
@@ -104,15 +111,21 @@ impl AssignmentService {
             let agent = match matched_agent {
                 Some(a) => Some(a),
                 None => {
-                    // Find any idle registered agent that is not targeted by another active task
+                    // Find any available registered agent that is not targeted by another active task
                     sqlx::query_as!(
                         Agent,
                         r#"
                         SELECT a.id, a.human_owner, a.api_key_hash, a.adapter_type AS "adapter_type: AdapterType",
                                a.capabilities, a.nats_subject, a.status AS "status: AgentStatus",
-                               a.current_task_id, a.last_seen, a.created_at
+                               a.current_task_id, a.last_seen, a.created_at,
+                               a.capability_profile, a.health_status AS "health_status: HealthStatus",
+                               a.consecutive_failures, a.tasks_completed_count, a.tasks_failed_count,
+                               a.last_error, a.heartbeat_latency_ms, a.max_concurrency, a.active_tasks_count, a.is_draining
                         FROM agents a
                         WHERE a.status = 'idle'
+                          AND a.is_draining = FALSE
+                          AND a.active_tasks_count < a.max_concurrency
+                          AND a.health_status IN ('healthy', 'degraded')
                           AND NOT EXISTS (
                               SELECT 1 FROM tasks t
                               WHERE t.assigned_agent_id = a.id

@@ -15,7 +15,15 @@ pub enum AgentMessage {
         human_owner: String,
         adapter_type: String,
         capabilities: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        profile: Option<crate::capabilities::AgentCapabilities>,
         api_key: String,
+    },
+    /// Agent reports an updated capability or availability profile.
+    UpdateCapabilities {
+        agent_id: Uuid,
+        profile: crate::capabilities::AgentCapabilities,
+        timestamp: DateTime<Utc>,
     },
     /// Agent acknowledged task assignment and started work.
     TaskStarted {
@@ -59,6 +67,8 @@ pub enum AgentMessage {
         agent_id: Uuid,
         status: AgentStatus,
         current_task_id: Option<Uuid>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        health: Option<crate::capabilities::AgentHealth>,
         timestamp: DateTime<Utc>,
     },
 }
@@ -111,7 +121,21 @@ mod tests {
                 human_owner: "Alice".to_string(),
                 adapter_type: "Mock".to_string(),
                 capabilities: vec!["rust".to_string()],
+                profile: None,
                 api_key: "secret".to_string(),
+            },
+            AgentMessage::Register {
+                agent_id,
+                human_owner: "Bob".to_string(),
+                adapter_type: "Agy".to_string(),
+                capabilities: vec!["rust".to_string(), "backend".to_string()],
+                profile: Some(crate::capabilities::AgentCapabilities::default()),
+                api_key: "secret".to_string(),
+            },
+            AgentMessage::UpdateCapabilities {
+                agent_id,
+                profile: crate::capabilities::AgentCapabilities::default(),
+                timestamp: now,
             },
             AgentMessage::TaskStarted {
                 agent_id,
@@ -149,6 +173,7 @@ mod tests {
                 agent_id,
                 status: AgentStatus::Busy,
                 current_task_id: Some(task_id),
+                health: Some(crate::capabilities::AgentHealth::default()),
                 timestamp: now,
             },
         ];

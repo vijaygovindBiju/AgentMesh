@@ -70,6 +70,7 @@ async fn test_approval_gating_unapproved_task_cannot_be_assigned() {
             adapter_type: AdapterType::Mock,
             capabilities: vec!["rust".to_string()],
             nats_subject: "agents.alice.events".to_string(),
+            ..Default::default()
         },
     )
     .await
@@ -165,6 +166,7 @@ async fn test_dependency_tracking_b_waits_for_a_completed() {
             adapter_type: AdapterType::Mock,
             capabilities: vec![],
             nats_subject: "agents.bob.events".to_string(),
+            ..Default::default()
         },
     )
     .await
@@ -397,6 +399,7 @@ async fn test_human_override_reassign_task() {
             adapter_type: AdapterType::Mock,
             capabilities: vec![],
             nats_subject: "agents.a.events".to_string(),
+            ..Default::default()
         },
     )
     .await
@@ -410,6 +413,7 @@ async fn test_human_override_reassign_task() {
             adapter_type: AdapterType::Mock,
             capabilities: vec![],
             nats_subject: "agents.b.events".to_string(),
+            ..Default::default()
         },
     )
     .await
@@ -485,6 +489,7 @@ async fn test_concurrency_locking_prevents_double_assignment() {
             adapter_type: AdapterType::Mock,
             capabilities: vec![],
             nats_subject: "agents.solo.events".to_string(),
+            ..Default::default()
         },
     )
     .await
@@ -577,6 +582,7 @@ async fn test_coordinator_core_engine_lifecycle_and_blocked_event() {
             adapter_type: AdapterType::Mock,
             capabilities: vec![],
             nats_subject: "agents.charlie.events".to_string(),
+            ..Default::default()
         },
     )
     .await

@@ -175,30 +175,20 @@ impl AppState {
         });
 
         self.agents = vec![
-            Agent {
-                id: agent1_id,
-                human_owner: "agent-backend (Alice)".to_string(),
-                api_key_hash: "mock_hash_backend".to_string(),
-                adapter_type: crate::domain::AdapterType::Agy,
-                capabilities: serde_json::json!(["backend", "rust"]),
-                nats_subject: format!("agents.{agent1_id}.events"),
-                status: crate::domain::AgentStatus::Idle,
-                current_task_id: None,
-                last_seen: Some(chrono::Utc::now()),
-                created_at: chrono::Utc::now(),
-            },
-            Agent {
-                id: agent2_id,
-                human_owner: "agent-infra (Bob)".to_string(),
-                api_key_hash: "mock_hash_infra".to_string(),
-                adapter_type: crate::domain::AdapterType::Mock,
-                capabilities: serde_json::json!(["infra", "nats", "docker"]),
-                nats_subject: format!("agents.{agent2_id}.events"),
-                status: crate::domain::AgentStatus::Busy,
-                current_task_id: None,
-                last_seen: Some(chrono::Utc::now()),
-                created_at: chrono::Utc::now(),
-            },
+            Agent::mock(
+                agent1_id,
+                "agent-backend (Alice)",
+                crate::domain::AdapterType::Agy,
+                vec!["backend".to_string(), "rust".to_string()],
+                crate::domain::AgentStatus::Idle,
+            ),
+            Agent::mock(
+                agent2_id,
+                "agent-infra (Bob)",
+                crate::domain::AdapterType::Mock,
+                vec!["infra".to_string(), "nats".to_string(), "docker".to_string()],
+                crate::domain::AgentStatus::Busy,
+            ),
         ];
 
         let prop_id = Uuid::new_v4();

@@ -85,6 +85,7 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
             adapter_type: AdapterType::Mock,
             capabilities: vec!["backend".to_string(), "rust".to_string()],
             nats_subject: format!("agents.{agent_a_id}.events"),
+            ..Default::default()
         },
     )
     .await
@@ -99,6 +100,7 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
             adapter_type: AdapterType::Mock,
             capabilities: vec!["infra".to_string(), "sql".to_string()],
             nats_subject: format!("agents.{agent_b_id}.events"),
+            ..Default::default()
         },
     )
     .await

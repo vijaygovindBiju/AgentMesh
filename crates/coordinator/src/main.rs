@@ -125,6 +125,7 @@ async fn main() -> Result<()> {
                         adapter_type: AdapterType::Mock,
                         capabilities: vec!["backend".to_string(), "rust".to_string()],
                         nats_subject: format!("agents.{a1_id}.events"),
+                        ..Default::default()
                     },
                 )
                 .await;
@@ -140,6 +141,7 @@ async fn main() -> Result<()> {
                         adapter_type: AdapterType::Mock,
                         capabilities: vec!["infra".to_string(), "sql".to_string(), "nats".to_string()],
                         nats_subject: format!("agents.{a2_id}.events"),
+                        ..Default::default()
                     },
                 )
                 .await;

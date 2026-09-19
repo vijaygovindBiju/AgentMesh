@@ -12,6 +12,7 @@ pub struct MockAgent {
     pub task_delay: Duration,
     pub simulate_blocker: Option<Uuid>,
     pub simulate_failure: bool,
+    pub profile: Option<agent_protocol::AgentCapabilities>,
 }
 
 impl MockAgent {
@@ -25,6 +26,7 @@ impl MockAgent {
             task_delay: Duration::from_millis(100),
             simulate_blocker: None,
             simulate_failure: false,
+            profile: None,
         }
     }
 
@@ -43,6 +45,12 @@ impl MockAgent {
     /// Configures the mock agent to simulate a task failure.
     pub fn with_failure(mut self, should_fail: bool) -> Self {
         self.simulate_failure = should_fail;
+        self
+    }
+
+    /// Configures a structured capabilities profile for the mock agent.
+    pub fn with_profile(mut self, profile: agent_protocol::AgentCapabilities) -> Self {
+        self.profile = Some(profile);
         self
     }
 }
@@ -66,5 +74,9 @@ impl AgentAdapter for MockAgent {
 
     fn api_key(&self) -> &str {
         &self.api_key
+    }
+
+    fn capability_profile(&self) -> Option<agent_protocol::AgentCapabilities> {
+        self.profile.clone()
     }
 }

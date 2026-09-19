@@ -393,6 +393,7 @@ mod tests {
                 adapter_type: AdapterType::Mock,
                 capabilities: vec!["rust".to_string()],
                 nats_subject: "agents.bob.events".to_string(),
+                ..Default::default()
             },
         )
         .await
@@ -406,6 +407,7 @@ mod tests {
                 adapter_type: AdapterType::Mock,
                 capabilities: vec!["rust".to_string()],
                 nats_subject: "agents.charlie.events".to_string(),
+                ..Default::default()
             },
         )
         .await
@@ -533,6 +535,7 @@ mod tests {
                 adapter_type: AdapterType::Mock,
                 capabilities: vec!["rust".to_string()],
                 nats_subject: "agents.a.events".to_string(),
+                ..Default::default()
             },
         )
         .await
@@ -546,6 +549,7 @@ mod tests {
                 adapter_type: AdapterType::Mock,
                 capabilities: vec!["rust".to_string()],
                 nats_subject: "agents.b.events".to_string(),
+                ..Default::default()
             },
         )
         .await

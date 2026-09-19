@@ -560,6 +560,7 @@ async fn test_phase9_two_agents_parallel_git_workflow_over_jetstream() {
             adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string(), "backend".to_string()],
             nats_subject: "agents.alice.events".to_string(),
+            ..Default::default()
         },
     )
     .await
@@ -573,6 +574,7 @@ async fn test_phase9_two_agents_parallel_git_workflow_over_jetstream() {
             adapter_type: AdapterType::Agy,
             capabilities: vec!["frontend".to_string(), "typescript".to_string()],
             nats_subject: "agents.bob.events".to_string(),
+            ..Default::default()
         },
     )
     .await

@@ -50,6 +50,7 @@ async fn test_ai_planning_service_full_workflow() {
             adapter_type: AdapterType::Mock,
             capabilities: vec!["rust".to_string(), "nats".to_string()],
             nats_subject: format!("agents.{agent_id}.events"),
+            ..Default::default()
         },
     )
     .await

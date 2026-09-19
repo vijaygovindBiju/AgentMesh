@@ -22,7 +22,7 @@ pub mod task;
 // ─── Convenience re-exports ───────────────────────────────────────────────────
 // Callers can `use crate::domain::*` or import specific items.
 
-pub use agent::{AdapterType, Agent, AgentStatus, NewAgent};
+pub use agent::{AdapterType, Agent, AgentStatus, HealthStatus, NewAgent};
 pub use approval::{ApprovalStatus, NewTaskApproval, TaskApproval};
 pub use delivery::{AckKind, DeliveryStatus, NewTaskDelivery, TaskDelivery};
 pub use event::{AgentEvent, AgentEventType, NewAgentEvent};

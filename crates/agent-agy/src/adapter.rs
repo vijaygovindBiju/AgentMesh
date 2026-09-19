@@ -29,10 +29,12 @@ pub struct AgyAgent {
     pub dangerously_skip_permissions: bool,
     /// Optional blocker task UUID for simulating/testing blocked states.
     pub simulate_blocker: Option<Uuid>,
+    /// Structured capability profile detected or configured for this agent.
+    pub profile: Option<agent_protocol::AgentCapabilities>,
 }
 
 impl AgyAgent {
-    /// Creates a new `AgyAgent` with sane defaults.
+    /// Creates a new `AgyAgent` with auto-detected capabilities and sane defaults.
     pub fn new(human_owner: impl Into<String>, api_key: impl Into<String>) -> Self {
         let agy_path = std::env::var("AGY_BIN_PATH")
             .map(PathBuf::from)
@@ -47,10 +49,17 @@ impl AgyAgent {
                 PathBuf::from("agy")
             });
 
+        // Automatically detect host environment capabilities (OS, compilers, developer tools)
+        let detected_profile = agent_protocol::CapabilityDetector::detect_all(
+            "Agy",
+            &["agy".to_string(), "general-coding".to_string()],
+        );
+        let tags = detected_profile.all_tags();
+
         Self {
             id: Uuid::new_v4(),
             human_owner: human_owner.into(),
-            capabilities: vec!["agy".to_string(), "general-coding".to_string()],
+            capabilities: tags,
             api_key: api_key.into(),
             agy_path,
             model: None,
@@ -59,6 +68,7 @@ impl AgyAgent {
             timeout: Duration::from_secs(600), // 10 minutes default
             dangerously_skip_permissions: true,
             simulate_blocker: None,
+            profile: Some(detected_profile),
         }
     }
 
@@ -106,6 +116,12 @@ impl AgyAgent {
         self.dangerously_skip_permissions = skip;
         self
     }
+
+    pub fn with_profile(mut self, profile: agent_protocol::AgentCapabilities) -> Self {
+        self.capabilities = profile.all_tags();
+        self.profile = Some(profile);
+        self
+    }
 }
 
 fn dirs_home() -> Option<PathBuf> {
@@ -131,6 +147,10 @@ impl AgentAdapter for AgyAgent {
 
     fn api_key(&self) -> &str {
         &self.api_key
+    }
+
+    fn capability_profile(&self) -> Option<agent_protocol::AgentCapabilities> {
+        self.profile.clone()
     }
 }
 

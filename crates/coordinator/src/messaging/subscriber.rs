@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::Context as JetStreamContext;
+use chrono::Utc;
 use serde_json::json;
 use sqlx::PgPool;
 use tracing::{error, info, warn};
@@ -156,8 +157,9 @@ impl EventSubscriber {
                 // 2. Update Task to Completed
                 TaskRepository::update_status(pool, task_id, TaskStatus::Completed).await?;
 
-                // 3. Free agent -> Idle
+                // 3. Free agent -> Idle and record completion metrics
                 AgentRepository::set_current_task(pool, agent_id, None, AgentStatus::Idle).await?;
+                let _ = AgentRepository::record_task_completion(pool, agent_id).await?;
             }
 
             AgentMessage::Failed {
@@ -184,17 +186,27 @@ impl EventSubscriber {
                 // 2. Update Task to Failed
                 TaskRepository::update_status(pool, task_id, TaskStatus::Failed).await?;
 
-                // 3. Agent to Error
+                // 3. Agent to Error and record failure in health metrics
                 AgentRepository::set_current_task(pool, agent_id, None, AgentStatus::Error).await?;
+                let _ = AgentRepository::record_task_failure(pool, agent_id, &error).await?;
             }
 
             AgentMessage::Heartbeat {
                 agent_id,
                 status,
                 current_task_id: _,
-                timestamp: _,
+                health,
+                timestamp,
             } => {
-                AgentRepository::record_heartbeat(pool, agent_id).await?;
+                let latency_ms = health
+                    .as_ref()
+                    .and_then(|h| h.heartbeat_latency_ms.map(|l| l as i64))
+                    .or_else(|| {
+                        let elapsed = Utc::now().signed_duration_since(timestamp).num_milliseconds();
+                        if elapsed >= 0 { Some(elapsed) } else { None }
+                    });
+
+                AgentRepository::record_heartbeat_with_latency(pool, agent_id, latency_ms).await?;
                 let _ = AgentRepository::update_status(pool, agent_id, match status {
                     agent_protocol::AgentStatus::Offline => AgentStatus::Offline,
                     agent_protocol::AgentStatus::Idle => AgentStatus::Idle,
@@ -202,6 +214,23 @@ impl EventSubscriber {
                     agent_protocol::AgentStatus::Blocked => AgentStatus::Blocked,
                     agent_protocol::AgentStatus::Error => AgentStatus::Error,
                 }).await?;
+
+                if let Some(h) = health {
+                    let _ = AgentRepository::update_health(
+                        pool,
+                        agent_id,
+                        h.status.into(),
+                        h.consecutive_failures as i32,
+                        h.last_error.as_deref(),
+                        latency_ms,
+                    )
+                    .await;
+                }
+            }
+
+            AgentMessage::UpdateCapabilities { agent_id, profile, timestamp: _ } => {
+                info!(%agent_id, "Agent reported updated capability profile");
+                let _ = AgentRepository::update_capability_profile(pool, agent_id, &profile).await?;
             }
 
             AgentMessage::Register { .. } => {
@@ -300,6 +329,7 @@ mod tests {
                 adapter_type: AdapterType::Mock,
                 capabilities: vec!["rust".to_string()],
                 nats_subject: "agents.test.events".to_string(),
+                ..Default::default()
             },
         )
         .await

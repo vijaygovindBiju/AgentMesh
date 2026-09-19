@@ -44,6 +44,7 @@ impl AgyAgentRunner {
             human_owner: agent.human_owner().to_string(),
             adapter_type: agent.adapter_type().to_string(),
             capabilities: agent.capabilities().to_vec(),
+            profile: agent.capability_profile(),
             api_key: agent.api_key().to_string(),
         };
 
@@ -83,10 +84,22 @@ impl AgyAgentRunner {
         status: AgentStatus,
         current_task_id: Option<Uuid>,
     ) -> Result<()> {
+        Self::send_heartbeat_with_health(client, agent_id, status, current_task_id, None).await
+    }
+
+    /// Sends a periodic heartbeat with optional health metrics.
+    pub async fn send_heartbeat_with_health(
+        client: &Client,
+        agent_id: Uuid,
+        status: AgentStatus,
+        current_task_id: Option<Uuid>,
+        health: Option<agent_protocol::AgentHealth>,
+    ) -> Result<()> {
         let hb = AgentMessage::Heartbeat {
             agent_id,
             status,
             current_task_id,
+            health,
             timestamp: Utc::now(),
         };
         let payload = serde_json::to_vec(&hb)?;

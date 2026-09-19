@@ -77,8 +77,8 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Phase 8 — Real agy Integration (DONE)
 - [x] Phase 9 — Real Repository / Git Coordination (DONE)
 - [x] Phase 10 — Intelligent Planning v1 (DONE)
-- [ ] Phase 11 — Agent Capability System (NEXT)
-- [ ] v1.0 Remaining Phases (PLANNED)
+- [x] Phase 11 — Agent Capability System (DONE)
+- [ ] Phase 12 — Security (NEXT)
 
 ---
 
@@ -354,18 +354,21 @@ Given a real repository + project requirements, AgentMesh produces a useful depe
 
 ---
 
-## Phase 11 — Agent Capability System
+## Phase 11 — Agent Capability System [x] DONE
 
 **Goal:** Coordinator understands what each agent can do.
 
-- [ ] 11.1 Define capability model
-- [ ] 11.2 Register capabilities
-- [ ] 11.3 Detect agent runtime
-- [ ] 11.4 Detect language/framework capabilities
-- [ ] 11.5 Detect available tools
-- [ ] 11.6 Capability-based task matching
-- [ ] 11.7 Agent availability state
-- [ ] 11.8 Agent health information
+- [x] 11.1 Define capability model (`AgentCapabilities`, `RuntimeCapability`, `LanguageCapability`, `ToolCapability`, `TaskRequirements`, `HealthStatus` in `agent-protocol/src/capabilities.rs`)
+- [x] 11.2 Register capabilities (`AgentMessage::Register` carries structured profile, `UpdateCapabilities` protocol message, stored in `agents.capability_profile` JSONB)
+- [x] 11.3 Detect agent runtime (`CapabilityDetector::detect_runtime` extracts OS, CPU arch, logical cores, adapter details)
+- [x] 11.4 Detect language/framework capabilities (`CapabilityDetector::detect_languages` detects Rust, Python, Node/TS, Go, Dart/Flutter, C/C++)
+- [x] 11.5 Detect available tools (`CapabilityDetector::detect_tools` discovers git, docker, cargo, sqlx, agy, etc. from PATH)
+- [x] 11.6 Capability-based task matching (`AgentCapabilityMatcher::rank_candidates` scores candidates on language, tools, OS, and skill tags with match breakdown)
+- [x] 11.7 Agent availability state (`AgentAvailability`, draining state, active task concurrency gating in `AgentRepository::find_available_agents`)
+- [x] 11.8 Agent health information (`HealthStatus`, consecutive task failure tracking, heartbeat latency tracking, unhealthy agent task gating)
+
+### Acceptance Criteria — Phase 11
+Coordinator assigns tasks based on capabilities + availability + health metrics. ✓ Verified in `phase11_capabilities.rs` and workspace test suite.
 
 *Capability Matching Example:*
 ```

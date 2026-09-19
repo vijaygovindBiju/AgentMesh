@@ -23,7 +23,8 @@ impl HeartbeatMonitor {
         let rows = sqlx::query!(
             r#"
             UPDATE agents
-            SET status = 'offline'
+            SET status = 'offline',
+                health_status = 'offline'
             WHERE status NOT IN ('offline')
               AND last_seen IS NOT NULL
               AND last_seen < $1
@@ -57,10 +58,19 @@ impl HeartbeatMonitor {
                 agent_id,
                 status: _,
                 current_task_id: _,
-                timestamp: _,
+                health,
+                timestamp,
             }) = serde_json::from_slice::<AgentMessage>(&msg.payload)
             {
-                if let Err(e) = AgentRepository::record_heartbeat(&pool, agent_id).await {
+                let latency_ms = health
+                    .as_ref()
+                    .and_then(|h| h.heartbeat_latency_ms.map(|l| l as i64))
+                    .or_else(|| {
+                        let elapsed = Utc::now().signed_duration_since(timestamp).num_milliseconds();
+                        if elapsed >= 0 { Some(elapsed) } else { None }
+                    });
+
+                if let Err(e) = AgentRepository::record_heartbeat_with_latency(&pool, agent_id, latency_ms).await {
                     error!(%agent_id, error = %e, "Failed to record agent heartbeat");
                 }
             }
@@ -101,6 +111,7 @@ mod tests {
                 adapter_type: AdapterType::Mock,
                 capabilities: vec![],
                 nats_subject: "agents.timeout.events".to_string(),
+                ..Default::default()
             },
         )
         .await
