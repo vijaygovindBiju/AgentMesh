@@ -11,7 +11,10 @@ use crate::db::repositories::{
     AgentEventRepository, AgentRepository, TaskDeliveryRepository, TaskRepository,
 };
 use crate::domain::{AckKind, AgentEventType, AgentStatus, DeliveryStatus, NewAgentEvent, TaskStatus};
+use crate::git::{AgentWorkspace, GitCoordinator};
+use crate::messaging::publisher::TaskPublisher;
 use crate::messaging::streams::{AGENT_EVENTS_STREAM, AGENT_EVENTS_SUBJECT};
+use crate::observability::CoordinatorEventRepository;
 use crate::security::audit::{AuditEvent, AuditLogger};
 use crate::security::task_auth::TaskAuthorizer;
 use crate::security::SecurityError;
@@ -82,6 +85,15 @@ impl EventSubscriber {
 
     /// Handles a single incoming AgentMessage and updates PostgreSQL state accordingly.
     pub async fn handle_agent_message(pool: &PgPool, msg: AgentMessage) -> Result<()> {
+        Self::handle_agent_message_with_jetstream(pool, msg, None).await
+    }
+
+    /// Handles an incoming AgentMessage with optional JetStream context for publishing follow-up protocol messages.
+    pub async fn handle_agent_message_with_jetstream(
+        pool: &PgPool,
+        msg: AgentMessage,
+        jetstream: Option<&JetStreamContext>,
+    ) -> Result<()> {
         let dedup_key = match &msg {
             AgentMessage::TaskStarted { agent_id, task_id, .. } => {
                 Some(crate::reliability::EventDeduplicator::compute_event_key(*agent_id, *task_id, "TaskStarted", None))
@@ -121,7 +133,7 @@ impl EventSubscriber {
 
                 info!(%agent_id, %task_id, %idempotency_key, "Agent reported TaskStarted");
 
-                // 1. Record event
+                // 1. Record agent event
                 AgentEventRepository::create(
                     pool,
                     &NewAgentEvent {
@@ -153,6 +165,22 @@ impl EventSubscriber {
                 // 4. Update agent status to Busy
                 AgentRepository::set_current_task(pool, agent_id, Some(task_id), AgentStatus::Busy)
                     .await?;
+
+                // 5. Record coordinator observability event
+                let task = TaskRepository::find_by_id(pool, task_id).await.ok().flatten();
+                let short_id = task.as_ref().map(|t| t.short_id.as_str()).unwrap_or("TASK");
+                let project_id = task.as_ref().map(|t| t.project_id);
+
+                let _ = CoordinatorEventRepository::record(
+                    pool,
+                    "task.started",
+                    project_id,
+                    Some(task_id),
+                    Some(agent_id),
+                    format!("Task {short_id} execution started by agent {agent_id}"),
+                    json!({ "idempotency_key": idempotency_key }),
+                )
+                .await;
             }
 
             AgentMessage::ProgressUpdate {
@@ -178,6 +206,21 @@ impl EventSubscriber {
                     },
                 )
                 .await?;
+
+                let task = TaskRepository::find_by_id(pool, task_id).await.ok().flatten();
+                let short_id = task.as_ref().map(|t| t.short_id.as_str()).unwrap_or("TASK");
+                let project_id = task.as_ref().map(|t| t.project_id);
+
+                let _ = CoordinatorEventRepository::record(
+                    pool,
+                    "task.progress",
+                    project_id,
+                    Some(task_id),
+                    Some(agent_id),
+                    format!("Task {short_id} progress ({percent}%): {message}"),
+                    json!({ "percent": percent, "message": message }),
+                )
+                .await;
             }
 
             AgentMessage::Blocked {
@@ -211,6 +254,33 @@ impl EventSubscriber {
 
                 // 3. Update Agent status to Blocked
                 AgentRepository::update_status(pool, agent_id, AgentStatus::Blocked).await?;
+
+                let task = TaskRepository::find_by_id(pool, task_id).await.ok().flatten();
+                let short_id = task.as_ref().map(|t| t.short_id.as_str()).unwrap_or("TASK");
+                let project_id = task.as_ref().map(|t| t.project_id);
+
+                let _ = CoordinatorEventRepository::record(
+                    pool,
+                    "task.blocked",
+                    project_id,
+                    Some(task_id),
+                    Some(agent_id),
+                    format!("Task {short_id} blocked: {reason}"),
+                    json!({ "reason": reason, "blocking_task_id": blocking_task_id }),
+                )
+                .await;
+
+                // If agent is blocked on a dependency task, publish WaitForDependency over JetStream
+                if let (Some(blocker_id), Some(js)) = (blocking_task_id, jetstream) {
+                    let _ = TaskPublisher::publish_wait_for_dependency(
+                        js,
+                        agent_id,
+                        task_id,
+                        blocker_id,
+                        &reason,
+                    )
+                    .await;
+                }
             }
 
             AgentMessage::Completed {
@@ -244,6 +314,118 @@ impl EventSubscriber {
                 // 3. Free agent -> Idle and record completion metrics
                 AgentRepository::set_current_task(pool, agent_id, None, AgentStatus::Idle).await?;
                 let _ = AgentRepository::record_task_completion(pool, agent_id).await?;
+
+                let task = TaskRepository::find_by_id(pool, task_id).await.ok().flatten();
+                let short_id = task.as_ref().map(|t| t.short_id.as_str()).unwrap_or("TASK");
+                let project_id = task.as_ref().map(|t| t.project_id);
+
+                // Finalize Git workspace if worktree exists
+                if let Ok(Some(gc)) = TaskRepository::find_git_context(pool, task_id).await {
+                    if let (Some(ref repo_path_str), Some(ref task_branch)) = (gc.repo_path, gc.task_branch) {
+                        let repo_root = std::path::Path::new(&repo_path_str);
+                        let worktree_path = AgentWorkspace::expected_worktree_path(repo_root, short_id);
+                        if worktree_path.exists() {
+                            let ws = AgentWorkspace {
+                                task_id,
+                                short_id: short_id.to_string(),
+                                repo_root: repo_root.to_path_buf(),
+                                worktree_path,
+                                task_branch: task_branch.clone(),
+                                base_commit_sha: gc.base_commit_sha.unwrap_or_default(),
+                            };
+                            let base_branch = gc.base_branch.as_deref().unwrap_or("main");
+                            let title = task.as_ref().map(|t| t.title.as_str()).unwrap_or("completed task");
+                            let git_coord = GitCoordinator::new(pool.clone());
+                            match git_coord.finalize_task(&ws, short_id, title, base_branch).await {
+                                Ok(git_res) => {
+                                    info!(
+                                        task_id = %task_id,
+                                        sha = %git_res.completion_commit_sha,
+                                        clean = git_res.can_merge_cleanly,
+                                        "Finalized task git workspace"
+                                    );
+                                    let _ = TaskRepository::record_completion_git_state(
+                                        pool,
+                                        task_id,
+                                        &git_res.completion_commit_sha,
+                                        &git_res.actual_modified_resources,
+                                    )
+                                    .await;
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        task_id = %task_id,
+                                        error = %e,
+                                        "Failed to finalize task git state; preserving worktree for diagnostics"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let _ = CoordinatorEventRepository::record(
+                    pool,
+                    "task.completed",
+                    project_id,
+                    Some(task_id),
+                    Some(agent_id),
+                    format!("Task {short_id} completed successfully by agent {agent_id}"),
+                    json!({ "summary": summary }),
+                )
+                .await;
+
+                // 4. Check if any blocked tasks in this project can now be unblocked
+                if let Some(proj_id) = project_id {
+                    let blocked_tasks = sqlx::query_as!(
+                        crate::domain::Task,
+                        r#"
+                        SELECT id, project_id, short_id, title, description,
+                               status AS "status: TaskStatus", assigned_agent_id,
+                               affected_resources, estimated_size, proposal_id,
+                               created_at, updated_at
+                        FROM tasks
+                        WHERE project_id = $1 AND status = 'blocked'
+                        "#,
+                        proj_id
+                    )
+                    .fetch_all(pool)
+                    .await
+                    .unwrap_or_default();
+
+                    for bt in blocked_tasks {
+                        let unsatisfied_deps = sqlx::query!(
+                            r#"
+                            SELECT count(*) as count
+                            FROM task_dependencies td
+                            JOIN tasks b ON td.depends_on_id = b.id
+                            WHERE td.dependent_id = $1
+                              AND td.kind = 'blocks'
+                              AND b.status <> 'completed'
+                            "#,
+                            bt.id
+                        )
+                        .fetch_one(pool)
+                        .await
+                        .map(|r| r.count.unwrap_or(0))
+                        .unwrap_or(1);
+
+                        if unsatisfied_deps == 0 {
+                            info!(task_id = %bt.id, short_id = %bt.short_id, "Prerequisites complete; unblocking task to Approved");
+                            let _ = TaskRepository::update_status(pool, bt.id, TaskStatus::Approved).await;
+                            let _ = CoordinatorEventRepository::record(
+                                pool,
+                                "task.unblocked",
+                                Some(proj_id),
+                                Some(bt.id),
+                                bt.assigned_agent_id,
+                                format!("Task {} unblocked after completion of prerequisite task {}", bt.short_id, short_id),
+                                json!({ "unblocked_by": task_id }),
+                            )
+                            .await;
+                        }
+                    }
+                }
             }
 
             AgentMessage::Failed {
@@ -277,6 +459,21 @@ impl EventSubscriber {
                 // 3. Agent to Error and record failure in health metrics
                 AgentRepository::set_current_task(pool, agent_id, None, AgentStatus::Error).await?;
                 let _ = AgentRepository::record_task_failure(pool, agent_id, &error).await?;
+
+                let task = TaskRepository::find_by_id(pool, task_id).await.ok().flatten();
+                let short_id = task.as_ref().map(|t| t.short_id.as_str()).unwrap_or("TASK");
+                let project_id = task.as_ref().map(|t| t.project_id);
+
+                let _ = CoordinatorEventRepository::record(
+                    pool,
+                    "task.failed",
+                    project_id,
+                    Some(task_id),
+                    Some(agent_id),
+                    format!("Task {short_id} execution failed on agent {agent_id}: {error}"),
+                    json!({ "error": error }),
+                )
+                .await;
             }
 
             AgentMessage::Heartbeat {

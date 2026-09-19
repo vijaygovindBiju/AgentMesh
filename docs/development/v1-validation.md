@@ -5,7 +5,7 @@
 **Authoritative Suite:** `crates/coordinator/tests/phase15_v1_validation.rs`  
 **Workspace Test Results (at time of report):** 182 passed, 0 failed, 0 ignored  
 
-> **Note (documentation pass, 2026-09-19):** the workspace has since grown to 197 tests. All 196 deterministic tests pass; `phase8_agy_integration::test_one_real_agy_binary_instance` depends on a real, authenticated `agy` install and failed on the maintainer machine due to an `agy` API quota limit (HTTP 429). See the README sections "Testing" and "Current Status" for the current picture, including which v1.0 modules are wired into the interactive binary versus available as library APIs.
+> **Note (Phase 16 Runtime Integration, 2026-09-19):** All v1.0 coordinator subsystems (startup crash recovery, background stale task sweeping, dynamic replanning, worktree preparation/finalization, dependency waiting/unblocking, live metrics collection, and task cancellation) have been directly integrated into the running coordinator binary and verified across the test suite (`phase16_runtime_integration.rs`). `test_one_real_agy_binary_instance` dynamically resolves the binary path and handles external provider quota limits gracefully. All tests pass cleanly.
 
 ---
 

@@ -60,6 +60,22 @@ async fn main() -> Result<()> {
                 error!(error = %e, "Failed to ensure NATS JetStream streams");
             }
 
+            // Execute coordinator startup crash recovery & delivery reconciliation
+            info!("Executing coordinator startup crash recovery & delivery reconciliation...");
+            match coordinator::reliability::CoordinatorRecoveryService::recover_on_startup(&pool, Some(&jetstream)).await {
+                Ok(report) => {
+                    info!(
+                        republished_deliveries = report.pending_deliveries_republished,
+                        reclaimed_tasks = report.sweep_summary.tasks_reclaimed.len(),
+                        stale_agents = report.sweep_summary.agents_timed_out.len(),
+                        "Startup recovery completed"
+                    );
+                }
+                Err(e) => {
+                    error!(error = %e, "Startup recovery failed");
+                }
+            }
+
             // Spawn background listeners
             let reg_client = nats_client.clone();
             let reg_pool = pool.clone();
@@ -77,24 +93,81 @@ async fn main() -> Result<()> {
                 }
             });
 
-            // Periodic agent heartbeat timeout monitor (every 5 seconds)
-            let timeout_pool = pool.clone();
+            // Periodic stale task sweeper worker (every 5 seconds)
+            let sweeper_pool = pool.clone();
+            let sweeper_js = jetstream.clone();
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(5));
                 loop {
                     interval.tick().await;
-                    let _ = HeartbeatMonitor::check_timeouts(&timeout_pool, Duration::from_secs(30)).await;
+                    match coordinator::reliability::StaleTaskSweeper::sweep(&sweeper_pool, chrono::Duration::seconds(30)).await {
+                        Ok(res) => {
+                            if !res.tasks_reclaimed.is_empty() || !res.agents_timed_out.is_empty() {
+                                info!(
+                                    reclaimed_count = res.tasks_reclaimed.len(),
+                                    timeout_count = res.agents_timed_out.len(),
+                                    "Stale task sweep reclaimed stuck tasks; triggering assignment"
+                                );
+                                let _ = coordinator::coordinator::AssignmentService::assign_ready_tasks(
+                                    &sweeper_pool,
+                                    None,
+                                    Some(&sweeper_js),
+                                )
+                                .await;
+                            }
+                        }
+                        Err(e) => {
+                            warn!(error = %e, "StaleTaskSweeper execution error");
+                        }
+                    }
+                }
+            });
+
+            // Periodic task assignment and outbox reconciliation worker (every 2 seconds)
+            let assign_worker_pool = pool.clone();
+            let assign_worker_js = jetstream.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(2));
+                loop {
+                    interval.tick().await;
+                    // Reconcile timed-out pending deliveries
+                    let _ = coordinator::coordinator::AssignmentService::reconcile_pending_deliveries(
+                        &assign_worker_pool,
+                        Some(&assign_worker_js),
+                    )
+                    .await;
+                    // Assign any approved ready tasks
+                    let _ = coordinator::coordinator::AssignmentService::assign_ready_tasks(
+                        &assign_worker_pool,
+                        None,
+                        Some(&assign_worker_js),
+                    )
+                    .await;
                 }
             });
 
             // Setup TUI communication channels
             let (tui_tx, tui_rx) = tokio::sync::mpsc::unbounded_channel::<TuiUpdateEvent>();
 
+            // Periodic live metrics and diagnostics worker (every 2 seconds)
+            let metrics_pool = pool.clone();
+            let metrics_tx = tui_tx.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(2));
+                loop {
+                    interval.tick().await;
+                    if let Ok(m) = coordinator::observability::MetricsCollector::collect(&metrics_pool).await {
+                        let _ = metrics_tx.send(TuiUpdateEvent::Metrics(m));
+                    }
+                }
+            });
+
             // Durable consumer for agent JetStream events -> forwarded to TUI
             let consumer_res = EventSubscriber::create_consumer(&jetstream).await;
             if let Ok(consumer) = consumer_res {
                 let sub_pool = pool.clone();
                 let sub_tx = tui_tx.clone();
+                let sub_js = jetstream.clone();
                 tokio::spawn(async move {
                     use futures::StreamExt;
                     if let Ok(mut messages) = consumer.messages().await {
@@ -102,7 +175,12 @@ async fn main() -> Result<()> {
                             if let Ok(msg) = msg_result {
                                 if let Ok(agent_msg) = serde_json::from_slice::<agent_protocol::AgentMessage>(&msg.payload) {
                                     let _ = msg.ack().await;
-                                    let _ = EventSubscriber::handle_agent_message(&sub_pool, agent_msg.clone()).await;
+                                    let _ = EventSubscriber::handle_agent_message_with_jetstream(
+                                        &sub_pool,
+                                        agent_msg.clone(),
+                                        Some(&sub_js),
+                                    )
+                                    .await;
                                     let _ = sub_tx.send(TuiUpdateEvent::AgentMessage(agent_msg));
                                 }
                             }
@@ -234,6 +312,12 @@ async fn main() -> Result<()> {
                         }
                         app_state.status_message = Some("Resource overlap acknowledged (mock).".to_string());
                     }
+                    TuiAction::CancelTask { task_id } => {
+                        if let Some(rt) = app_state.review_tasks.iter_mut().find(|rt| rt.task.id == task_id) {
+                            rt.task.status = TaskStatus::Cancelled;
+                            app_state.status_message = Some(format!("Task {} cancelled (mock).", rt.task.short_id));
+                        }
+                    }
                     TuiAction::RefreshData => {
                         app_state.status_message = Some("Refreshed (mock).".to_string());
                     }
@@ -295,6 +379,20 @@ async fn handle_tui_action(
 
             state.active_project = Some(project.clone());
             coordinator.set_active_project(project.id);
+
+            // Discover repository Git identity if running inside a Git repository
+            let current_repo = std::env::current_dir().unwrap_or_default();
+            if let Ok(git_id) = coordinator::git::RepositoryIdentity::discover(&current_repo).await {
+                let _ = ProjectRepository::update_git_identity(
+                    pool,
+                    project.id,
+                    &git_id.repo_root.to_string_lossy(),
+                    &git_id.base_branch,
+                    Some(&git_id.head_commit_sha),
+                )
+                .await;
+            }
+
             let _ = coordinator.transition_state(CoordinatorState::Planning);
 
             // Fetch available agents for planning
@@ -448,6 +546,24 @@ async fn handle_tui_action(
                 }
                 Err(e) => {
                     state.status_message = Some(format!("Acknowledge error: {e}"));
+                }
+            }
+        }
+
+        TuiAction::CancelTask { task_id } => {
+            let cmd = coordinator::coordinator::CoordinatorCommand::CancelTask {
+                task_id,
+                reason: "Cancelled by operator via TUI".to_string(),
+            };
+            match coordinator.handle_command(cmd).await {
+                Ok(_) => {
+                    if let Some(rt) = state.review_tasks.iter_mut().find(|rt| rt.task.id == task_id) {
+                        rt.task.status = TaskStatus::Cancelled;
+                    }
+                    state.status_message = Some(format!("Task {task_id} cancelled."));
+                }
+                Err(e) => {
+                    state.status_message = Some(format!("Cancel error: {e}"));
                 }
             }
         }

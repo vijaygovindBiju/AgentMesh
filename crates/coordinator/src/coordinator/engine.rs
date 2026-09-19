@@ -137,19 +137,91 @@ impl CoordinatorCore {
                 })
             }
 
-            CoordinatorCommand::CancelTask { task_id, .. } => {
-                TaskRepository::update_status(&self.pool, task_id, TaskStatus::Cancelled).await?;
+            CoordinatorCommand::CancelTask { task_id, reason } => {
+                let task_before = TaskRepository::find_by_id(&self.pool, task_id).await?;
+                let old_status = task_before.as_ref().map(|t| t.status).unwrap_or(TaskStatus::Assigned);
+                let assigned_agent = task_before.and_then(|t| t.assigned_agent_id);
+
+                let _ = CommandHandler::execute_cancel_task(&self.pool, task_id, &reason).await?;
+
+                if let (Some(agent_id), Some(js)) = (assigned_agent, self.jetstream.as_ref()) {
+                    let _ = crate::messaging::publisher::TaskPublisher::publish_cancellation(
+                        js,
+                        agent_id,
+                        task_id,
+                        &reason,
+                    )
+                    .await;
+                }
+
                 Ok(CoordinatorEvent::TaskStatusChanged {
                     task_id,
-                    old_status: TaskStatus::Assigned,
+                    old_status,
                     new_status: TaskStatus::Cancelled,
                 })
+            }
+
+            CoordinatorCommand::TriggerReplanning { project_id, reason } => {
+                let _ = self.trigger_replanning(project_id, &reason, None).await?;
+                Ok(CoordinatorEvent::StateChanged(self.state))
             }
 
             CoordinatorCommand::RequestRefresh => {
                 Ok(CoordinatorEvent::StateChanged(self.state))
             }
         }
+    }
+
+    /// Triggers the dynamic re-planning workflow for a project when a task fails,
+    /// a cross-agent conflict is detected, or the operator requests an adjustment.
+    ///
+    /// Preserves the strict human approval gate: all newly generated tasks from replanning
+    /// are stored in `TaskStatus::HumanReview` and cannot execute until approved.
+    pub async fn trigger_replanning(
+        &mut self,
+        project_id: Uuid,
+        reason: &str,
+        provider_override: Option<&dyn crate::ai::LlmProvider>,
+    ) -> Result<Uuid> {
+        tracing::info!(%project_id, %reason, "Triggering dynamic replanning");
+
+        // 1. Gather replan context across tasks, agents, conflicts, and unexpected changes
+        let replan_req = crate::ai::ReplanEngine::gather_replan_context(&self.pool, project_id, None).await?;
+
+        // 2. Resolve LLM provider
+        let env_provider;
+        let provider: &dyn crate::ai::LlmProvider = match provider_override {
+            Some(p) => p,
+            None => {
+                env_provider = crate::ai::create_provider_from_env()?;
+                env_provider.as_ref()
+            }
+        };
+
+        // 3. Execute replan and persist new proposal & tasks (all tasks created in HumanReview status)
+        let proposal_id = crate::ai::ReplanEngine::execute_replan(&self.pool, provider, &replan_req).await?;
+
+        // 4. Record coordinator event
+        let _ = crate::observability::CoordinatorEventRepository::record(
+            &self.pool,
+            "project.replanned",
+            Some(project_id),
+            None,
+            None,
+            format!("Dynamic replanning generated proposal {proposal_id}: {reason}"),
+            serde_json::json!({
+                "proposal_id": proposal_id,
+                "reason": reason,
+                "failed_tasks": replan_req.failed_tasks.len(),
+                "completed_tasks": replan_req.completed_tasks.len(),
+            }),
+        )
+        .await;
+
+        // 5. Update coordinator state to HumanReview so the operator can review the plan
+        let _ = self.transition_state(CoordinatorState::HumanReview);
+
+        Ok(proposal_id)
     }
 
     /// Triggers an assignment cycle for ready, approved tasks whose blockers are completed.
@@ -191,10 +263,25 @@ impl CoordinatorCore {
             _ => None,
         };
 
-        // 1. Process in event subscriber (persists to PostgreSQL)
-        EventSubscriber::handle_agent_message(&self.pool, msg).await?;
+        // 1. Process in event subscriber (persists to PostgreSQL and unblocks dependencies)
+        EventSubscriber::handle_agent_message_with_jetstream(&self.pool, msg.clone(), self.jetstream.as_ref()).await?;
 
-        // 2. Check for project completion if a task completed
+        // 2. Dynamic replanning trigger on task failure (behind strict human approval gate)
+        if let AgentMessage::Failed { task_id: fail_tid, ref error, .. } = msg {
+            if let Ok(Some(task)) = TaskRepository::find_by_id(&self.pool, fail_tid).await {
+                tracing::info!(
+                    task_id = %fail_tid,
+                    project_id = %task.project_id,
+                    "Task execution failed; triggering dynamic replanning behind human approval gate"
+                );
+                let reason = format!("Task {} execution failed: {}", task.short_id, error);
+                if let Err(e) = self.trigger_replanning(task.project_id, &reason, None).await {
+                    tracing::warn!(error = %e, "Dynamic replanning on task failure skipped or failed");
+                }
+            }
+        }
+
+        // 3. Check for project completion if a task completed
         if let Some(tid) = task_id {
             if let Some(task) = TaskRepository::find_by_id(&self.pool, tid).await? {
                 if let Some(proj_id) = self.active_project_id {

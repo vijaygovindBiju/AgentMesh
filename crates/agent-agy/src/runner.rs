@@ -354,17 +354,22 @@ impl AgyAgentRunner {
                             warn!(
                                 task_id = %spec.task_id,
                                 status = %result.status,
+                                error = ?result.error,
                                 "agy returned non-success result"
                             );
+                            let raw_err = result
+                                .error
+                                .or(result.response)
+                                .unwrap_or_else(|| format!("agy failed with status {}", result.status));
+                            let error = agent_protocol::security::SecretRedactor::redact(&raw_err);
+
                             Self::publish_event(
                                 client,
                                 event_subject,
                                 &AgentMessage::Failed {
                                     agent_id: agent.agent_id(),
                                     task_id: spec.task_id,
-                                    error: result
-                                        .response
-                                        .unwrap_or_else(|| format!("agy failed with status {}", result.status)),
+                                    error,
                                     timestamp: Utc::now(),
                                 },
                             )
@@ -382,6 +387,32 @@ impl AgyAgentRunner {
 
                 AgyProcessEvent::Completed { exit_code: _, result } => {
                     if !final_reported && !is_blocked {
+                        if let Some(ref res) = result {
+                            if res.status != "SUCCESS" {
+                                let raw_err = res
+                                    .error
+                                    .as_ref()
+                                    .or(res.response.as_ref())
+                                    .cloned()
+                                    .unwrap_or_else(|| format!("agy process completed with non-success status {}", res.status));
+                                let error = agent_protocol::security::SecretRedactor::redact(&raw_err);
+
+                                Self::publish_event(
+                                    client,
+                                    event_subject,
+                                    &AgentMessage::Failed {
+                                        agent_id: agent.agent_id(),
+                                        task_id: spec.task_id,
+                                        error,
+                                        timestamp: Utc::now(),
+                                    },
+                                )
+                                .await?;
+                                final_reported = true;
+                                continue;
+                            }
+                        }
+
                         let summary = result
                             .and_then(|r| r.response)
                             .unwrap_or_else(|| format!("Task {} completed by agy", spec.short_id));
@@ -415,13 +446,31 @@ impl AgyAgentRunner {
                             "agy task execution failed"
                         );
 
+                        let raw_err = match exit_code {
+                            Some(code) => {
+                                if stderr.is_empty() {
+                                    format!("agy process exited with status code {code}: {reason}")
+                                } else {
+                                    format!("agy process exited with status code {code}: {reason}. Stderr: {stderr}")
+                                }
+                            }
+                            None => {
+                                if stderr.is_empty() {
+                                    reason
+                                } else {
+                                    format!("{reason}. Stderr: {stderr}")
+                                }
+                            }
+                        };
+                        let error = agent_protocol::security::SecretRedactor::redact(&raw_err);
+
                         Self::publish_event(
                             client,
                             event_subject,
                             &AgentMessage::Failed {
                                 agent_id: agent.agent_id(),
                                 task_id: spec.task_id,
-                                error: format!("{reason}. Stderr: {stderr}"),
+                                error,
                                 timestamp: Utc::now(),
                             },
                         )
@@ -476,5 +525,16 @@ mod tests {
         assert!(prompt.contains("TASK GIT BRANCH: agentmesh/task-001"));
         assert!(prompt.contains("BASE GIT BRANCH: main"));
         assert!(prompt.contains("REPOSITORY WORKSPACE: /tmp/repo"));
+    }
+
+    #[test]
+    fn test_error_secret_redaction() {
+        let sensitive_err = "API failure with key am_ak_99a8b7c6d5e4f3210123456789abcdef and token sk-proj-1234567890abcdef1234567890 in postgres://usr:secret_pass@localhost:5432/db";
+        let redacted = agent_protocol::security::SecretRedactor::redact(sensitive_err);
+        assert!(!redacted.contains("am_ak_99a8b7c6d5e4f3210123456789abcdef"));
+        assert!(!redacted.contains("sk-proj-1234567890abcdef1234567890"));
+        assert!(!redacted.contains("secret_pass"));
+        assert!(redacted.contains("[REDACTED_API_KEY]"));
+        assert!(redacted.contains("[REDACTED]"));
     }
 }

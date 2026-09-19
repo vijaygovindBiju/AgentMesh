@@ -25,6 +25,8 @@ pub enum TuiAction {
     },
     /// Human acknowledged a detected resource overlap warning
     AcknowledgeOverlap { warning_id: Uuid },
+    /// Human cancelled an active or assigned task
+    CancelTask { task_id: Uuid },
     /// Request refresh of project / agent data from storage
     RefreshData,
     /// Human requested exit
@@ -530,6 +532,12 @@ impl AppState {
                 self.input_mode = InputMode::EditingDescription;
                 self.status_message = Some("Editing description inline. [Enter] save & approve, [Esc] cancel.".to_string());
                 None
+            }
+            KeyCode::Char('c') | KeyCode::Char('C') => {
+                let task_id = self.review_tasks[self.selected_task_index].task.id;
+                let short_id = self.review_tasks[self.selected_task_index].task.short_id.clone();
+                self.status_message = Some(format!("Cancelling task {short_id}..."));
+                Some(TuiAction::CancelTask { task_id })
             }
             _ => None,
         }

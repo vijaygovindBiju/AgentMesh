@@ -84,6 +84,32 @@ impl AgyStepUpdatePayload {
     }
 }
 
+fn deserialize_error_field<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let val = Option::<serde_json::Value>::deserialize(deserializer)?;
+    match val {
+        None => Ok(None),
+        Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(s)) => {
+            if s.trim().is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(s))
+            }
+        }
+        Some(serde_json::Value::Object(map)) => {
+            if let Some(msg) = map.get("message").and_then(|m| m.as_str()) {
+                Ok(Some(msg.to_string()))
+            } else {
+                Ok(Some(serde_json::to_string(&map).unwrap_or_default()))
+            }
+        }
+        Some(other) => Ok(Some(other.to_string())),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AgyResultPayload {
     #[serde(default)]
@@ -91,6 +117,8 @@ pub struct AgyResultPayload {
     pub status: String,
     #[serde(default)]
     pub response: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_error_field")]
+    pub error: Option<String>,
     #[serde(default)]
     pub duration_seconds: Option<f64>,
     #[serde(default)]
@@ -163,6 +191,32 @@ mod tests {
                 assert!(step_update.blocked_reason().contains("Which database migration version"));
             }
             other => panic!("Expected StepUpdate, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_result_error_event_with_string() {
+        let raw = r#"{"event":"result","result":{"conversation_id":"8a6e3b0f-2ee1-4c48-a19b-52e0f71db1c2","status":"ERROR","error":"RESOURCE_EXHAUSTED: rate limit exceeded (HTTP 429)","duration_seconds":1.2,"num_turns":1}}"#;
+        let event = parse_stream_line(raw).expect("Failed to parse error result");
+        match event {
+            AgyStreamEvent::Result { result } => {
+                assert_eq!(result.status, "ERROR");
+                assert_eq!(result.error.as_deref(), Some("RESOURCE_EXHAUSTED: rate limit exceeded (HTTP 429)"));
+            }
+            other => panic!("Expected Result, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_result_error_event_with_object() {
+        let raw = r#"{"event":"result","result":{"conversation_id":"8a6e3b0f-2ee1-4c48-a19b-52e0f71db1c2","status":"ERROR","error":{"code":429,"message":"Quota exceeded"},"duration_seconds":0.5,"num_turns":1}}"#;
+        let event = parse_stream_line(raw).expect("Failed to parse structured error result");
+        match event {
+            AgyStreamEvent::Result { result } => {
+                assert_eq!(result.status, "ERROR");
+                assert_eq!(result.error.as_deref(), Some("Quota exceeded"));
+            }
+            other => panic!("Expected Result, got {other:?}"),
         }
     }
 }

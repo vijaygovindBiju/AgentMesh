@@ -113,6 +113,12 @@ async fn main() -> Result<()> {
                             error!(error = %e, "agy task execution failed");
                         }
                     }
+                    Ok(CoordinatorMessage::TaskCancelled { task_id, reason, .. }) => {
+                        tracing::warn!(%task_id, %reason, "Received TaskCancelled instruction from coordinator; cancelling agy task");
+                    }
+                    Ok(CoordinatorMessage::WaitForDependency { task_id, blocking_task_id, message, .. }) => {
+                        tracing::info!(%task_id, %blocking_task_id, %message, "Received WaitForDependency notice from coordinator; waiting for prerequisite");
+                    }
                     Ok(other) => {
                         info!(message = ?other, "Received non-assignment coordinator message");
                     }

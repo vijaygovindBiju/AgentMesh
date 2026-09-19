@@ -90,22 +90,22 @@ Task delivery is not a generic queue. `TaskDelivery` records in PostgreSQL track
 
 ## v1.0 Architecture Additions
 
-v1.0 (Phases 8–15) adds the following modules to the v0.1 core. Each is implemented in `crates/coordinator/src/` and covered by the corresponding `tests/phaseN_*.rs` suite. Modules marked *library* are exercised by tests and available as APIs but are not yet invoked automatically by the interactive `coordinator` binary (see the README "Current Status" section).
+v1.0 (Phases 8–16) integrates the following subsystems directly into the running coordinator binary and core runtime:
 
-1. **Intelligent Planning & Dynamic Re-planning (Phases 3 & 10)** — `ai/`
+1. **Intelligent Planning & Dynamic Re-planning (Phases 3, 10 & 16)** — `ai/`
    - Repository discovery via `RepositoryScanner` (ecosystems, languages, crates, file tree) feeding repository-aware prompts. *Wired: the binary scans its working directory at planning time.*
-   - `ReplanEngine` builds a corrective proposal from completed/failed/blocked tasks, unexpected resource changes and Git conflicts. *Library.*
-2. **Real Agent Integration (`agy`) & Worktree Isolation (Phases 8 & 9)** — `crates/agent-agy`, `git/`
-   - `AgyAgent` / `AgyProcess` / `AgyStreamEvent` manage the `agy` CLI subprocess and translate its NDJSON stream into protocol events. *Wired (separate binary).*
-   - `AgentWorkspace` creates one Git worktree per task on an `agentmesh/<short-id>` branch; `ResourceTracker`, `ConflictDetector` and `CompletionManager` audit and finalize the result. *Library; `AssignmentService` forwards branch/path info when present.*
+   - `ReplanEngine` builds a corrective proposal from completed/failed/blocked tasks, unexpected resource changes and Git conflicts. *Wired: `CoordinatorCore::trigger_replanning` and `CoordinatorCommand::TriggerReplanning` execute corrective replanning, strictly gating new tasks in `HumanReview`.*
+2. **Real Agent Integration (`agy`) & Worktree Isolation (Phases 8, 9 & 16)** — `crates/agent-agy`, `git/`
+   - `AgyAgent` / `AgyProcess` / `AgyStreamEvent` manage the `agy` CLI subprocess and translate its NDJSON stream into protocol events with error preservation and secret redaction. *Wired (separate binary).*
+   - `AgentWorkspace` creates one Git worktree per task on an `agentmesh/<short-id>` branch; `ResourceTracker`, `ConflictDetector` and `CompletionManager` audit and finalize the result. *Wired: `AssignmentService` automatically invokes `prepare_task_workspace` during dispatch, and `EventSubscriber` automatically invokes `finalize_task` upon completion.*
 3. **Agent Capability Matching & Health Gating (Phase 11)** — `agent-protocol/capabilities.rs`, `ai/matcher.rs`
    - `AgentCapabilityMatcher` scores candidates on languages, tools, OS and tags; `HealthStatus` and availability gate assignment. *Wired: suggestions at planning time; availability/health filters in the assignment query.*
 4. **Security, Authentication & Audit Logging (Phase 12)** — `security/`
-   - SHA-256 `am_ak_` API keys with constant-time verification, `AgentRole`, path-based `PermissionBoundary`, `TaskAuthorizer`, `SecretRedactor`, `audit_logs`. *Wired in registration, assignment and event ingestion. TLS/mTLS via `connect_secure` is library-only.*
-5. **Observability, Timelines & Diagnostics (Phase 13)** — `observability/`
-   - `TimelineService`, `DeliveryDiagnostics`, `FailureDiagnostics`, `MetricsCollector`, `coordinator_events`, and the Diagnostics TUI screen. *Screen wired; metric/timeline feeds are library.*
-6. **Reliability (Phase 14)** — `reliability/`
-   - `CoordinatorRecoveryService` (startup), `StaleTaskSweeper`, `EventDeduplicator`, `ResilientConnection`. *Deduplication wired; recovery and sweeper are library (exposed via `CoordinatorCore`).*
+   - SHA-256 `am_ak_` API keys with constant-time verification, `AgentRole`, path-based `PermissionBoundary`, `TaskAuthorizer`, `SecretRedactor`, `audit_logs`. *Wired in registration, assignment and event ingestion. TLS/mTLS via `connect_secure` is library-supported.*
+5. **Observability, Timelines & Diagnostics (Phases 13 & 16)** — `observability/`
+   - `TimelineService`, `DeliveryDiagnostics`, `FailureDiagnostics`, `MetricsCollector`, `coordinator_events`, and the Diagnostics TUI screen. *Wired: `MetricsCollector` periodically pushes live metrics to TUI; `CoordinatorEventRepository` records coordinator events across all lifecycle operations.*
+6. **Reliability (Phases 14 & 16)** — `reliability/`
+   - `CoordinatorRecoveryService` (startup), `StaleTaskSweeper`, `EventDeduplicator`, `ResilientConnection`. *Wired: `CoordinatorRecoveryService::recover_on_startup` runs on coordinator start; `StaleTaskSweeper` runs periodic background sweeps reclaiming stale tasks; background worker reconciles pending deliveries and dispatches unblocked ready tasks.*
 
 ---
 

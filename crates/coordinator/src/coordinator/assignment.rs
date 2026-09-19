@@ -12,6 +12,7 @@ use crate::db::repositories::{
 use crate::domain::{
     AdapterType, Agent, AgentStatus, DeliveryStatus, HealthStatus, Task, TaskStatus,
 };
+use crate::git::GitCoordinator;
 use crate::messaging::publisher::TaskPublisher;
 
 #[derive(Debug, Clone)]
@@ -248,11 +249,47 @@ impl AssignmentService {
                     &idempotency_key,
                 );
 
-                // Fetch git coordination info for task/project if present
+                // Fetch git coordination info for task/project if present and prepare isolated worktree
                 if let Ok(Some(git_info)) = TaskRepository::find_git_context(pool, task.id).await {
-                    spec.task_branch = git_info.task_branch;
-                    spec.base_branch = git_info.base_branch;
-                    spec.repo_path = git_info.repo_path;
+                    let mut workspace_ready = false;
+                    if let Some(ref repo_path_str) = git_info.repo_path {
+                        let repo_root = std::path::Path::new(repo_path_str);
+                        if repo_root.exists() {
+                            let base_branch = git_info.base_branch.as_deref().unwrap_or("main");
+                            let git_coord = GitCoordinator::new(pool.clone());
+                            match git_coord
+                                .prepare_task_workspace(
+                                    repo_root,
+                                    task.project_id,
+                                    task.id,
+                                    &task.short_id,
+                                    base_branch,
+                                    None,
+                                )
+                                .await
+                            {
+                                Ok(ws) => {
+                                    spec.task_branch = Some(ws.task_branch.clone());
+                                    spec.base_branch = Some(base_branch.to_string());
+                                    spec.repo_path = Some(ws.worktree_path.to_string_lossy().to_string());
+                                    workspace_ready = true;
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        task_id = %task.id,
+                                        error = %e,
+                                        "Failed to prepare git workspace for task; falling back to direct repo context"
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    if !workspace_ready {
+                        spec.task_branch = git_info.task_branch;
+                        spec.base_branch = git_info.base_branch;
+                        spec.repo_path = git_info.repo_path;
+                    }
                 }
 
                 match TaskPublisher::publish_assignment(js, agent.id, &spec).await {

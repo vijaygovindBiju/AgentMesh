@@ -225,6 +225,107 @@ pub fn glob_matches(pattern: &str, candidate: &str) -> bool {
     true
 }
 
+/// Redacts sensitive information such as API keys, tokens, and credentials from logs and strings.
+pub struct SecretRedactor;
+
+impl SecretRedactor {
+    /// Scans a text string and replaces discovered credentials, API keys, and connection strings with `[REDACTED]`.
+    pub fn redact(text: &str) -> String {
+        let mut result = text.to_string();
+
+        // 1. Redact AgentMesh API keys: am_ak_<hex>
+        let mut start_idx = 0;
+        while let Some(pos) = result[start_idx..].find("am_ak_") {
+            let actual_pos = start_idx + pos;
+            let end_pos = result[actual_pos..]
+                .find(|c: char| !c.is_alphanumeric() && c != '_')
+                .map(|i| actual_pos + i)
+                .unwrap_or(result.len());
+
+            let key_slice = &result[actual_pos..end_pos];
+            if key_slice.len() > 10 {
+                result.replace_range(actual_pos..end_pos, "[REDACTED_API_KEY]");
+                start_idx = actual_pos + "[REDACTED_API_KEY]".len();
+            } else {
+                start_idx = end_pos;
+            }
+        }
+
+        // 2. Redact standard AI API keys: sk-<alphanumeric>
+        start_idx = 0;
+        while let Some(pos) = result[start_idx..].find("sk-") {
+            let actual_pos = start_idx + pos;
+            let end_pos = result[actual_pos..]
+                .find(|c: char| !c.is_alphanumeric() && c != '_' && c != '-')
+                .map(|i| actual_pos + i)
+                .unwrap_or(result.len());
+
+            let key_slice = &result[actual_pos..end_pos];
+            if key_slice.len() > 10 {
+                result.replace_range(actual_pos..end_pos, "[REDACTED_API_KEY]");
+                start_idx = actual_pos + "[REDACTED_API_KEY]".len();
+            } else {
+                start_idx = end_pos;
+            }
+        }
+
+        // 3. Redact passwords in connection URLs: postgres://user:password@host
+        while let Some(proto_pos) = result.find("://") {
+            let user_start = proto_pos + 3;
+            if let Some(at_pos) = result[user_start..].find('@') {
+                let user_slice = &result[user_start..user_start + at_pos];
+                if let Some(colon_pos) = user_slice.find(':') {
+                    let pw_start = user_start + colon_pos + 1;
+                    let pw_end = user_start + at_pos;
+                    result.replace_range(pw_start..pw_end, "[REDACTED]");
+                }
+                break;
+            } else {
+                break;
+            }
+        }
+
+        // 4. Redact private key blocks
+        if let Some(priv_start) = result.find("-----BEGIN") {
+            if let Some(priv_end) = result.find("KEY-----") {
+                let actual_end = priv_end + 8;
+                if actual_end > priv_start {
+                    result.replace_range(priv_start..actual_end, "[REDACTED_PRIVATE_KEY]");
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Recursively redacts sensitive values in JSON payloads.
+    pub fn redact_json(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::String(s) => serde_json::Value::String(Self::redact(s)),
+            serde_json::Value::Array(arr) => {
+                serde_json::Value::Array(arr.iter().map(Self::redact_json).collect())
+            }
+            serde_json::Value::Object(map) => {
+                let mut redacted_map = serde_json::Map::new();
+                for (k, v) in map {
+                    let k_lower = k.to_lowercase();
+                    if k_lower.contains("password")
+                        || k_lower.contains("secret")
+                        || k_lower.contains("api_key")
+                        || k_lower.contains("token")
+                    {
+                        redacted_map.insert(k.clone(), serde_json::Value::String("[REDACTED]".to_string()));
+                    } else {
+                        redacted_map.insert(k.clone(), Self::redact_json(v));
+                    }
+                }
+                serde_json::Value::Object(redacted_map)
+            }
+            other => other.clone(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

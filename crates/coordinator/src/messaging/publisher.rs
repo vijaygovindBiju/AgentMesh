@@ -57,6 +57,34 @@ impl TaskPublisher {
 
         Ok(ack.sequence)
     }
+
+    /// Publishes a `WaitForDependency` notice to an agent.
+    pub async fn publish_wait_for_dependency(
+        jetstream: &JetStreamContext,
+        agent_id: Uuid,
+        task_id: Uuid,
+        blocking_task_id: Uuid,
+        message: &str,
+    ) -> Result<u64> {
+        let subject = format!("coordinator.tasks.assign.{agent_id}");
+        let message = CoordinatorMessage::WaitForDependency {
+            task_id,
+            blocking_task_id,
+            message: message.to_string(),
+            timestamp: Utc::now(),
+        };
+        let payload = serde_json::to_vec(&message)
+            .context("Failed to serialize CoordinatorMessage::WaitForDependency")?;
+
+        let ack = jetstream
+            .publish(subject.clone(), payload.into())
+            .await
+            .with_context(|| format!("Failed to publish wait for dependency to {subject}"))?
+            .await
+            .with_context(|| format!("Failed to get publish ack for {subject}"))?;
+
+        Ok(ack.sequence)
+    }
 }
 
 #[cfg(test)]

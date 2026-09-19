@@ -20,6 +20,11 @@ pub struct AgentWorkspace {
 }
 
 impl AgentWorkspace {
+    /// Returns the standard path where a task's worktree is expected to be placed.
+    pub fn expected_worktree_path(repo_root: &Path, short_id: &str) -> PathBuf {
+        repo_root.join(".agentmesh").join("worktrees").join(short_id)
+    }
+
     /// Creates an isolated Git worktree for the task, checked out on `task_branch`
     /// starting at `base_commit_or_ref`.
     pub async fn create(
@@ -37,7 +42,7 @@ impl AgentWorkspace {
         // 1. Determine destination worktree directory
         let worktree_path = match custom_base_dir {
             Some(base_dir) => base_dir.join(short_id),
-            None => repo_root.join(".agentmesh").join("worktrees").join(short_id),
+            None => Self::expected_worktree_path(&repo_root, short_id),
         };
 
         if let Some(parent) = worktree_path.parent() {

@@ -525,7 +525,7 @@ Module: `crates/coordinator/src/git/`. Schema: `migrations/002_git_coordination.
 
 Why worktrees: they share one object store while giving each agent a private checkout, so N agents can work on N branches of the same clone without cloning N times or fighting over `.git/index`.
 
-**Wiring status:** `AssignmentService` already forwards `task_branch`/`base_branch`/`repo_path` to agents when present in the database, and `agent-agy` executes in that directory. However, the interactive coordinator binary does not yet call `GitCoordinator::prepare_task_workspace` or `finalize_task_git_state` automatically; these are invoked from the integration tests and are available as library APIs.
+**Wiring status:** Fully wired into coordinator runtime. `AssignmentService` automatically invokes `GitCoordinator::prepare_task_workspace` during task dispatch (spawning an isolated worktree at `.agentmesh/worktrees/<short-id>`), and `EventSubscriber` invokes `CompletionManager::finalize_task_git_state` upon task completion (committing work, auditing resources, verifying mergeability, and removing the worktree).
 
 ---
 
@@ -536,7 +536,7 @@ Why worktrees: they share one object store while giving each agent a private che
 - **Blocker enforcement:** the assignment query only claims `approved` tasks with an approval row and *no* `blocks` dependency whose blocker is not `completed`.
 - **Resource overlap:** `OverlapDetector` computes reachability over `Blocks` edges. Two tasks touching the same resource with a path between them → `Info`; with no ordering between them → `Critical`.
 - **Human approval:** `CommandHandler::execute_approve_task` refuses to approve a task with an unacknowledged `Critical` overlap (`ApprovalGateError::BlockedByCriticalOverlap`). Press `a` to acknowledge, then `y`.
-- **Automatic unblocking:** when the blocker reports `Completed`, dependents satisfy the claim query immediately. They are dispatched on the next assignment cycle (triggered by the next approve/edit action in v1.0).
+- **Automatic unblocking:** when the blocker reports `Completed`, dependents satisfy the claim query immediately. The background periodic assignment worker (running every 2 s) dispatches ready unblocked tasks automatically.
 
 ---
 
@@ -545,16 +545,17 @@ Why worktrees: they share one object store while giving each agent a private che
 | Scenario | v1.0 behaviour | Wired in binary? |
 | :--- | :--- | :--- |
 | **Agent heartbeat failure** | `HeartbeatMonitor::check_timeouts` marks agents with no heartbeat for 30 s as `offline` (checked every 5 s). | Yes |
-| **Stale tasks** | `StaleTaskSweeper::sweep` finds `assigned`/`executing` tasks whose agent is offline or stale, unassigns them, reverts to `Approved` (or `HumanReview` after 3 delivery attempts), increments the agent's failure count, records a `task.reclaimed` event, and marks expired unacknowledged deliveries. | Library / tests (`CoordinatorCore::run_stale_sweep`) |
-| **Reassignment** | A reclaimed `Approved` task is picked up by the next assignment cycle with `attempt + 1` and a new idempotency key. `CommandHandler::execute_reassign_task` lets a human move a `Failed` task back to `Approved` for a specific agent. | Assignment: yes. Reassign: library (no TUI key) |
+| **Stale tasks** | `StaleTaskSweeper::sweep` finds `assigned`/`executing` tasks whose agent is offline or stale, unassigns them, reverts to `Approved` (or `HumanReview` after 3 delivery attempts), increments failure count, records `task.reclaimed` event, and marks expired deliveries. Run by background worker every 5 s. | Yes |
+| **Reassignment** | A reclaimed `Approved` task is picked up by periodic assignment worker (running every 2 s) with `attempt + 1` and a new idempotency key. `CommandHandler::execute_reassign_task` lets a human move a `Failed` task back to `Approved` for a specific agent. | Yes |
 | **Duplicate events** | `EventDeduplicator` (in-memory TTL) drops repeated lifecycle events; delivery ACKs are idempotent by `idempotency_key`. | Yes |
-| **Coordinator restart** | `CoordinatorRecoveryService::recover_on_startup` republishes `pending` deliveries, sweeps stale tasks, and reports orphans. `AssignmentService::reconcile_pending_deliveries` republishes deliveries stuck in `pending` > 5 s (terminal after 3 attempts). | Library / tests |
+| **Coordinator restart** | `CoordinatorRecoveryService::recover_on_startup` runs on launch, republishing `pending` deliveries, sweeping stale tasks, and reporting orphans. `AssignmentService::reconcile_pending_deliveries` runs every 2 s in background. | Yes |
 | **NATS publish failure** | In-band compensation: delivery → `terminal`, task → `Approved`, agent → `Idle`. | Yes |
 | **NATS/DB reconnect** | `ResilientConnection` provides reconnect callbacks and exponential-backoff retry helpers. | Library |
-| **Execution failure** | `Failed` → task `Failed`, agent `Error`, failure metrics; **requires a human** to reassign (no automatic retry storms). | Yes |
-| **Blocked** | `Blocked` → task `Blocked`, agent `Blocked`; the agent may later resume and report `Completed`. | Yes |
+| **Execution failure** | `Failed` → task `Failed`, agent `Error`, failure metrics; dynamic replanning triggered behind human approval gate. | Yes |
+| **Blocked** | `Blocked` → task `Blocked`, agent `Blocked`; publishes `WaitForDependency` over JetStream and unblocks automatically on prerequisite completion. | Yes |
+| **Task cancellation** | `CancelTask` → marks non-terminal deliveries `Terminal`, frees agent to `Idle`, cleans up worktree, publishes `TaskCancelled` to agent. | Yes (`c` key in TUI / command) |
 
-Automatic recovery is limited to what is marked "Yes" above. Anything else needs either a human action in the TUI or a caller of the library APIs.
+Automatic recovery is active across all lifecycle events and background workers listed as "Yes" above. Database consistency is strictly preserved in PostgreSQL.
 
 ---
 
@@ -582,7 +583,7 @@ ReplanEngine::execute_replan → validated → new Proposal + Proposed tasks (su
 Human review               tasks enter HumanReview exactly like an initial plan
 ```
 
-Replanning never bypasses the approval gate: it only creates `Proposed` tasks, which a human must approve. It is available through `PlanningService::generate_replan`; the TUI does not yet have a key to trigger it.
+Replanning never bypasses the approval gate: it only creates `Proposed` tasks in `HumanReview`, which a human must approve. It is automatically triggered upon task execution failure, or by operator command via `CoordinatorCommand::TriggerReplanning` / `CoordinatorCore::trigger_replanning`.
 
 ---
 
@@ -616,10 +617,10 @@ Module: `crates/coordinator/src/observability/`; schema `migrations/005_observab
 | **Task timeline** | `TimelineService::build_task_timeline` — milestones (proposed, approved, assigned, started, progress, completed/failed), elapsed durations | Library / tests |
 | **Agent timeline** | `TimelineService::build_agent_timeline` — registration, deliveries, events | Library / tests |
 | **Agent events** | `agent_events` table (every lifecycle message) | SQL; Dashboard reflects state changes live |
-| **Coordinator events** | `coordinator_events` table (`task.reclaimed`, …) via `CoordinatorEventRepository` | SQL; Diagnostics screen list (populated by library callers / demo mode) |
+| **Coordinator events** | `coordinator_events` table (`task.reclaimed`, `task.cancelled`, `task.unblocked`, `project.replanned`) via `CoordinatorEventRepository` | SQL; Diagnostics screen (`4`) |
 | **Delivery visibility** | `DeliveryDiagnostics::inspect` — attempts, ACK state, expiry, redelivery | Library |
 | **Failure diagnostics** | `FailureDiagnostics::diagnose_task` — merge collisions, unexpected resources, `RemediationAdvice` | Library |
-| **System metrics** | `MetricsCollector::collect` → `SystemMetrics` (task/agent counts, delivery success, throughput) | Diagnostics screen (`4`) — shown when metrics are pushed to the TUI; the live binary does not yet push them |
+| **System metrics** | `MetricsCollector::collect` → `SystemMetrics` (task/agent counts, delivery success, throughput) | Diagnostics screen (`4`) — live binary periodically collects and pushes metrics every 2 s |
 | **Structured logs** | `TraceContext` spans with task/agent/project IDs; `RUST_LOG` filter, stderr | `RUST_LOG=debug cargo run --bin coordinator 2> coordinator_debug.log` |
 | **Audit** | `audit_logs` table | SQL |
 | **Execution integrity** | verified in `phase15_v1_validation.rs` (`test_phase15_9_…`) | Tests |
@@ -802,13 +803,12 @@ Workspace crate version is `0.1.0` (the coordinator logs `v0.1.0` at startup); "
 
 ### Future / not implemented
 
-- Background assignment/sweeper/recovery loops in the coordinator binary (today: assignment on approve; sweeper/recovery via library).
-- Automatic worktree creation and completion handling from the interactive binary.
-- TUI actions for reassign, cancel, replan, and live metrics streaming into the Diagnostics screen.
-- Coordinator publishing `TaskCancelled` / `WaitForDependency`; adapters acting on them.
-- OpenAI / Gemini providers; NATS server-side account permissions; admin approval of new agent registrations; a `coordinator` Docker image.
+- OpenAI / Gemini direct coordinator planner providers (Anthropic Claude 3.5 Sonnet and Mock are supported).
+- NATS server-side account permissions (currently enforced in coordinator core).
+- Admin approval queue for initial agent registrations (currently auto-accepted upon valid registration).
+- Standalone `coordinator` Docker image and Kubernetes Helm charts.
 
-AgentMesh v1.0 is a complete, tested coordination core and a working `agy` adapter. It is **not** production-ready as shipped — see §15.
+AgentMesh v1.0 is a complete, fully-wired multi-agent coordination core with a working `agy` adapter and robust Git worktree isolation. It is **not** production-ready as shipped — see §15.
 
 ---
 
