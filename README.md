@@ -756,10 +756,10 @@ AgentMesh/
 │   ├── architecture.md         # System architecture and success criteria
 │   ├── domain-model.md         # Canonical state machines and relational models
 │   ├── protocol.md             # Agent protocol and NATS topic specifications
-│   └── decisions/              # Architecture Decision Records (ADRs 001–008)
+│   ├── v1-validation.md        # v1.0 End-to-end multi-agent validation report
+│   └── decisions/              # Architecture Decision Records (ADRs 001–012)
 │
-├── migrations/                 # SQL migrations applied automatically by coordinator
-│   └── 20260916000001_initial_schema.sql
+├── migrations/                 # SQL migrations applied automatically by coordinator (001–005)
 │
 └── crates/
     ├── coordinator/            # Primary coordinator binary and core library

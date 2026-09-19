@@ -38,16 +38,31 @@ notes.txt
 *.old
 *~
 ~$*
+.~lock.*
 
-# Generated documentation builds and documentation files
-docs/
+# Generated documentation builds and artifacts (keep source markdown in docs/)
 doc/
 docs/build/
 docs/_build/
 site/
 book/
+target/doc/
+
+# Unnecessary binary/office document formats
 *.doc
 *.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+*.odt
+*.ods
+*.odp
+*.pdf
+*.rtf
+*.pages
+*.numbers
+*.key
 
 # Todo lists and task tracking
 !TODO.md
