@@ -16,6 +16,7 @@ PostgreSQL 16 is the authoritative single source of truth; NATS 2.10 JetStream p
 - [The Solution](#the-solution)
 - [Core Philosophy](#core-philosophy)
 - [Architecture](#architecture)
+- [End-to-End Workflow](#end-to-end-workflow)
 - [Key Features](#key-features)
 - [Tech Stack](#tech-stack)
 - [System Requirements](#system-requirements)
@@ -151,6 +152,60 @@ Automated Recovery (Stale Sweeper, Dependency Unblocking, Dynamic Replanning)
 - **Agent Protocol (`crates/agent-protocol/`)**: Pure, transport-agnostic Serde definitions for all coordinator-agent messages. Zero network dependencies.
 - **Mock Agent (`crates/agent-mock/`)**: Protocol-compliant worker with configurable simulated execution delays; used for testing, demos, and CI.
 - **AGY Adapter (`crates/agent-agy/`)**: Supervised runner that wraps the Antigravity `agy` CLI, parses real-time NDJSON event streams, dynamically resolves binary paths, handles process timeouts, redacts secrets, and gracefully surfaces upstream quota limits.
+
+---
+
+## End-to-End Workflow
+
+The following steps are executed and enforced directly by the active AgentMesh coordinator binary and worker agents:
+
+```text
+Project                    (TUI)       Screen 1: name + description, Enter
+   ↓
+Repository Discovery       (Runtime)   RepositoryScanner scans coordinator root workspace
+   ↓                                   (ecosystems, languages, crates, file tree, README summary)
+AI Planning                (Runtime)   LlmProvider returns tasks, dependencies, affected resources,
+   ↓                                   suggested agents (AgentCapabilityMatcher), complexity (XS–XL)
+DAG Validation             (Runtime)   PlanValidator rejects cycles, self-deps, unknown refs, dup IDs
+   ↓
+Human Review               (TUI)       Screen 2: y approve / n reject / e edit+approve / a acknowledge / c cancel
+   ↓
+Overlap / Dependency Checks(Runtime)   Critical overlap blocks approval until acknowledged;
+   ↓                                   blocked tasks are not claimable until blockers are Completed
+Capability Matching        (Runtime)   Suggested agent preferred if idle+healthy, else any eligible agent
+   ↓
+Task Assignment            (Runtime)   2s periodic worker claims ready tasks: task→Assigned, agent→Busy,
+   ↓                                   TaskDelivery(Pending) with idempotency key ({task_id}:{attempt})
+Git Worktree Preparation   (Runtime)   GitCoordinator creates isolated .agentmesh/worktrees/<short-id>
+   ↓                                   worktree on agentmesh/<short-id> branch, populating TaskSpec.repo_path
+Transport Dispatch         (Runtime)   TaskAssignment published to coordinator.tasks.assign.{agent_id} on JetStream
+   ↓
+Agent Execution            (Agent)     agent-mock simulates; agent-agy executes `agy` inside task worktree
+   ↓
+Progress / Events          (Agent)     TaskStarted, ProgressUpdate, Blocked, Completed, Failed → agents.{id}.events
+   ↓
+Git Finalization           (Runtime)   On completion, GitCoordinator stages uncommitted work, verifies 3-way
+   ↓                                   mergeability to base branch, records completion commit, and removes worktree
+Dependency Unblocking      (Runtime)   When blocker completes, dependents are automatically unblocked to Approved;
+   ↓                                   the 2s assignment loop claims and dispatches them on the next tick
+Metrics & Diagnostics      (Runtime)   2s background metrics worker streams live KPIs to TUI Diagnostics screen;
+   ↓                                   CoordinatorEventRepository records all lifecycle events
+Dynamic Replanning         (Runtime)   On task failure or merge collision, ReplanEngine generates corrective tasks;
+   ↓                                   strictly places them in HumanReview behind the human approval gate
+Stale Sweeper              (Runtime)   5s background sweeper reclaims tasks from offline agents, increments
+                                       attempt counts, and safely re-queues them for assignment
+```
+
+### Active Background Runtime Loops
+
+In AgentMesh v1.0, task scheduling and recovery are fully automated via background runtime workers in `crates/coordinator/src/main.rs`:
+
+1. **2-Second Assignment & Reconciliation Worker**:
+   Runs every 2 seconds. Evaluates PostgreSQL for tasks in `Approved` status whose dependencies are all `Completed`. Concurrently locks and claims them (`FOR UPDATE SKIP LOCKED`), provisions private Git worktrees, generates unique idempotency keys (`{task_id}:{attempt}`), and publishes assignments over JetStream. It also reconciles unacknowledged pending deliveries. When a blocking task finishes, downstream dependents are unblocked and dispatched on the very next 2-second tick without requiring any operator intervention.
+2. **5-Second Stale Task Sweeper**:
+   Runs every 5 seconds via `StaleTaskSweeper::sweep`. Automatically identifies tasks in `Assigned` or `Executing` status whose assigned worker has missed heartbeats (>30s) or gone offline. It unassigns the dead agent, marks expired deliveries as `Terminal`, increments the failure count, records `task.reclaimed` coordinator events, and resets tasks with `< 3` attempts to `Approved` for immediate reassignment (or escalates tasks with `≥ 3` attempts to `HumanReview`).
+3. **2-Second Live Metrics Worker**:
+   Runs every 2 seconds via `MetricsCollector::collect`. Aggregates real-time operational KPIs (fleet status, active deliveries, throughput, failure rates) from PostgreSQL and streams `TuiUpdateEvent::Metrics` directly into the TUI event loop for real-time visualization on the Diagnostics screen.
 
 ---
 
