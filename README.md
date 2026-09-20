@@ -20,8 +20,11 @@ PostgreSQL 16 is the authoritative single source of truth; NATS 2.10 JetStream p
 - [Tech Stack](#tech-stack)
 - [System Requirements](#system-requirements)
 - [Installation](#installation)
-  - [Option A — Installer Script (Recommended)](#option-a--installer-script-recommended)
-  - [Option B — Manual Source Build](#option-b--manual-source-build)
+  - [Option A — Automated Setup & Build (`./install.sh`)](#option-a--automated-setup--build-installsh)
+  - [Option B — Production Binary Installer (`./scripts/install.sh`)](#option-b--production-binary-installer-scriptsinstallsh)
+  - [Option C — Manual Source Build (`cargo build`)](#option-c--manual-source-build-cargo-build)
+  - [Notice on Remote Curl Installation](#notice-on-remote-curl-installation)
+- [Install on Another Linux Machine (Worker Host)](#install-on-another-linux-machine-worker-host)
 - [Backing Infrastructure (Docker Compose)](#backing-infrastructure-docker-compose)
 - [Configuration Reference](#configuration-reference)
 - [Quick Start](#quick-start)
@@ -211,50 +214,172 @@ Every technology listed below is actively used in the AgentMesh codebase:
 
 ## Installation
 
-### Option A — Installer Script (Recommended)
+AgentMesh provides two installation scripts depending on your goal:
+1. `./install.sh` (Repository Root) — An end-to-end environment bootstrapper that checks tools, generates configuration, starts backing Docker services (PostgreSQL + NATS), compiles the workspace, and optionally installs binaries.
+2. `./scripts/install.sh` — A dedicated binary installer and uninstaller that compiles optimized release binaries and installs them into `~/.local/bin` (or a custom `--prefix`).
 
-AgentMesh includes an auditable, idempotent installation script:
+---
+
+### Option A — Automated Setup & Build (`./install.sh`)
+
+Use `./install.sh` to set up a complete local development or production environment from the repository root:
 
 ```bash
-# Clone the repository
 git clone https://github.com/vijaygovindBiju/AgentMesh.git
 cd AgentMesh
 
-# Run the installer (compiles release binaries and installs to ~/.local/bin)
+# Run the standard environment setup (checks prerequisites, starts Docker, builds debug binaries)
+./install.sh
+
+# Or run optimized production setup and install binaries to ~/.local/bin:
+./install.sh --release -p ~/.local/bin
+```
+
+#### What `./install.sh` Actually Does
+1. **Verifies Prerequisites**: Checks for `git`, `curl`, the Rust toolchain (`cargo` and `rustc`), and Docker with the Docker Compose v2 plugin (`docker compose`). If Rust is missing, it offers interactive installation via `rustup`.
+2. **Configures Environment**: Safely copies `.env.example` to `.env` if `.env` does not already exist, preserving your existing configuration if present.
+3. **Starts Infrastructure Services**: Automatically executes `docker compose up -d` to launch PostgreSQL 16 (`postgres:16-alpine`, port 5432) and NATS 2.10 (`nats:2.10-alpine`, client port 4222, monitoring port 8222) with JetStream enabled, and waits up to 15 seconds for healthy container status. (Can be bypassed with `--skip-docker`).
+4. **Compiles Workspace Binaries**: Executes `cargo build --workspace` (or `cargo build --release --workspace` if `--release` / `-r` is passed), building all three workspace binaries:
+   - `coordinator` (`crates/coordinator/src/main.rs`)
+   - `agent-mock` (`crates/agent-mock/src/main.rs`)
+   - `agent-agy` (`crates/agent-agy/src/main.rs`)
+5. **Installs Binaries (Optional)**: If `-p, --prefix <DIR>` or `--install` is provided, it installs the three compiled executables into the target directory (`install -m 0755`) and checks whether the directory is in your `PATH`.
+
+#### `./install.sh` Flags and Options
+```text
+Usage:
+  ./install.sh [options]
+
+Options:
+  -r, --release          Build optimized release binaries (cargo build --release)
+  -p, --prefix <DIR>     Install compiled binaries to target directory (default: ~/.local/bin)
+  --install              Install binaries to ~/.local/bin after building
+  --skip-docker          Do not start Docker Compose containers
+  --skip-build           Skip cargo workspace build
+  -y, --yes              Non-interactive mode (accept all prompts)
+  -h, --help             Display this help message and exit
+```
+
+---
+
+### Option B — Production Binary Installer (`./scripts/install.sh`)
+
+If you want an auditable, lightweight installer dedicated strictly to building and placing release binaries into `~/.local/bin` (e.g. for worker nodes where Docker is not required):
+
+```bash
+git clone https://github.com/vijaygovindBiju/AgentMesh.git
+cd AgentMesh
+
+# Build release binaries and install to ~/.local/bin
 ./scripts/install.sh
 ```
 
-#### Installer Options
+#### Installer Features & Options
 ```bash
-./scripts/install.sh --help               # Show help
-./scripts/install.sh --prefix /usr/local/bin  # Custom installation directory
+./scripts/install.sh --help               # Display help
+./scripts/install.sh --prefix /usr/local/bin  # Install system-wide (requires sudo)
 ./scripts/install.sh --debug              # Build debug binaries instead of release
-./scripts/install.sh --skip-build         # Install existing build artifacts without rebuilding
-./scripts/install.sh --skip-env           # Do not touch .env
+./scripts/install.sh --skip-build         # Install existing build artifacts without compiling
+./scripts/install.sh --skip-env           # Do not create or touch .env
 ./scripts/install.sh -y                   # Non-interactive mode
 ./scripts/install.sh --uninstall          # Cleanly remove installed binaries from prefix
 ```
 
-Ensure `~/.local/bin` is in your `PATH` (add `export PATH="$HOME/.local/bin:$PATH"` to your `~/.bashrc` or `~/.zshrc`).
-
 ---
 
-### Option B — Manual Source Build
+### Option C — Manual Source Build (`cargo build`)
 
-You can compile AgentMesh directly using Cargo:
+You can compile AgentMesh manually using standard Cargo commands:
 
 ```bash
 git clone https://github.com/vijaygovindBiju/AgentMesh.git
 cd AgentMesh
 
-# Compile the entire workspace in release mode
+# Build all binaries in release mode
 cargo build --release --workspace
 ```
 
 This compiles three executables in `target/release/`:
-- `target/release/coordinator` — The central coordinator TUI and engine.
-- `target/release/agent-mock` — The simulated test worker agent.
-- `target/release/agent-agy` — The Antigravity CLI adapter.
+- `target/release/coordinator` — Central coordinator TUI, state engine, and Git manager.
+- `target/release/agent-mock` — Simulated test worker agent.
+- `target/release/agent-agy` — Antigravity CLI agent adapter.
+
+Copy them to your path if desired:
+```bash
+cp target/release/coordinator target/release/agent-mock target/release/agent-agy ~/.local/bin/
+```
+
+---
+
+### Notice on Remote Curl Installation
+
+> [!NOTE]
+> A remote one-liner installation (such as `curl -fsSL <url> | bash`) without cloning the repository is **not supported**.
+> 
+> AgentMesh compiles from source using the Rust toolchain and sqlx compile-time query verification against the embedded migration schemas. It does not currently distribute pre-compiled binary tarballs via GitHub Releases. To install AgentMesh, clone the repository first, then run `./install.sh` or `./scripts/install.sh`.
+
+---
+
+## Install on Another Linux Machine (Worker Host)
+
+When running a multi-machine fleet (coordinator on Machine A, remote agents on Machine B), the worker host **only needs to run the agent adapter**. Worker machines do **not** require PostgreSQL, Docker, or the coordinator binary.
+
+```text
+Machine A (Coordinator Host)                       Machine B (Worker Host)
+─────────────────────────────                      ───────────────────────
+• Coordinator Runtime                              • agent-agy or agent-mock
+• PostgreSQL 16 (port 5432)                        • Antigravity agy CLI (installed separately)
+• NATS 2.10 (port 4222) ◄────── TCP Connection ────┘ (no Docker or PostgreSQL needed!)
+```
+
+### Step 1: System Prerequisites on Worker Host
+- **Git** (`sudo apt install git` or `sudo dnf install git`)
+- **Rust Toolchain** (if compiling on the worker):
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  source "$HOME/.cargo/env"
+  ```
+- **Antigravity CLI (`agy`)**:
+  > [!IMPORTANT]
+  > **AgentMesh does NOT install `agy` itself.** You must install and authenticate the Antigravity CLI independently on the worker machine before starting `agent-agy`.
+  > Verify with:
+  > ```bash
+  > agy --version
+  > ```
+  > Ensure `agy` is authenticated with your AI provider.
+
+### Step 2: Clone and Install Worker Binaries on Worker Host
+```bash
+git clone https://github.com/vijaygovindBiju/AgentMesh.git
+cd AgentMesh
+
+# Compile and install only the agent binaries into ~/.local/bin
+cargo build --release --bin agent-agy --bin agent-mock
+mkdir -p ~/.local/bin
+cp target/release/agent-agy target/release/agent-mock ~/.local/bin/
+```
+*(Or use `./install.sh --release --skip-docker -p ~/.local/bin`)*
+
+### Step 3: Configure and Launch Worker
+On the worker machine, set the environment variables to point across the network to Machine A:
+
+```bash
+# Point to Machine A's IP address (LAN or WireGuard/Tailscale VPN)
+export NATS_URL="nats://192.168.1.50:4222"
+export NATS_AUTH_TOKEN="agentmesh_dev_token"  # Must match Machine A's NATS_AUTH_TOKEN
+
+# Worker configuration
+export AGY_AGENT_OWNER="Worker-Linux-01"
+export AGY_AGENT_API_KEY="am_ak_$(openssl rand -hex 32)"
+export AGY_EFFORT="medium"
+export AGY_TIMEOUT_SECS=600
+
+# Start the agent
+agent-agy
+```
+
+### Step 4: Verify Remote Fleet Registration
+On Machine A, open the Coordinator TUI and press `3` to open the Fleet Dashboard. You will see `Worker-Linux-01` registered, displaying its detected toolchains, idle status, and live 5-second heartbeats.
 
 ---
 

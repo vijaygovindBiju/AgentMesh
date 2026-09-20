@@ -33,12 +33,23 @@ RELEASE_MODE=false
 SKIP_DOCKER=false
 SKIP_BUILD=false
 NON_INTERACTIVE=false
+INSTALL_BIN=false
+PREFIX="${PREFIX:-$HOME/.local/bin}"
 
 # ─── Parse Command-Line Arguments ─────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -r|--release)
             RELEASE_MODE=true
+            shift
+            ;;
+        -p|--prefix)
+            INSTALL_BIN=true
+            PREFIX="$2"
+            shift 2
+            ;;
+        --install)
+            INSTALL_BIN=true
             shift
             ;;
         --skip-docker)
@@ -62,6 +73,8 @@ Usage:
 
 Options:
   -r, --release          Build optimized release binaries (cargo build --release)
+  -p, --prefix <DIR>     Install compiled binaries to target directory (default: ~/.local/bin)
+  --install              Install binaries to ~/.local/bin after building
   --skip-docker          Do not start Docker Compose containers
   --skip-build           Skip cargo workspace build
   -y, --yes              Non-interactive mode (accept all prompts)
@@ -70,6 +83,7 @@ Options:
 Examples:
   ./install.sh                 # Standard dev setup (starts Docker & builds debug binaries)
   ./install.sh --release       # Production setup (builds optimized release binaries)
+  ./install.sh --release -p ~/.local/bin  # Build and install binaries to ~/.local/bin
   ./install.sh --skip-docker   # Build binaries only, assume native DB/NATS are running
 EOF
             exit 0
@@ -266,14 +280,24 @@ else
         info "Step 4: Compiling AgentMesh workspace in RELEASE mode (cargo build --release --workspace)..."
         cargo build --release --workspace
         success "Release compilation complete!"
-        COORD_BIN="./target/release/coordinator"
-        AGENT_BIN="./target/release/agent-mock"
+        BUILD_DIR="./target/release"
     else
         info "Step 4: Compiling AgentMesh workspace in DEBUG mode (cargo build --workspace)..."
         cargo build --workspace
         success "Debug compilation complete!"
-        COORD_BIN="./target/debug/coordinator"
-        AGENT_BIN="./target/debug/agent-mock"
+        BUILD_DIR="./target/debug"
+    fi
+    COORD_BIN="${BUILD_DIR}/coordinator"
+    MOCK_BIN="${BUILD_DIR}/agent-mock"
+    AGY_BIN="${BUILD_DIR}/agent-agy"
+
+    if [ "$INSTALL_BIN" = true ]; then
+        info "Installing binaries to ${PREFIX}..."
+        mkdir -p "${PREFIX}"
+        install -m 0755 "${COORD_BIN}" "${PREFIX}/coordinator"
+        install -m 0755 "${MOCK_BIN}" "${PREFIX}/agent-mock"
+        install -m 0755 "${AGY_BIN}" "${PREFIX}/agent-agy"
+        success "Installed coordinator, agent-mock, and agent-agy to ${PREFIX}"
     fi
 fi
 
@@ -287,26 +311,35 @@ echo -e "${BLUE}================================================================
 
 echo -e "\n${BOLD}How to Run AgentMesh:${NC}\n"
 
-if [ "$RELEASE_MODE" = true ]; then
+if [ "$INSTALL_BIN" = true ]; then
+    echo -e "  ${CYAN}1. Launch the Coordinator TUI:${NC}"
+    echo -e "     ${BOLD}${PREFIX}/coordinator${NC}   (or: ${BOLD}coordinator${NC} if ${PREFIX} is in PATH)\n"
+    echo -e "  ${CYAN}2. Launch a Mock Worker:${NC}"
+    echo -e "     ${BOLD}MOCK_AGENT_OWNER=\"Alice\" ${PREFIX}/agent-mock${NC}\n"
+    echo -e "  ${CYAN}3. Launch an AGY Worker (requires Antigravity CLI installed separately):${NC}"
+    echo -e "     ${BOLD}AGY_AGENT_OWNER=\"Bob\" ${PREFIX}/agent-agy${NC}\n"
+elif [ "$RELEASE_MODE" = true ]; then
     echo -e "  ${CYAN}1. Launch the Coordinator TUI:${NC}"
     echo -e "     ${BOLD}./target/release/coordinator${NC}   (or: ${BOLD}cargo run --release --bin coordinator${NC})\n"
-    echo -e "  ${CYAN}2. In separate terminals, launch Mock Agent Workers:${NC}"
-    echo -e "     ${BOLD}MOCK_AGENT_OWNER=\"Alice (Backend Lead)\" ./target/release/agent-mock${NC}"
-    echo -e "     ${BOLD}MOCK_AGENT_OWNER=\"Bob (Infra Lead)\" ./target/release/agent-mock${NC}\n"
+    echo -e "  ${CYAN}2. Launch a Mock Worker:${NC}"
+    echo -e "     ${BOLD}MOCK_AGENT_OWNER=\"Alice\" ./target/release/agent-mock${NC}\n"
+    echo -e "  ${CYAN}3. Launch an AGY Worker (requires Antigravity CLI installed separately):${NC}"
+    echo -e "     ${BOLD}AGY_AGENT_OWNER=\"Bob\" ./target/release/agent-agy${NC}\n"
 else
     echo -e "  ${CYAN}1. Launch the Coordinator TUI:${NC}"
     echo -e "     ${BOLD}cargo run --bin coordinator${NC}\n"
-    echo -e "  ${CYAN}2. In separate terminals, launch Mock Agent Workers:${NC}"
-    echo -e "     ${BOLD}MOCK_AGENT_OWNER=\"Alice (Backend Lead)\" cargo run --bin agent-mock${NC}"
-    echo -e "     ${BOLD}MOCK_AGENT_OWNER=\"Bob (Infra Lead)\" cargo run --bin agent-mock${NC}\n"
+    echo -e "  ${CYAN}2. Launch a Mock Worker:${NC}"
+    echo -e "     ${BOLD}MOCK_AGENT_OWNER=\"Alice\" cargo run --bin agent-mock${NC}\n"
+    echo -e "  ${CYAN}3. Launch an AGY Worker (requires Antigravity CLI installed separately):${NC}"
+    echo -e "     ${BOLD}AGY_AGENT_OWNER=\"Bob\" cargo run --bin agent-agy${NC}\n"
 fi
 
-echo -e "  ${CYAN}3. Inspect Backing Services:${NC}"
+echo -e "  ${CYAN}Backing Services Status:${NC}"
 echo -e "     • NATS HTTP Monitoring:  ${BOLD}http://localhost:8222${NC}"
 echo -e "     • PostgreSQL Port:       ${BOLD}localhost:5432${NC}"
 echo -e "     • Docker Status:         ${BOLD}docker compose ps${NC}\n"
 
-echo -e "  ${CYAN}4. Run Automated Test Suite:${NC}"
-echo -e "     ${BOLD}cargo test --workspace${NC}\n"
+echo -e "  ${CYAN}Run Automated Test Suite:${NC}"
+echo -e "     ${BOLD}cargo test --workspace --no-fail-fast${NC}\n"
 
 echo -e "${GREEN}Ready to coordinate! Press Tab in the TUI to cycle screens.${NC}\n"

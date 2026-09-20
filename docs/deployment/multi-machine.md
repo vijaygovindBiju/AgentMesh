@@ -152,7 +152,7 @@ curl -s "http://localhost:8222/jsz?consumers=true" | grep -o 'agent-agy-[0-9a-f]
 3. The agent publishes `TaskStarted → ProgressUpdate… → Completed | Failed | Blocked` to `agents.<agent_id>.events` (JetStream `AGENT_EVENTS`).
 4. The coordinator's durable `coordinator-events` consumer authorizes (`TaskAuthorizer`), deduplicates (`EventDeduplicator`) and persists each event, updating `tasks`, `agents`, `task_deliveries`, `agent_events`, and the TUI.
 
-Git context: if `tasks.task_branch` / `repo_path` are set (via `GitCoordinator::prepare_task_workspace`, currently a library call), they are included in the `TaskAssignment`. The path is interpreted **on the agent host**, so a remote agent needs the repository (or worktree) at that same path, e.g. via a shared filesystem or an identical clone layout. The v1.0 binaries do not synchronize repositories between machines.
+Git context: when a project has a Git repository, `AssignmentService` automatically invokes `GitCoordinator::prepare_task_workspace` during task dispatch. `tasks.task_branch` and `repo_path` (pointing to the task's worktree) are populated and included in the `TaskAssignment`. The path is interpreted **on the agent host**, so a remote agent needs the repository (or worktree) at that same path, e.g. via a shared filesystem or an identical clone layout. The v1.0 binaries do not synchronize repositories between machines.
 
 ---
 
