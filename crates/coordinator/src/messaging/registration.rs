@@ -121,6 +121,7 @@ impl RegistrationHandler {
                 if let Some(ref prof) = profile {
                     let _ = AgentRepository::update_capability_profile(pool, agent_id, prof).await;
                 }
+                let _ = AgentRepository::update_status(pool, agent_id, crate::domain::AgentStatus::Idle).await;
 
                 let _ = AuditLogger::record(
                     pool,
@@ -157,6 +158,7 @@ impl RegistrationHandler {
                     api_key_expires_at: None,
                 };
                 AgentRepository::create_with_id(pool, agent_id, &new_agent).await?;
+                let _ = AgentRepository::update_status(pool, agent_id, crate::domain::AgentStatus::Idle).await;
 
                 let _ = AuditLogger::record(
                     pool,

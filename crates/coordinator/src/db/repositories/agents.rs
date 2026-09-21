@@ -936,6 +936,10 @@ impl AgentRepository {
                 health_status = CASE
                     WHEN health_status = 'offline' THEN 'healthy'::agent_health_status
                     ELSE health_status
+                END,
+                status = CASE
+                    WHEN status = 'offline' THEN 'idle'::agent_status
+                    ELSE status
                 END
             WHERE id = $1
             "#,
