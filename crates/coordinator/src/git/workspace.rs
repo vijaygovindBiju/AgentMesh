@@ -45,6 +45,9 @@ impl AgentWorkspace {
             )
         })?;
 
+        // Ensure internal .agentmesh directory is excluded from git status
+        Self::ensure_git_exclude(&repo_root, ".agentmesh").await;
+
         // 1. Determine destination worktree directory
         let worktree_path = match custom_base_dir {
             Some(base_dir) => base_dir.join(short_id),
@@ -164,6 +167,25 @@ impl AgentWorkspace {
             .await;
 
         Ok(())
+    }
+
+    /// Ensures a pattern is present in the repository's `.git/info/exclude` file,
+    /// preventing internal AgentMesh worktrees from showing up as untracked files.
+    pub async fn ensure_git_exclude(repo_root: &Path, pattern: &str) {
+        let exclude_path = repo_root.join(".git").join("info").join("exclude");
+        if let Some(parent) = exclude_path.parent() {
+            let _ = tokio::fs::create_dir_all(parent).await;
+        }
+        let current = tokio::fs::read_to_string(&exclude_path).await.unwrap_or_default();
+        if !current.lines().any(|l| l.trim() == pattern || l.trim() == format!("{pattern}/")) {
+            let mut updated = current;
+            if !updated.is_empty() && !updated.ends_with('\n') {
+                updated.push('\n');
+            }
+            updated.push_str(pattern);
+            updated.push('\n');
+            let _ = tokio::fs::write(&exclude_path, updated).await;
+        }
     }
 
     /// Checks if the worktree directory is active and valid.
