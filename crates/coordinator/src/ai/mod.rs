@@ -1,6 +1,7 @@
 //! AI Planning layer: LLM provider abstraction, structured planning schemas,
 //! deterministic plan validation, and PostgreSQL proposal persistence.
 
+pub mod agy;
 pub mod anthropic;
 pub mod complexity;
 pub mod matcher;
@@ -16,6 +17,7 @@ pub mod validator;
 use anyhow::{bail, Result};
 use std::sync::Arc;
 
+pub use agy::AgyProvider;
 pub use anthropic::AnthropicProvider;
 pub use complexity::{ComplexityEstimate, ComplexityEstimator};
 pub use matcher::AgentCapabilityMatcher;
@@ -40,6 +42,12 @@ pub fn create_provider_by_name(name: &str) -> Result<Arc<dyn LlmProvider>> {
             mock.model_name = model;
             Ok(Arc::new(mock))
         }
+        "agy" => {
+            let model = std::env::var("AGY_MODEL")
+                .or_else(|_| std::env::var("AI_MODEL"))
+                .unwrap_or_else(|_| "gemini-3.8-flash-low".to_string());
+            Ok(Arc::new(AgyProvider::new(model)))
+        }
         "anthropic" => {
             let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| {
                 anyhow::anyhow!(
@@ -51,7 +59,7 @@ pub fn create_provider_by_name(name: &str) -> Result<Arc<dyn LlmProvider>> {
             Ok(Arc::new(AnthropicProvider::new(api_key, model)))
         }
         other => {
-            bail!("Unsupported AI_PROVIDER '{other}'. Supported providers: 'mock', 'anthropic'")
+            bail!("Unsupported AI_PROVIDER '{other}'. Supported providers: 'mock', 'agy', 'anthropic'")
         }
     }
 }
@@ -77,6 +85,9 @@ mod tests {
     fn test_create_provider_by_name() {
         let provider = create_provider_by_name("mock").unwrap();
         assert_eq!(provider.provider_name(), "mock");
+
+        let agy = create_provider_by_name("agy").unwrap();
+        assert_eq!(agy.provider_name(), "agy");
 
         let res = create_provider_by_name("unknown_xyz");
         assert!(res.is_err());
