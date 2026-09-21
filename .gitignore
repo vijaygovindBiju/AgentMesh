@@ -4,7 +4,9 @@
 # Environment secrets — never commit (the template .env.example IS tracked)
 .env
 .env.*
+.env.worker
 !.env.example
+!.env.worker.example
 
 # AgentMesh runtime data: per-task Git worktrees created by AgentWorkspace
 # (default location <repo>/.agentmesh/worktrees/<short-id>)

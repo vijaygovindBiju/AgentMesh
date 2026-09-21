@@ -176,8 +176,13 @@ impl AgentWorkspace {
         if let Some(parent) = exclude_path.parent() {
             let _ = tokio::fs::create_dir_all(parent).await;
         }
-        let current = tokio::fs::read_to_string(&exclude_path).await.unwrap_or_default();
-        if !current.lines().any(|l| l.trim() == pattern || l.trim() == format!("{pattern}/")) {
+        let current = tokio::fs::read_to_string(&exclude_path)
+            .await
+            .unwrap_or_default();
+        if !current
+            .lines()
+            .any(|l| l.trim() == pattern || l.trim() == format!("{pattern}/"))
+        {
             let mut updated = current;
             if !updated.is_empty() && !updated.ends_with('\n') {
                 updated.push('\n');

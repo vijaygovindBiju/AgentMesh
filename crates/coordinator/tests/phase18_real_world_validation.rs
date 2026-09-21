@@ -16,7 +16,9 @@ use coordinator::ai::{
     AvailableAgentContext, MockLlmProvider, PlanningRequest, PlanningResponse, PlanningService,
     ProposedDependency, ProposedTask, ReplanEngine, RepositoryScanner,
 };
-use coordinator::coordinator::{AssignmentService, CommandHandler, CoordinatorCommand, CoordinatorCore};
+use coordinator::coordinator::{
+    AssignmentService, CommandHandler, CoordinatorCommand, CoordinatorCore,
+};
 use coordinator::db::pool::{create_pool, run_migrations};
 use coordinator::db::repositories::{
     AgentEventRepository, AgentRepository, ProjectRepository, ProposalRepository,
@@ -119,7 +121,10 @@ async fn test_phase18_1_real_repository_discovery() {
         "Must detect Rust as primary language"
     );
     assert!(
-        context.key_modules.iter().any(|m| m == "minigrep" || m == "src"),
+        context
+            .key_modules
+            .iter()
+            .any(|m| m == "minigrep" || m == "src"),
         "Must identify minigrep or src module"
     );
     assert!(
@@ -216,12 +221,15 @@ async fn test_phase18_2_ai_planning_and_human_approval_gate() {
             Ok(p) => p,
             Err(_) => {
                 let mock_plan = PlanningResponse {
-                    reasoning: "Decomposed minigrep enhancement into lib.rs search and main.rs CLI".to_string(),
+                    reasoning: "Decomposed minigrep enhancement into lib.rs search and main.rs CLI"
+                        .to_string(),
                     proposed_tasks: vec![
                         ProposedTask {
                             short_id: "MINI-001".to_string(),
                             title: "Implement helper and unit tests in lib.rs".to_string(),
-                            description: "Add version info helper function and unit tests in src/lib.rs".to_string(),
+                            description:
+                                "Add version info helper function and unit tests in src/lib.rs"
+                                    .to_string(),
                             suggested_agent_id: Some(agy_agent_id),
                             affected_resources: vec!["src/lib.rs".to_string()],
                             estimated_size: Some("S".to_string()),
@@ -229,20 +237,19 @@ async fn test_phase18_2_ai_planning_and_human_approval_gate() {
                         ProposedTask {
                             short_id: "MINI-002".to_string(),
                             title: "Update CLI argument parsing in main.rs".to_string(),
-                            description: "Add flag parsing and wire to lib in src/main.rs".to_string(),
+                            description: "Add flag parsing and wire to lib in src/main.rs"
+                                .to_string(),
                             suggested_agent_id: Some(agy_agent_id),
                             affected_resources: vec!["src/main.rs".to_string()],
                             estimated_size: Some("S".to_string()),
                         },
                     ],
-                    proposed_dependencies: vec![
-                        ProposedDependency {
-                            dependent_short_id: "MINI-002".to_string(),
-                            depends_on_short_id: "MINI-001".to_string(),
-                            kind: "blocks".to_string(),
-                            reason: "CLI relies on lib functions".to_string(),
-                        }
-                    ],
+                    proposed_dependencies: vec![ProposedDependency {
+                        dependent_short_id: "MINI-002".to_string(),
+                        depends_on_short_id: "MINI-001".to_string(),
+                        kind: "blocks".to_string(),
+                        reason: "CLI relies on lib functions".to_string(),
+                    }],
                 };
                 Arc::new(MockLlmProvider::new().with_response(mock_plan))
             }
@@ -284,20 +291,23 @@ async fn test_phase18_2_ai_planning_and_human_approval_gate() {
             task.short_id
         );
     }
-    println!("✔ Human Review Gate verified: {} task(s) waiting for operator", tasks.len());
+    println!(
+        "✔ Human Review Gate verified: {} task(s) waiting for operator",
+        tasks.len()
+    );
 
     // 6. Operator explicitly approves only the first task
     let task_to_approve = &tasks[0];
-    let approved_task = CommandHandler::execute_approve_task(
-        &pool,
-        task_to_approve.id,
-        "Lead Engineer Human Gate",
-    )
-    .await
-    .expect("Approve task");
+    let approved_task =
+        CommandHandler::execute_approve_task(&pool, task_to_approve.id, "Lead Engineer Human Gate")
+            .await
+            .expect("Approve task");
 
     assert_eq!(approved_task.status, TaskStatus::Approved);
-    println!("Approved Task: {} [{}]", approved_task.short_id, approved_task.id);
+    println!(
+        "Approved Task: {} [{}]",
+        approved_task.short_id, approved_task.id
+    );
 
     // Verify unapproved tasks remain in HumanReview
     if tasks.len() > 1 {
@@ -501,10 +511,7 @@ async fn test_phase18_3_worktree_real_agy_execution_and_finalization() {
     let recorded_events = AgentEventRepository::list_by_task(&pool, task.id)
         .await
         .unwrap();
-    println!(
-        "Recorded events count: {}",
-        recorded_events.len()
-    );
+    println!("Recorded events count: {}", recorded_events.len());
     for ev in &recorded_events {
         println!("  - Event: {:?} | Message: {:?}", ev.event_type, ev.message);
     }
@@ -539,7 +546,10 @@ async fn test_phase18_3_worktree_real_agy_execution_and_finalization() {
 
     println!("=== Test 5: Git Finalization Results ===");
     println!("Completion Commit SHA: {completion_commit_sha}");
-    println!("Actual Modified:       {:?}", git_ctx.actual_modified_resources);
+    println!(
+        "Actual Modified:       {:?}",
+        git_ctx.actual_modified_resources
+    );
     println!("Worktree cleaned up:    {}", !expected_worktree.exists());
 
     assert!(
@@ -547,7 +557,10 @@ async fn test_phase18_3_worktree_real_agy_execution_and_finalization() {
         "Must generate completion commit SHA"
     );
     assert!(
-        git_ctx.actual_modified_resources.iter().any(|r| r.contains("src/lib.rs")),
+        git_ctx
+            .actual_modified_resources
+            .iter()
+            .any(|r| r.contains("src/lib.rs")),
         "Modified resources must include src/lib.rs"
     );
     assert!(
@@ -570,7 +583,10 @@ async fn test_phase18_3_worktree_real_agy_execution_and_finalization() {
 
     // Verify original repository remains clean
     let clean_after = identity.is_clean().await.unwrap();
-    assert!(clean_after, "Original repository must remain clean after finalization");
+    assert!(
+        clean_after,
+        "Original repository must remain clean after finalization"
+    );
 
     // Clean up task branch from repository
     let branch_name = BranchStrategy::task_branch_name("REAL-001");
@@ -725,7 +741,11 @@ async fn test_phase18_4_parallel_tasks_and_worktree_isolation() {
             .await
             .unwrap();
 
-    assert_eq!(assignments.len(), 2, "Both independent tasks must be assigned");
+    assert_eq!(
+        assignments.len(),
+        2,
+        "Both independent tasks must be assigned"
+    );
 
     let wt_a = AgentWorkspace::expected_worktree_path(&identity.repo_root, "PARA-001");
     let wt_b = AgentWorkspace::expected_worktree_path(&identity.repo_root, "PARA-002");
@@ -885,10 +905,9 @@ async fn test_phase18_5_dependency_chain_and_auto_assignment() {
         .unwrap();
 
     // First assignment cycle: only Task 1 should be assigned! Task 2 must wait!
-    let assign1 =
-        AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
-            .await
-            .unwrap();
+    let assign1 = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+        .await
+        .unwrap();
 
     assert_eq!(assign1.len(), 1, "Only Task 1 should be assigned");
     assert_eq!(assign1[0].task_id, task_1.id);
@@ -929,12 +948,15 @@ async fn test_phase18_5_dependency_chain_and_auto_assignment() {
         .unwrap();
 
     // Second assignment cycle: Task 2 is now automatically unblocked and ready!
-    let assign2 =
-        AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
-            .await
-            .unwrap();
+    let assign2 = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+        .await
+        .unwrap();
 
-    assert_eq!(assign2.len(), 1, "Task 2 must be automatically assigned after prerequisite completes");
+    assert_eq!(
+        assign2.len(),
+        1,
+        "Task 2 must be automatically assigned after prerequisite completes"
+    );
     assert_eq!(assign2[0].task_id, task_2.id);
 
     // Clean up worktrees
@@ -1054,10 +1076,9 @@ async fn test_phase18_6_agent_failure_stale_sweep_and_reassignment() {
         .unwrap();
 
     // Assignment cycle: delivery 1 created
-    let assign1 =
-        AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
-            .await
-            .unwrap();
+    let assign1 = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+        .await
+        .unwrap();
     assert_eq!(assign1.len(), 1);
     assert_eq!(assign1[0].idempotency_key, format!("{}:1", task.id));
 
@@ -1111,12 +1132,15 @@ async fn test_phase18_6_agent_failure_stale_sweep_and_reassignment() {
         .unwrap();
 
     // Reassignment cycle
-    let assign2 =
-        AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
-            .await
-            .unwrap();
+    let assign2 = AssignmentService::assign_ready_tasks(&pool, Some(project.id), Some(&jetstream))
+        .await
+        .unwrap();
 
-    assert_eq!(assign2.len(), 1, "Reclaimed task must be assigned to new agent");
+    assert_eq!(
+        assign2.len(),
+        1,
+        "Reclaimed task must be assigned to new agent"
+    );
     assert_eq!(assign2[0].agent_id, new_agent);
     assert_eq!(
         assign2[0].idempotency_key,
@@ -1268,7 +1292,10 @@ async fn test_phase18_7_task_cancellation_and_subprocess_check() {
         .ok()
         .flatten();
 
-    assert!(msg_received.is_some(), "NATS must receive TaskCancelled message");
+    assert!(
+        msg_received.is_some(),
+        "NATS must receive TaskCancelled message"
+    );
     let payload = msg_received.unwrap().payload;
     let coord_msg: CoordinatorMessage = serde_json::from_slice(&payload).unwrap();
 
@@ -1277,7 +1304,9 @@ async fn test_phase18_7_task_cancellation_and_subprocess_check() {
             task_id, reason, ..
         } => {
             assert_eq!(task_id, task.id);
-            println!("Received CoordinatorMessage::TaskCancelled: task_id={task_id}, reason={reason}");
+            println!(
+                "Received CoordinatorMessage::TaskCancelled: task_id={task_id}, reason={reason}"
+            );
         }
         other => panic!("Expected TaskCancelled, got {other:?}"),
     }
@@ -1361,33 +1390,32 @@ async fn test_phase18_8_dynamic_replanning_behind_human_gate() {
 
     // Gather replan context
     let repo_context = RepositoryScanner::scan(&repo_path).await.ok();
-    let replan_req =
-        ReplanEngine::gather_replan_context(&pool, project.id, repo_context).await.unwrap();
+    let replan_req = ReplanEngine::gather_replan_context(&pool, project.id, repo_context)
+        .await
+        .unwrap();
 
     assert_eq!(replan_req.completed_tasks.len(), 1);
     assert_eq!(replan_req.failed_tasks.len(), 1);
 
     // Provide corrective plan via Mock provider
     let corrective_plan = PlanningResponse {
-        reasoning: "Correct failed compilation in main.rs while preserving completed lib.rs work".to_string(),
-        proposed_tasks: vec![
-            ProposedTask {
-                short_id: "REPLAN-FIX-001".to_string(),
-                title: "Fix compiler errors in main.rs".to_string(),
-                description: "Fix import and trait bounds in src/main.rs".to_string(),
-                suggested_agent_id: None,
-                affected_resources: vec!["src/main.rs".to_string()],
-                estimated_size: Some("S".to_string()),
-            }
-        ],
+        reasoning: "Correct failed compilation in main.rs while preserving completed lib.rs work"
+            .to_string(),
+        proposed_tasks: vec![ProposedTask {
+            short_id: "REPLAN-FIX-001".to_string(),
+            title: "Fix compiler errors in main.rs".to_string(),
+            description: "Fix import and trait bounds in src/main.rs".to_string(),
+            suggested_agent_id: None,
+            affected_resources: vec!["src/main.rs".to_string()],
+            estimated_size: Some("S".to_string()),
+        }],
         proposed_dependencies: vec![],
     };
 
     let replan_provider = MockLlmProvider::new().with_response(corrective_plan);
-    let new_proposal_id =
-        ReplanEngine::execute_replan(&pool, &replan_provider, &replan_req)
-            .await
-            .expect("Execute replan");
+    let new_proposal_id = ReplanEngine::execute_replan(&pool, &replan_provider, &replan_req)
+        .await
+        .expect("Execute replan");
 
     // Verify corrective proposal created
     assert_ne!(new_proposal_id, initial_proposal.id);
@@ -1408,10 +1436,9 @@ async fn test_phase18_8_dynamic_replanning_behind_human_gate() {
     );
 
     // Human explicitly approves the corrective task
-    let approved =
-        CommandHandler::execute_approve_task(&pool, fix_task.id, "Operator Reviewer")
-            .await
-            .unwrap();
+    let approved = CommandHandler::execute_approve_task(&pool, fix_task.id, "Operator Reviewer")
+        .await
+        .unwrap();
     assert_eq!(approved.status, TaskStatus::Approved);
 
     println!("✔ Test 11: Real Replanning Behind Human Gate PASSED\n");
@@ -1428,20 +1455,24 @@ async fn test_phase18_9_metrics_and_coordinator_restart_recovery() {
     };
 
     // 1. Verify Metrics Collector
-    let metrics = MetricsCollector::collect(&pool).await.expect("Collect metrics");
+    let metrics = MetricsCollector::collect(&pool)
+        .await
+        .expect("Collect metrics");
     println!("=== Test 12: Live System Metrics ===");
     println!("Total tasks:            {}", metrics.total_tasks);
     println!("Tasks (completed):      {}", metrics.tasks_completed);
     println!("Tasks (failed):         {}", metrics.tasks_failed);
     println!("Total agents:           {}", metrics.total_agents);
-    println!("Delivery success rate:  {:.2}%", metrics.delivery_success_rate_percent);
+    println!(
+        "Delivery success rate:  {:.2}%",
+        metrics.delivery_success_rate_percent
+    );
 
     // 2. Simulate Coordinator Restart Recovery
     println!("\n=== Test 13: Coordinator Restart Recovery ===");
-    let recovery_report =
-        CoordinatorRecoveryService::recover_on_startup(&pool, Some(&jetstream))
-            .await
-            .expect("Startup recovery");
+    let recovery_report = CoordinatorRecoveryService::recover_on_startup(&pool, Some(&jetstream))
+        .await
+        .expect("Startup recovery");
 
     println!(
         "Republished pending deliveries: {}",
@@ -1598,7 +1629,11 @@ async fn test_phase18_10_distributed_two_agent_execution() {
             .await
             .unwrap();
 
-    assert_eq!(assignments.len(), 2, "Both tasks must be assigned in parallel");
+    assert_eq!(
+        assignments.len(),
+        2,
+        "Both tasks must be assigned in parallel"
+    );
 
     let wt1 = AgentWorkspace::expected_worktree_path(&identity.repo_root, "DIST-001");
     let wt2 = AgentWorkspace::expected_worktree_path(&identity.repo_root, "DIST-002");
@@ -1622,12 +1657,18 @@ async fn test_phase18_10_distributed_two_agent_execution() {
     });
 
     // Write simulated work inside both isolated worktrees
-    tokio::fs::write(wt1.join("src/feature_a.rs"), "// Feature A implementation\n")
-        .await
-        .unwrap();
-    tokio::fs::write(wt2.join("src/feature_b.rs"), "// Feature B implementation\n")
-        .await
-        .unwrap();
+    tokio::fs::write(
+        wt1.join("src/feature_a.rs"),
+        "// Feature A implementation\n",
+    )
+    .await
+    .unwrap();
+    tokio::fs::write(
+        wt2.join("src/feature_b.rs"),
+        "// Feature B implementation\n",
+    )
+    .await
+    .unwrap();
 
     // Agent 1 reports completion over NATS
     EventSubscriber::handle_agent_message_with_jetstream(
@@ -1662,8 +1703,14 @@ async fn test_phase18_10_distributed_two_agent_execution() {
     subscriber_handle.abort();
 
     // Verify both tasks Completed in PostgreSQL
-    let t1_done = TaskRepository::find_by_id(&pool, task_1.id).await.unwrap().unwrap();
-    let t2_done = TaskRepository::find_by_id(&pool, task_2.id).await.unwrap().unwrap();
+    let t1_done = TaskRepository::find_by_id(&pool, task_1.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let t2_done = TaskRepository::find_by_id(&pool, task_2.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(t1_done.status, TaskStatus::Completed);
     assert_eq!(t2_done.status, TaskStatus::Completed);
 
@@ -1682,8 +1729,10 @@ async fn test_phase18_10_distributed_two_agent_execution() {
 
     // Verify main repository clean
     let clean_after = identity.is_clean().await.unwrap();
-    assert!(clean_after, "Repository must remain clean after distributed execution");
+    assert!(
+        clean_after,
+        "Repository must remain clean after distributed execution"
+    );
 
     println!("✔ Test 14: Distributed / Two-Agent Concurrent Execution PASSED\n");
 }
-

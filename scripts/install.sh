@@ -37,6 +37,7 @@ SKIP_BUILD=false
 SKIP_ENV=false
 UNINSTALL=false
 NON_INTERACTIVE=false
+AGENT_ONLY=false
 
 # Helper functions
 info() {
@@ -82,6 +83,10 @@ while [[ $# -gt 0 ]]; do
             UNINSTALL=true
             shift
             ;;
+        -w|--worker|--agent-only)
+            AGENT_ONLY=true
+            shift
+            ;;
         -y|--yes|--non-interactive)
             NON_INTERACTIVE=true
             shift
@@ -103,6 +108,7 @@ Options:
   -d, --debug            Build in debug mode instead of release
   --skip-build           Skip cargo build and install existing binaries
   --skip-env             Skip creating .env from .env.example
+  -w, --worker, --agent-only  Install ONLY agent-agy (for worker machines)
   -u, --uninstall        Remove installed AgentMesh binaries from prefix
   -y, --yes              Non-interactive mode
   -h, --help             Show this help message
@@ -187,7 +193,9 @@ if [ "$MISSING" -ne 0 ]; then
 fi
 
 # Step 2: Environment Configuration (.env)
-if [ "$SKIP_ENV" = false ]; then
+if [ "$AGENT_ONLY" = true ]; then
+    info "Step 2: Skipping .env configuration (agent-only mode)."
+elif [ "$SKIP_ENV" = false ]; then
     info "Step 2: Checking environment configuration..."
     if [ ! -f .env ]; then
         if [ -f .env.example ]; then
@@ -205,10 +213,18 @@ BUILD_DIR="${TARGET_DIR}/${BUILD_PROFILE}"
 
 if [ "$SKIP_BUILD" = false ]; then
     info "Step 3: Compiling AgentMesh binaries (${BUILD_PROFILE} mode)..."
-    if [ "$BUILD_PROFILE" = "release" ]; then
-        cargo build --release --workspace
+    if [ "$AGENT_ONLY" = true ]; then
+        if [ "$BUILD_PROFILE" = "release" ]; then
+            cargo build --release -p agent-agy
+        else
+            cargo build -p agent-agy
+        fi
     else
-        cargo build --workspace
+        if [ "$BUILD_PROFILE" = "release" ]; then
+            cargo build --release --workspace
+        else
+            cargo build --workspace
+        fi
     fi
     success "Compilation complete."
 else
@@ -219,7 +235,11 @@ fi
 info "Step 4: Installing binaries to ${PREFIX}..."
 mkdir -p "${PREFIX}"
 
-BINARIES=("coordinator" "agent-mock" "agent-agy")
+if [ "$AGENT_ONLY" = true ]; then
+    BINARIES=("agent-agy")
+else
+    BINARIES=("coordinator" "agent-mock" "agent-agy")
+fi
 for bin in "${BINARIES[@]}"; do
     src="${BUILD_DIR}/${bin}"
     dst="${PREFIX}/${bin}"
@@ -244,24 +264,51 @@ for bin in "${BINARIES[@]}"; do
 done
 
 echo ""
-echo -e "${BLUE}================================================================${NC}"
-success "AgentMesh v0.1.0 installed successfully!"
-echo -e "${BLUE}================================================================${NC}"
+if [ "$AGENT_ONLY" = true ]; then
+    echo -e "${BLUE}================================================================${NC}"
+    success "AgentMesh Worker (agent-agy) installed successfully!"
+    echo -e "${BLUE}================================================================${NC}"
 
-# Check if PREFIX is in PATH
-if [[ ":$PATH:" != *":$PREFIX:"* ]]; then
-    echo -e "\n${YELLOW}${BOLD}Notice:${NC} '${PREFIX}' is not currently in your PATH."
-    echo -e "To run binaries directly by name, add this to your shell profile (~/.bashrc, ~/.zshrc):"
-    echo -e "  ${CYAN}export PATH=\"${PREFIX}:\$PATH\"${NC}\n"
+    if [[ ":$PATH:" != *":$PREFIX:"* ]]; then
+        echo -e "\n${YELLOW}${BOLD}Notice:${NC} '${PREFIX}' is not currently in your PATH."
+        echo -e "To run binaries directly by name, add this to your shell profile (~/.bashrc, ~/.zshrc):"
+        echo -e "  ${CYAN}export PATH=\"${PREFIX}:\$PATH\"${NC}\n"
+    fi
+
+    echo -e "${BOLD}Worker Environment Variables Required:${NC}"
+    echo -e "Set these variables before running the agent:"
+    echo -e "  • ${BOLD}NATS_URL${NC}=nats://<coordinator-ip>:4222"
+    echo -e "  • ${BOLD}NATS_AUTH_TOKEN${NC}=<token>"
+    echo -e "  • ${BOLD}AGY_AGENT_OWNER${NC}=<owner-name>"
+    echo -e "  • ${BOLD}AGY_AGENT_API_KEY${NC}=<api-key>"
+    echo -e "  • ${BOLD}AGY_MODEL${NC}=<model> (optional)"
+    echo -e "  • ${BOLD}AGY_BIN_PATH${NC}=<path-to-agy> (optional)"
+    echo -e "  • ${BOLD}AGY_WORKSPACE_DIR${NC}=<path-to-repo> (optional)\n"
+
+    echo -e "${BOLD}To start the worker:${NC}"
+    echo -e "  ${CYAN}${PREFIX}/agent-agy${NC}\n"
+    
+    echo -e "To uninstall anytime:        ${CYAN}./scripts/install.sh --uninstall --prefix ${PREFIX}${NC}\n"
+else
+    echo -e "${BLUE}================================================================${NC}"
+    success "AgentMesh v0.1.0 installed successfully!"
+    echo -e "${BLUE}================================================================${NC}"
+
+    # Check if PREFIX is in PATH
+    if [[ ":$PATH:" != *":$PREFIX:"* ]]; then
+        echo -e "\n${YELLOW}${BOLD}Notice:${NC} '${PREFIX}' is not currently in your PATH."
+        echo -e "To run binaries directly by name, add this to your shell profile (~/.bashrc, ~/.zshrc):"
+        echo -e "  ${CYAN}export PATH=\"${PREFIX}:\$PATH\"${NC}\n"
+    fi
+
+    echo -e "${BOLD}Installed Executables:${NC}"
+    echo -e "  • ${BOLD}coordinator${NC}  — Terminal UI and orchestration engine"
+    echo -e "  • ${BOLD}agent-mock${NC}   — Simulated test agent"
+    echo -e "  • ${BOLD}agent-agy${NC}    — Antigravity agy CLI adapter\n"
+
+    echo -e "${BOLD}Next Steps:${NC}"
+    echo -e "  1. Start backing services:   ${CYAN}docker compose up -d${NC}"
+    echo -e "  2. Start the coordinator:    ${CYAN}${PREFIX}/coordinator${NC} (or 'coordinator' if in PATH)"
+    echo -e "  3. Start an agent:           ${CYAN}${PREFIX}/agent-mock${NC} or ${CYAN}${PREFIX}/agent-agy${NC}\n"
+    echo -e "To uninstall anytime:        ${CYAN}./scripts/install.sh --uninstall --prefix ${PREFIX}${NC}\n"
 fi
-
-echo -e "${BOLD}Installed Executables:${NC}"
-echo -e "  • ${BOLD}coordinator${NC}  — Terminal UI and orchestration engine"
-echo -e "  • ${BOLD}agent-mock${NC}   — Simulated test agent"
-echo -e "  • ${BOLD}agent-agy${NC}    — Antigravity agy CLI adapter\n"
-
-echo -e "${BOLD}Next Steps:${NC}"
-echo -e "  1. Start backing services:   ${CYAN}docker compose up -d${NC}"
-echo -e "  2. Start the coordinator:    ${CYAN}${PREFIX}/coordinator${NC} (or 'coordinator' if in PATH)"
-echo -e "  3. Start an agent:           ${CYAN}${PREFIX}/agent-mock${NC} or ${CYAN}${PREFIX}/agent-agy${NC}\n"
-echo -e "To uninstall anytime:        ${CYAN}./scripts/install.sh --uninstall --prefix ${PREFIX}${NC}\n"
