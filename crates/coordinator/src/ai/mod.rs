@@ -44,7 +44,6 @@ pub fn create_provider_by_name(name: &str) -> Result<Arc<dyn LlmProvider>> {
         }
         "agy" => {
             let model = std::env::var("AGY_MODEL")
-                .or_else(|_| std::env::var("AI_MODEL"))
                 .unwrap_or_else(|_| "gemini-3.8-flash-low".to_string());
             Ok(Arc::new(AgyProvider::new(model)))
         }
