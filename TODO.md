@@ -495,10 +495,11 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 - [x] Fix `.env.example` (only `mock`/`anthropic` exist, `MOCK_AGENT_ID` must be a UUID, add `AGY_*` vars, agents do not read `.env`)
 - [x] `.gitignore`: `.env.*` with `!.env.example`, `.agentmesh/` runtime worktrees
 - [x] Verified: `cargo test --workspace --no-fail-fast` → 196 passed; `test_one_real_agy_binary_instance` fails only because `agy` returns `RESOURCE_EXHAUSTED (429)` quota error
-- [ ] Follow-ups discovered (not done here — out of scope for a docs task):
-  - `agent-agy` drops `result.error` on non-SUCCESS results (`AgyResultPayload` has no `error` field), so `Failed.error` is empty on API errors
-  - Binary does not run periodic assignment / stale sweep / startup recovery loops; worktree preparation, replanning, reassign are library-only
-  - `test_one_real_agy_binary_instance` hard-codes `/home/pirate/.local/bin/agy`
+- [x] Follow-ups addressed:
+  - [x] `agent-agy` error propagation on non-SUCCESS results (`AgyResultPayload.error` preserves error messages)
+  - [x] Binary runtime background workers: startup recovery, stale task sweep, and periodic assignment loops wired into `main.rs`
+  - [x] `test_one_real_agy_binary_instance` dynamically checks `AGY_BIN_PATH`, `$HOME/.local/bin/agy`, and PATH
+  - [x] Headless `AgyProvider` planning auto-applies `--dangerously-skip-permissions` and robust Markdown JSON fence cleaning
 
 ---
 

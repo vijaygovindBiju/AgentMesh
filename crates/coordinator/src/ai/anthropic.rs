@@ -23,16 +23,22 @@ impl AnthropicProvider {
         }
     }
 
-    /// Strips Markdown code fences if the model wraps JSON in ```json ... ```.
+    /// Strips Markdown code fences and surrounding text if the model wraps JSON.
     pub fn clean_json_response(raw: &str) -> &str {
         let trimmed = raw.trim();
-        if let Some(stripped) = trimmed.strip_prefix("```json") {
-            if let Some(inner) = stripped.strip_suffix("```") {
-                return inner.trim();
+        if let Some(start) = trimmed.find("```json") {
+            let after_fence = &trimmed[start + 7..];
+            if let Some(end) = after_fence.rfind("```") {
+                return after_fence[..end].trim();
             }
-        } else if let Some(stripped) = trimmed.strip_prefix("```") {
-            if let Some(inner) = stripped.strip_suffix("```") {
-                return inner.trim();
+        } else if let Some(start) = trimmed.find("```") {
+            let after_fence = &trimmed[start + 3..];
+            if let Some(end) = after_fence.rfind("```") {
+                return after_fence[..end].trim();
+            }
+        } else if let (Some(start), Some(end)) = (trimmed.find('{'), trimmed.rfind('}')) {
+            if start <= end {
+                return trimmed[start..=end].trim();
             }
         }
         trimmed

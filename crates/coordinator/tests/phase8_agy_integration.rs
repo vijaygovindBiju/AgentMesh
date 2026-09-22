@@ -889,12 +889,13 @@ async fn test_one_real_agy_binary_instance() {
     let agy_binary_path = std::env::var("AGY_BIN_PATH")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| {
-            let p = std::path::PathBuf::from("/home/pirate/.local/bin/agy");
-            if p.exists() {
-                p
-            } else {
-                std::path::PathBuf::from("agy")
+            if let Some(home) = std::env::var_os("HOME") {
+                let local_bin = std::path::PathBuf::from(home).join(".local/bin/agy");
+                if local_bin.exists() {
+                    return local_bin;
+                }
             }
+            std::path::PathBuf::from("agy")
         });
     if !agy_binary_path.exists() {
         eprintln!(

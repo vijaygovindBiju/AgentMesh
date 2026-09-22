@@ -13,6 +13,7 @@ use crate::ai::schema::{PlanningRequest, PlanningResponse};
 pub struct AgyProvider {
     pub agy_path: PathBuf,
     pub model: String,
+    pub dangerously_skip_permissions: bool,
 }
 
 impl AgyProvider {
@@ -20,10 +21,19 @@ impl AgyProvider {
         let agy_path = std::env::var("AGY_BIN_PATH")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("agy"));
+        let dangerously_skip_permissions = std::env::var("AGY_DANGEROUSLY_SKIP_PERMISSIONS")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(true);
         Self {
             agy_path,
             model: model.into(),
+            dangerously_skip_permissions,
         }
+    }
+
+    pub fn with_skip_permissions(mut self, skip: bool) -> Self {
+        self.dangerously_skip_permissions = skip;
+        self
     }
 }
 
@@ -42,6 +52,10 @@ impl LlmProvider for AgyProvider {
             .arg("--model")
             .arg(&self.model);
 
+        if self.dangerously_skip_permissions {
+            cmd.arg("--dangerously-skip-permissions");
+        }
+
         let output = cmd
             .output()
             .await
@@ -53,10 +67,11 @@ impl LlmProvider for AgyProvider {
         }
 
         let raw_stdout = String::from_utf8_lossy(&output.stdout);
+        let raw_stderr = String::from_utf8_lossy(&output.stderr);
         let cleaned = AnthropicProvider::clean_json_response(&raw_stdout);
 
         let plan: PlanningResponse = serde_json::from_str(cleaned)
-            .with_context(|| format!("Failed to parse agy JSON planning output: {cleaned}"))?;
+            .with_context(|| format!("Failed to parse agy JSON planning output. stdout='{raw_stdout}', stderr='{raw_stderr}', status={}", output.status))?;
 
         Ok(plan)
     }
