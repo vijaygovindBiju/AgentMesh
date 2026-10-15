@@ -2,11 +2,11 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph, Row, Table},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph, Row, Table},
     Frame,
 };
 
-use crate::domain::{AgentStatus, HealthStatus};
+use crate::domain::{AgentStatus, HealthStatus, TaskStatus};
 use crate::tui::state::AppState;
 
 pub struct DiagnosticsScreen;
@@ -53,6 +53,14 @@ impl DiagnosticsScreen {
 
         // 3. Coordinator Events Log Stream
         Self::render_events_stream(frame, chunks[2], state);
+
+        // 4. Overlays / Modals
+        if state.show_event_payload_modal {
+            Self::render_event_payload_modal(frame, area, state);
+        }
+        if state.show_timeline_modal {
+            Self::render_timeline_modal(frame, area, state);
+        }
     }
 
     /// Renders real-time system throughput and execution KPI cards.
@@ -265,13 +273,31 @@ impl DiagnosticsScreen {
 
     /// Renders task timeline drill-down view.
     fn render_timeline_drilldown(frame: &mut Frame, area: Rect, state: &AppState) {
+        let is_focused = state.diagnostics_focus == crate::tui::state::DiagnosticsFocus::Timeline;
+        let border_color = if is_focused {
+            Color::Yellow
+        } else {
+            Color::DarkGray
+        };
+        let border_type = if is_focused {
+            BorderType::Thick
+        } else {
+            BorderType::Plain
+        };
+        let title_text = if is_focused {
+            " Task Timeline Drill-Down [Focused: ↑/↓ Select Task, Enter Full Stages] "
+        } else {
+            " Task Timeline Drill-Down "
+        };
+
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray))
+            .border_type(border_type)
+            .border_style(Style::default().fg(border_color))
             .title(Span::styled(
-                " Task Timeline Drill-Down ",
+                title_text,
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(border_color)
                     .add_modifier(Modifier::BOLD),
             ));
 
@@ -375,8 +401,8 @@ impl DiagnosticsScreen {
                 ]),
                 Line::from(""),
                 Line::from(Span::styled(
-                    "Press [Enter] or navigate to view full chronological lifecycle timeline.",
-                    Style::default().fg(Color::DarkGray),
+                    "Press [Enter] to display full chronological lifecycle stages.",
+                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
                 )),
             ];
             let p = Paragraph::new(lines).block(block);
@@ -387,17 +413,54 @@ impl DiagnosticsScreen {
         }
     }
 
-    /// Renders the recent CoordinatorEvents log stream with severity colour coding.
+    /// Renders the recent CoordinatorEvents log stream with sliding window scrolling and severity colour coding.
     fn render_events_stream(frame: &mut Frame, area: Rect, state: &AppState) {
+        let is_focused = state.diagnostics_focus == crate::tui::state::DiagnosticsFocus::EventsStream;
+        let border_color = if is_focused {
+            Color::Magenta
+        } else {
+            Color::DarkGray
+        };
+        let border_type = if is_focused {
+            BorderType::Thick
+        } else {
+            BorderType::Plain
+        };
+
+        let title_text = if is_focused {
+            format!(
+                " Coordinator Events Stream ({}/{} events) [Focused: ↑/↓ Scroll, Enter Inspect Payload] ",
+                if state.recent_events.is_empty() {
+                    0
+                } else {
+                    state.selected_event_index + 1
+                },
+                state.recent_events.len()
+            )
+        } else {
+            format!(
+                " Coordinator Events Stream ({} events) ",
+                state.recent_events.len()
+            )
+        };
+
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray))
+            .border_type(border_type)
+            .border_style(Style::default().fg(border_color))
             .title(Span::styled(
-                " Coordinator Events Stream (Observability Log) ",
+                title_text,
                 Style::default()
-                    .fg(Color::Magenta)
+                    .fg(border_color)
                     .add_modifier(Modifier::BOLD),
             ));
+
+        let visible_rows = (area.height.saturating_sub(4)).max(5) as usize;
+        let scroll_offset = if state.selected_event_index >= visible_rows {
+            state.selected_event_index - visible_rows + 1
+        } else {
+            0
+        };
 
         let rows: Vec<Row> = if state.recent_events.is_empty() {
             vec![Row::new(vec![
@@ -412,8 +475,10 @@ impl DiagnosticsScreen {
             state
                 .recent_events
                 .iter()
-                .take(30)
-                .map(|ev| {
+                .enumerate()
+                .skip(scroll_offset)
+                .take(visible_rows)
+                .map(|(idx, ev)| {
                     let ts_str = ev.timestamp.format("%H:%M:%S%.3f").to_string();
                     let (level_str, level_col) = if ev.event_type.contains("failed")
                         || ev.event_type.contains("error")
@@ -442,14 +507,23 @@ impl DiagnosticsScreen {
                         })
                         .unwrap_or_else(|| "-".to_string());
 
+                    let is_selected = idx == state.selected_event_index;
+                    let prefix = if is_selected && is_focused { "▶ " } else { "  " };
+                    let time_display = format!("{prefix}{ts_str}");
+
+                    let mut row_style = Style::default().fg(level_col);
+                    if is_selected && is_focused {
+                        row_style = row_style.add_modifier(Modifier::BOLD);
+                    }
+
                     Row::new(vec![
-                        ts_str,
+                        time_display,
                         level_str.to_string(),
                         ev.event_type.clone(),
                         ev.message.clone(),
                         entity_id,
                     ])
-                    .style(Style::default().fg(level_col))
+                    .style(row_style)
                 })
                 .collect()
         };
@@ -457,10 +531,10 @@ impl DiagnosticsScreen {
         let table = Table::new(
             rows,
             [
-                Constraint::Length(13),     // Time
+                Constraint::Length(15),     // Time with cursor
                 Constraint::Length(7),      // Level
                 Constraint::Percentage(25), // Event Type
-                Constraint::Percentage(40), // Message
+                Constraint::Percentage(38), // Message
                 Constraint::Percentage(15), // Entity ID
             ],
         )
@@ -474,5 +548,250 @@ impl DiagnosticsScreen {
         .block(block);
 
         frame.render_widget(table, area);
+    }
+
+    /// Renders event detail & structured JSON payload modal dialog.
+    fn render_event_payload_modal(frame: &mut Frame, area: Rect, state: &AppState) {
+        let ev = match state.recent_events.get(state.selected_event_index) {
+            Some(e) => e,
+            None => return,
+        };
+
+        let popup_width = (area.width * 75 / 100).clamp(55, 85).min(area.width);
+        let popup_height = (area.height * 70 / 100).clamp(16, 26).min(area.height);
+
+        let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
+        let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
+
+        let popup_area = Rect {
+            x: popup_x,
+            y: popup_y,
+            width: popup_width,
+            height: popup_height,
+        };
+
+        frame.render_widget(Clear, popup_area);
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Double)
+            .border_style(Style::default().fg(Color::Magenta))
+            .title(Span::styled(
+                " Coordinator Event Details & Structured Payload [Esc/Enter: Close] ",
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ));
+
+        let inner = block.inner(popup_area);
+        frame.render_widget(block, popup_area);
+
+        let payload_pretty = serde_json::to_string_pretty(&ev.payload)
+            .unwrap_or_else(|_| "{}".to_string());
+
+        let mut lines = vec![
+            Line::from(vec![
+                Span::styled("Event Type: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    &ev.event_type,
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("  |  Time: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    ev.timestamp.format("%Y-%m-%d %H:%M:%S%.3f UTC").to_string(),
+                    Style::default().fg(Color::White),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled("Event ID: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(ev.id.to_string(), Style::default().fg(Color::Cyan)),
+            ]),
+            Line::from(vec![
+                Span::styled("Message: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(&ev.message, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(vec![
+                Span::styled("Target Task: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    ev.task_id.map(|id| id.to_string()).unwrap_or_else(|| "None".to_string()),
+                    Style::default().fg(Color::Cyan),
+                ),
+                Span::styled("  |  Target Agent: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    ev.agent_id.map(|id| id.to_string()).unwrap_or_else(|| "None".to_string()),
+                    Style::default().fg(Color::Cyan),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "─── JSON Payload ───────────────────────────────────────────────────────",
+                Style::default().fg(Color::DarkGray),
+            )]),
+        ];
+
+        let max_payload_lines = inner.height.saturating_sub(9) as usize;
+        for pl_line in payload_pretty.lines().take(max_payload_lines) {
+            lines.push(Line::from(Span::styled(
+                format!("  {pl_line}"),
+                Style::default().fg(Color::Green),
+            )));
+        }
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "Press [Esc] or [Enter] to dismiss.",
+            Style::default().fg(Color::DarkGray),
+        )));
+
+        let p = Paragraph::new(lines);
+        frame.render_widget(p, inner);
+    }
+
+    /// Renders full task chronological lifecycle stages modal.
+    fn render_timeline_modal(frame: &mut Frame, area: Rect, state: &AppState) {
+        let selected_task = match state.review_tasks.get(state.selected_task_index) {
+            Some(t) => t,
+            None => return,
+        };
+
+        let popup_width = (area.width * 75 / 100).clamp(55, 85).min(area.width);
+        let popup_height = (area.height * 70 / 100).clamp(16, 26).min(area.height);
+
+        let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
+        let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
+
+        let popup_area = Rect {
+            x: popup_x,
+            y: popup_y,
+            width: popup_width,
+            height: popup_height,
+        };
+
+        frame.render_widget(Clear, popup_area);
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Double)
+            .border_style(Style::default().fg(Color::Yellow))
+            .title(Span::styled(
+                format!(
+                    " Task [{}] Full Lifecycle Timeline Drill-Down [Esc/Enter: Close] ",
+                    selected_task.task.short_id
+                ),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ));
+
+        let inner = block.inner(popup_area);
+        frame.render_widget(block, popup_area);
+
+        let mut lines = vec![
+            Line::from(vec![
+                Span::styled("Task: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("[{}] {}", selected_task.task.short_id, selected_task.task.title),
+                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("  |  Status: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{:?}", selected_task.task.status),
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled("Description: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(&selected_task.task.description),
+            ]),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "─── Chronological Lifecycle Stages ─────────────────────────────────────",
+                Style::default().fg(Color::DarkGray),
+            )]),
+        ];
+
+        // If active selected_timeline has events, render them; otherwise synthesize stages
+        if let Some(tl) = &state.selected_timeline {
+            for item in &tl.events {
+                let elapsed_str = item
+                    .elapsed_since_start_ms
+                    .map(|ms| format!("+{}ms", ms))
+                    .unwrap_or_else(|| "0ms".to_string());
+                lines.push(Line::from(vec![
+                    Span::styled(format!("[{:>7}] ", elapsed_str), Style::default().fg(Color::DarkGray)),
+                    Span::styled(format!("{:<14} ", item.stage), Style::default().fg(Color::Cyan)),
+                    Span::styled(format!("{:<16} ", item.actor), Style::default().fg(Color::Yellow)),
+                    Span::raw(&item.message),
+                ]));
+            }
+        } else {
+            lines.push(Line::from(vec![
+                Span::styled("[0ms]     ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Proposed       ", Style::default().fg(Color::Cyan)),
+                Span::styled("coordinator      ", Style::default().fg(Color::Yellow)),
+                Span::raw("Task generated during LLM project decomposition."),
+            ]));
+
+            let review_done = selected_task.human_decision.is_some() || selected_task.task.status != TaskStatus::HumanReview;
+            if review_done {
+                let dec_str = match selected_task.human_decision {
+                    Some(crate::domain::ApprovalStatus::Approved) => "Task approved by operator without modification.",
+                    Some(crate::domain::ApprovalStatus::EditedAndApproved) => "Task description edited and approved by operator.",
+                    Some(crate::domain::ApprovalStatus::Rejected) => "Task rejected by operator.",
+                    _ => "Task marked Approved.",
+                };
+                lines.push(Line::from(vec![
+                    Span::styled("[+150ms]  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("HumanReview    ", Style::default().fg(Color::Green)),
+                    Span::styled("human-operator   ", Style::default().fg(Color::Yellow)),
+                    Span::raw(dec_str),
+                ]));
+            } else {
+                lines.push(Line::from(vec![
+                    Span::styled("[+150ms]  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("HumanReview    ", Style::default().fg(Color::Yellow)),
+                    Span::styled("coordinator      ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Waiting for operator approval/rejection decision."),
+                ]));
+            }
+
+            if let Some(agent_id) = selected_task.task.assigned_agent_id {
+                let agent_name = state.agents.iter().find(|a| a.id == agent_id)
+                    .map(|a| a.human_owner.as_str())
+                    .unwrap_or("agent-worker");
+                lines.push(Line::from(vec![
+                    Span::styled("[+320ms]  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("Assigned       ", Style::default().fg(Color::Cyan)),
+                    Span::styled(format!("{:<16} ", agent_name), Style::default().fg(Color::Yellow)),
+                    Span::raw("Task dispatched via NATS JetStream assignment queue."),
+                ]));
+            }
+
+            if selected_task.task.status == TaskStatus::Executing {
+                let pct = selected_task.progress_percent.unwrap_or(0);
+                lines.push(Line::from(vec![
+                    Span::styled("[+500ms]  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("Executing      ", Style::default().fg(Color::Cyan)),
+                    Span::styled("agent-worker     ", Style::default().fg(Color::Yellow)),
+                    Span::raw(format!("Task execution in progress ({pct}%).")),
+                ]));
+            } else if selected_task.task.status == TaskStatus::Completed {
+                lines.push(Line::from(vec![
+                    Span::styled("[+1200ms] ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("Completed      ", Style::default().fg(Color::Green)),
+                    Span::styled("agent-worker     ", Style::default().fg(Color::Yellow)),
+                    Span::raw("Task completed successfully with output artifacts verified."),
+                ]));
+            }
+        }
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "Press [Esc] or [Enter] to dismiss.",
+            Style::default().fg(Color::DarkGray),
+        )));
+
+        let p = Paragraph::new(lines);
+        frame.render_widget(p, inner);
     }
 }

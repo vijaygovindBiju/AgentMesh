@@ -7,13 +7,28 @@ use ratatui::{
 };
 
 use crate::tui::state::AppState;
-use crate::tui::widgets::{DetailsPaneWidget, TaskCardWidget};
+use crate::tui::widgets::{DagViewWidget, DetailsPaneWidget, TaskCardWidget};
 
 pub struct PlanReviewScreen;
 
 impl PlanReviewScreen {
     pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
-        if state.show_details_pane {
+        if state.show_dag_view {
+            if state.show_details_pane {
+                let chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([
+                        Constraint::Percentage(50), // DAG Graph view
+                        Constraint::Percentage(50), // Task details inspector
+                    ])
+                    .split(area);
+
+                DagViewWidget::render(frame, chunks[0], state);
+                DetailsPaneWidget::render(frame, chunks[1], state);
+            } else {
+                DagViewWidget::render(frame, area, state);
+            }
+        } else if state.show_details_pane {
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([

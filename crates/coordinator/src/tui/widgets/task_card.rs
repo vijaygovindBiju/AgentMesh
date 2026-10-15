@@ -72,7 +72,7 @@ impl TaskCardWidget {
             .as_deref()
             .unwrap_or("Unassigned (advisory)");
 
-        lines.push(Line::from(vec![
+        let mut status_line_spans = vec![
             Span::raw("    Status: "),
             Span::styled(
                 status_text,
@@ -83,7 +83,22 @@ impl TaskCardWidget {
             ),
             Span::raw("  Agent: "),
             Span::styled(agent_name, Style::default().fg(Color::Magenta)),
-        ]));
+        ];
+
+        if let Some(pct) = item.progress_percent {
+            let filled = (pct as usize / 10).min(10);
+            let empty = 10 - filled;
+            let bar = format!(" [{}{}] {pct}%", "█".repeat(filled), "░".repeat(empty));
+            status_line_spans.push(Span::raw("  Progress: "));
+            status_line_spans.push(Span::styled(
+                bar,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+
+        lines.push(Line::from(status_line_spans));
 
         // 3. Overlap warning banner (if any)
         if !item.overlap_warnings.is_empty() {

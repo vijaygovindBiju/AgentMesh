@@ -87,6 +87,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Phase 17 — Professional README, Installation & Developer Documentation (DONE)
 - [x] Phase 18 — Real-World Project Validation (DONE)
 - [x] Phase 19 — Real Multi-Machine Validation (DONE)
+- [~] Phase 20 — Operator TUI & CLI Preservation (IN PROGRESS)
 
 ---
 
@@ -627,6 +628,61 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 | 15 | Full distributed validation | Multi-Node | PASS | `test_phase19_6_full_distributed_validation_matrix` |
 
 **Summary: ALL 15 Scenarios PASSED (100% verified across host coordinator and isolated container worker nodes).**
+
+---
+
+## Phase 20 — Operator TUI & CLI Preservation
+
+**Goal:** Extend the coordinator with an enhanced, keyboard-driven Ratatui/Crossterm TUI for live task monitoring, dependency graphs, agent fleet capability inspection, and real-time event streaming while preserving headless CLI and automated orchestration paths.
+
+### 20.1 Architectural Inspection & Parallel Work Plan
+- [x] Survey coordinator state machine, event streams, NATS channels, and CLI entrypoint
+- [x] Survey existing TUI architecture, screens, widgets, keybindings, and gaps against R2
+- [x] Survey domain lifecycle, agent capabilities, approval gates, and Ratatui TestBackend strategy
+- [x] Formulate parallel execution plan with decoupled file boundaries and zero write collisions
+- [x] Document plan in `PROJECT.md` and `TODO.md`
+
+### 20.2 CLI Flags & Headless Preservation (R3) [x] DONE
+- [x] Implement `crates/coordinator/src/cli.rs` with `CliArgs` parser (`--headless`, `--tui`, `--project`, `--auto-approve`, `--status`, `--help`, `--version`) (14 unit tests pass)
+- [x] Preserve headless daemon operation and automated orchestration paths in `crates/coordinator/src/main.rs` (commit 726034c)
+- [x] Refactor long operations (AI planning) to non-blocking async execution with UI status streaming
+
+### 20.3 Enhanced Operator TUI (R2) [x] DONE
+- [x] Implement ASCII dependency graph (DAG) widget (`crates/coordinator/src/tui/widgets/dag_view.rs`) showing task topological order and blocking relationships
+- [x] Resolve prerequisite UUIDs to human-readable short IDs (`PLAN-1`) and titles in Details Pane
+- [x] Implement agent fleet capability inspection popup/pane (`crates/coordinator/src/tui/widgets/agent_inspector.rs`)
+- [x] Ingest live agent protocol events into `recent_events` and periodic coordinator event stream
+- [x] Implement scrollable event timeline table with `[Enter]` detail payload inspection in Diagnostics
+- [x] Implement on-screen shortcut cheatsheet modal (`crates/coordinator/src/tui/widgets/help_modal.rs`) triggered via `?`
+- [x] Enable interactive task selection, scrolling, and status details on Dashboard screen
+- [x] Display task progress percentage on task cards from agent `ProgressUpdate` messages
+- [x] Dynamic contextual footer shortcut hints reflecting focused pane and valid operator actions
+
+### 20.4 Deterministic Verification & Testing (R4)
+- [x] Create `TEST_INFRA.md` outlining opaque-box and TestBackend methodology
+- [x] Implement comprehensive Ratatui `TestBackend` test suite (`crates/coordinator/tests/phase20_tui_verification.rs`, 86 tests, commit 6e6432d) covering:
+  - Screen navigation and Tab cycling
+  - Plan review keyboard workflow (`[Y]`, `[N]`, `[E]`, `[Enter]`, `[A]`, `[C]`)
+  - Scrolling window on long task lists
+  - Inline description editor buffer manipulation
+  - Project input submission and validation
+  - Dashboard fleet capabilities and metrics buffer inspection
+  - Dashboard overlap warning acknowledgment
+  - Diagnostics screen event stream buffer inspection and payload modal
+  - Live event stream projections (`TaskStarted`, `Progress`, `Blocked`, `Completed`, `Failed`)
+  - Terminal size responsiveness (80x24, 100x30, 160x50, 70x20)
+  - CLI argument parsing deterministic tests
+- [x] Publish `TEST_READY.md` upon test suite readiness
+- [ ] Verify `cargo check --workspace` passes cleanly with 0 errors and 0 warnings
+- [ ] Verify `cargo test --workspace` passes cleanly across all workspace test suites
+
+### Acceptance Criteria — Phase 20
+- [ ] Architectural inspection and parallel plan documented before code modifications (R1 satisfied)
+- [ ] TUI runs using Ratatui and Crossterm with keyboard-driven navigation, DAG visualization, capability inspection, and shortcut help (R2 satisfied)
+- [ ] Headless/CLI modes of coordinator preserved without regression; automated orchestration intact (R3 satisfied)
+- [ ] Ratatui `TestBackend` unit tests verify screen rendering and state updates deterministically (R4 satisfied)
+- [ ] `cargo check --workspace` passes cleanly with 0 errors and 0 warnings (R4 satisfied)
+- [ ] `cargo test --workspace` passes cleanly with zero regressions (R4 satisfied)
 
 ---
 

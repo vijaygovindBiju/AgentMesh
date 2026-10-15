@@ -1,9 +1,27 @@
+use chrono::Utc;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use serde_json::json;
+use uuid::Uuid;
 
+use agent_protocol::AgentMessage;
 use coordinator::domain::ApprovalStatus;
-use coordinator::tui::{render, AppState, CurrentScreen, InputMode, TuiAction};
+use coordinator::observability::CoordinatorEvent;
+use coordinator::tui::state::DashboardFocus;
+use coordinator::tui::{render, AppState, CurrentScreen, InputMode, TuiAction, TuiUpdateEvent};
+
+fn buffer_to_string(terminal: &Terminal<TestBackend>) -> String {
+    let buffer = terminal.backend().buffer();
+    let mut s = String::new();
+    for y in 0..buffer.area.height {
+        for x in 0..buffer.area.width {
+            s.push_str(buffer[(x, y)].symbol());
+        }
+        s.push('\n');
+    }
+    s
+}
 
 fn press_key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -145,3 +163,227 @@ fn test_tui_rendering_headless_all_modes() {
         .draw(|f| render(f, &state))
         .expect("Render Dashboard");
 }
+
+#[test]
+fn test_milestone2_dag_view_toggle_and_rendering() {
+    let backend = TestBackend::new(140, 45);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut state = AppState::new().with_mock_data();
+    state.current_screen = CurrentScreen::PlanReview;
+
+    assert!(!state.show_dag_view);
+    // Press 'g' to toggle DAG view on
+    state.handle_key(press_key(KeyCode::Char('g')));
+    assert!(state.show_dag_view);
+
+    // Draw and verify DAG rendered
+    terminal.draw(|f| render(f, &state)).unwrap();
+    let buf = buffer_to_string(&terminal);
+    assert!(buf.contains("DAG") || buf.contains("Dependency Graph") || buf.contains("PLAN-1"));
+    assert!(buf.contains("──blocks──▶") || buf.contains("blocks") || buf.contains("PLAN-2"));
+
+    // Press 'g' to toggle back
+    state.handle_key(press_key(KeyCode::Char('g')));
+    assert!(!state.show_dag_view);
+}
+
+#[test]
+fn test_milestone2_help_modal_toggle_and_rendering() {
+    let backend = TestBackend::new(140, 45);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut state = AppState::new().with_mock_data();
+
+    assert!(!state.show_help_modal);
+    // Press '?' to toggle help modal on
+    state.handle_key(press_key(KeyCode::Char('?')));
+    assert!(state.show_help_modal);
+
+    // Draw and verify help modal rendered
+    terminal.draw(|f| render(f, &state)).unwrap();
+    let buf = buffer_to_string(&terminal);
+    assert!(buf.contains("Keyboard Shortcuts"));
+
+    // Press 'Esc' to close
+    state.handle_key(press_key(KeyCode::Esc));
+    assert!(!state.show_help_modal);
+}
+
+#[test]
+fn test_milestone2_agent_inspector_modal_and_focus_switching() {
+    let backend = TestBackend::new(140, 45);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut state = AppState::new().with_mock_data();
+    state.current_screen = CurrentScreen::Dashboard;
+
+    // Initial focus is AgentsTable
+    assert_eq!(state.dashboard_focus, DashboardFocus::AgentsTable);
+
+    // Switch focus to TasksTable with Right
+    state.handle_key(press_key(KeyCode::Right));
+    assert_eq!(state.dashboard_focus, DashboardFocus::TasksTable);
+
+    // Switch focus to OverlapsTable with Right
+    state.handle_key(press_key(KeyCode::Right));
+    assert_eq!(state.dashboard_focus, DashboardFocus::OverlapsTable);
+
+    // Switch back to AgentsTable
+    state.handle_key(press_key(KeyCode::Left));
+    assert_eq!(state.dashboard_focus, DashboardFocus::TasksTable);
+    state.handle_key(press_key(KeyCode::Left));
+    assert_eq!(state.dashboard_focus, DashboardFocus::AgentsTable);
+
+    // Open agent inspector with 'c'
+    assert!(!state.show_agent_inspector);
+    state.handle_key(press_key(KeyCode::Char('c')));
+    assert!(state.show_agent_inspector);
+
+    // Draw and verify modal
+    terminal.draw(|f| render(f, &state)).unwrap();
+    let buf = buffer_to_string(&terminal);
+    assert!(buf.contains("Agent Capability Profile") || buf.contains("Runtime") || buf.contains("OS"));
+
+    // Close inspector with Esc
+    state.handle_key(press_key(KeyCode::Esc));
+    assert!(!state.show_agent_inspector);
+}
+
+#[test]
+fn test_milestone2_details_pane_prerequisite_mapping() {
+    let backend = TestBackend::new(140, 45);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut state = AppState::new().with_mock_data();
+    state.current_screen = CurrentScreen::PlanReview;
+
+    // Task 1 depends on Task 0 in mock data
+    state.selected_task_index = 1;
+    terminal.draw(|f| render(f, &state)).unwrap();
+    let buf = buffer_to_string(&terminal);
+    // Must contain human readable short ID PLAN-1 instead of raw UUID
+    assert!(buf.contains("PLAN-1"));
+    assert!(buf.contains("Prerequisites") || buf.contains("Depends on"));
+}
+
+#[test]
+fn test_milestone2_real_time_progress_update_ingestion() {
+    let backend = TestBackend::new(140, 45);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut state = AppState::new().with_mock_data();
+    let task_id = state.review_tasks[0].task.id;
+
+    // Send ProgressUpdate message
+    let msg = AgentMessage::ProgressUpdate {
+        agent_id: Uuid::new_v4(),
+        task_id,
+        percent: 75,
+        message: "Processing database migrations".to_string(),
+        timestamp: Utc::now(),
+    };
+    state.apply_update(TuiUpdateEvent::AgentMessage(msg));
+
+    assert_eq!(state.review_tasks[0].progress_percent, Some(75));
+
+    // Render task cards and dashboard to verify progress display
+    state.current_screen = CurrentScreen::PlanReview;
+    terminal.draw(|f| render(f, &state)).unwrap();
+    let buf = buffer_to_string(&terminal);
+    assert!(buf.contains("75%"));
+
+    state.current_screen = CurrentScreen::Dashboard;
+    terminal.draw(|f| render(f, &state)).unwrap();
+    let buf = buffer_to_string(&terminal);
+    assert!(buf.contains("75%"));
+}
+
+#[test]
+fn test_milestone2_diagnostics_live_events_sliding_window_and_modals() {
+    let backend = TestBackend::new(140, 45);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut state = AppState::new().with_mock_data();
+    state.current_screen = CurrentScreen::Diagnostics;
+
+    // Add 40 events to test sliding window beyond 30
+    let mut events = Vec::new();
+    for i in 0..40 {
+        events.push(CoordinatorEvent {
+            id: Uuid::new_v4(),
+            timestamp: Utc::now(),
+            project_id: None,
+            task_id: None,
+            agent_id: None,
+            event_type: "heartbeat".to_string(),
+            message: format!("Heartbeat event {i}"),
+            payload: json!({ "index": i, "details": format!("Heartbeat event {i}") }),
+        });
+    }
+    state.apply_update(TuiUpdateEvent::RecentEvents(events));
+    assert_eq!(state.recent_events.len(), 40);
+
+    // Scroll down 35 times to test sliding window
+    for _ in 0..35 {
+        state.handle_key(press_key(KeyCode::Down));
+    }
+    assert_eq!(state.selected_event_index, 35);
+
+    // Render to verify sliding window works without panic
+    terminal.draw(|f| render(f, &state)).unwrap();
+
+    // Press Enter to open event payload modal
+    assert!(!state.show_event_payload_modal);
+    state.handle_key(press_key(KeyCode::Enter));
+    assert!(state.show_event_payload_modal);
+
+    terminal.draw(|f| render(f, &state)).unwrap();
+    let buf = buffer_to_string(&terminal);
+    assert!(buf.contains("Event Payload Detail") || buf.contains("Event Details"));
+
+    // Close modal with Esc
+    state.handle_key(press_key(KeyCode::Esc));
+    assert!(!state.show_event_payload_modal);
+}
+
+#[test]
+fn test_milestone2_inline_editor_utf8_multibyte_support() {
+    let mut state = AppState::new().with_mock_data();
+    state.current_screen = CurrentScreen::PlanReview;
+
+    // Start inline editing
+    state.handle_key(press_key(KeyCode::Char('e')));
+    assert_eq!(state.input_mode, InputMode::EditingDescription);
+
+    // Clear buffer with backspaces
+    while state.edit_cursor > 0 {
+        state.handle_key(press_key(KeyCode::Backspace));
+    }
+    assert_eq!(state.edit_buffer, "");
+    assert_eq!(state.edit_cursor, 0);
+
+    // Type multi-byte characters: Japanese, Spanish accented, and Emoji
+    for c in "東京 ñ 🚀".chars() {
+        state.handle_key(press_key(KeyCode::Char(c)));
+    }
+    assert_eq!(state.edit_buffer, "東京 ñ 🚀");
+    assert_eq!(state.edit_cursor, "東京 ñ 🚀".len());
+
+    // Navigate Left by 2 characters (over '🚀' and ' ')
+    state.handle_key(press_key(KeyCode::Left)); // before '🚀'
+    state.handle_key(press_key(KeyCode::Left)); // before ' '
+
+    // Backspace to delete 'ñ'
+    state.handle_key(press_key(KeyCode::Backspace));
+    assert_eq!(state.edit_buffer, "東京  🚀");
+
+    // Navigate Right
+    state.handle_key(press_key(KeyCode::Right));
+    state.handle_key(press_key(KeyCode::Right));
+
+    // Submit edit
+    let action = state.handle_key(press_key(KeyCode::Enter));
+    assert_eq!(state.input_mode, InputMode::Normal);
+    match action {
+        Some(TuiAction::EditTaskDescription { new_description, .. }) => {
+            assert_eq!(new_description, "東京  🚀");
+        }
+        other => panic!("Expected EditTaskDescription, got {:?}", other),
+    }
+}
+

@@ -42,6 +42,7 @@ pub enum TuiUpdateEvent {
     Metrics(crate::observability::SystemMetrics),
     Timeline(crate::observability::TaskTimeline),
     ObservabilityEvent(crate::observability::CoordinatorEvent),
+    RecentEvents(Vec<crate::observability::CoordinatorEvent>),
 }
 
 /// Active top-level screen
@@ -65,6 +66,23 @@ impl CurrentScreen {
     }
 }
 
+/// Active focus pane on the Dashboard screen
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DashboardFocus {
+    #[default]
+    AgentsTable,
+    TasksTable,
+    OverlapsTable,
+}
+
+/// Active focus pane on the Diagnostics screen
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DiagnosticsFocus {
+    #[default]
+    EventsStream,
+    Timeline,
+}
+
 /// Current keyboard input mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum InputMode {
@@ -82,6 +100,7 @@ pub struct ReviewTaskState {
     pub suggested_agent_name: Option<String>,
     pub overlap_warnings: Vec<OverlapWarning>,
     pub human_decision: Option<ApprovalStatus>,
+    pub progress_percent: Option<u8>,
 }
 
 impl ReviewTaskState {
@@ -92,6 +111,7 @@ impl ReviewTaskState {
             suggested_agent_name: None,
             overlap_warnings: Vec::new(),
             human_decision: None,
+            progress_percent: None,
         }
     }
 }
@@ -115,11 +135,16 @@ pub struct AppState {
     pub review_tasks: Vec<ReviewTaskState>,
     pub selected_task_index: usize,
     pub show_details_pane: bool,
+    pub show_dag_view: bool,
     pub edit_buffer: String,
     pub edit_cursor: usize,
 
     // Dashboard / System context
     pub agents: Vec<Agent>,
+    pub dashboard_focus: DashboardFocus,
+    pub selected_agent_index: usize,
+    pub selected_dashboard_task_index: usize,
+    pub show_agent_inspector: bool,
     pub active_overlaps: Vec<OverlapWarning>,
     pub selected_overlap_index: usize,
 
@@ -128,6 +153,12 @@ pub struct AppState {
     pub recent_events: Vec<crate::observability::CoordinatorEvent>,
     pub selected_timeline: Option<crate::observability::TaskTimeline>,
     pub selected_event_index: usize,
+    pub diagnostics_focus: DiagnosticsFocus,
+    pub show_event_payload_modal: bool,
+    pub show_timeline_modal: bool,
+
+    // Global modal dialogs
+    pub show_help_modal: bool,
 
     // Status bar & messaging
     pub status_message: Option<String>,
@@ -156,10 +187,15 @@ impl AppState {
             review_tasks: Vec::new(),
             selected_task_index: 0,
             show_details_pane: true,
+            show_dag_view: false,
             edit_buffer: String::new(),
             edit_cursor: 0,
 
             agents: Vec::new(),
+            dashboard_focus: DashboardFocus::AgentsTable,
+            selected_agent_index: 0,
+            selected_dashboard_task_index: 0,
+            show_agent_inspector: false,
             active_overlaps: Vec::new(),
             selected_overlap_index: 0,
 
@@ -167,6 +203,11 @@ impl AppState {
             recent_events: Vec::new(),
             selected_timeline: None,
             selected_event_index: 0,
+            diagnostics_focus: DiagnosticsFocus::EventsStream,
+            show_event_payload_modal: false,
+            show_timeline_modal: false,
+
+            show_help_modal: false,
 
             status_message: Some(
                 "Welcome to AgentMesh Coordinator. Press [Tab] to switch screens.".to_string(),
@@ -191,26 +232,63 @@ impl AppState {
             updated_at: chrono::Utc::now(),
         });
 
-        self.agents = vec![
-            Agent::mock(
-                agent1_id,
-                "agent-backend (Alice)",
-                crate::domain::AdapterType::Agy,
-                vec!["backend".to_string(), "rust".to_string()],
-                crate::domain::AgentStatus::Idle,
-            ),
-            Agent::mock(
-                agent2_id,
-                "agent-infra (Bob)",
-                crate::domain::AdapterType::Mock,
-                vec![
-                    "infra".to_string(),
-                    "nats".to_string(),
-                    "docker".to_string(),
-                ],
-                crate::domain::AgentStatus::Busy,
-            ),
-        ];
+        let mut agent1 = Agent::mock(
+            agent1_id,
+            "agent-backend (Alice)",
+            crate::domain::AdapterType::Agy,
+            vec!["backend".to_string(), "rust".to_string()],
+            crate::domain::AgentStatus::Idle,
+        );
+        agent1.capability_profile = Some(serde_json::to_value(agent_protocol::AgentCapabilities {
+            runtime: agent_protocol::RuntimeCapability {
+                os: "linux".to_string(),
+                arch: "x86_64".to_string(),
+                adapter_type: "Agy".to_string(),
+                agy_version: Some("0.4.2".to_string()),
+                cpu_count: 8,
+                memory_mb: Some(16384),
+            },
+            languages: vec![
+                agent_protocol::LanguageCapability::new("rust", Some("1.80.0".to_string()), vec!["tokio".to_string(), "axum".to_string(), "sqlx".to_string()]),
+            ],
+            tools: vec![
+                agent_protocol::ToolCapability::new("cargo", Some("1.80.0".to_string()), Some("/usr/bin/cargo".to_string())),
+                agent_protocol::ToolCapability::new("git", Some("2.43.0".to_string()), Some("/usr/bin/git".to_string())),
+            ],
+            tags: vec!["backend".to_string(), "systems".to_string(), "cloud".to_string()],
+        }).unwrap());
+
+        let mut agent2 = Agent::mock(
+            agent2_id,
+            "agent-infra (Bob)",
+            crate::domain::AdapterType::Mock,
+            vec![
+                "infra".to_string(),
+                "nats".to_string(),
+                "docker".to_string(),
+            ],
+            crate::domain::AgentStatus::Busy,
+        );
+        agent2.capability_profile = Some(serde_json::to_value(agent_protocol::AgentCapabilities {
+            runtime: agent_protocol::RuntimeCapability {
+                os: "linux".to_string(),
+                arch: "x86_64".to_string(),
+                adapter_type: "Mock".to_string(),
+                agy_version: None,
+                cpu_count: 4,
+                memory_mb: Some(8192),
+            },
+            languages: vec![
+                agent_protocol::LanguageCapability::new("python", Some("3.11.4".to_string()), vec!["nats-py".to_string(), "pytest".to_string()]),
+            ],
+            tools: vec![
+                agent_protocol::ToolCapability::new("docker", Some("24.0.5".to_string()), Some("/usr/bin/docker".to_string())),
+                agent_protocol::ToolCapability::new("nats", Some("0.1.0".to_string()), Some("/usr/local/bin/nats".to_string())),
+            ],
+            tags: vec!["infra".to_string(), "nats".to_string(), "docker".to_string()],
+        }).unwrap());
+
+        self.agents = vec![agent1, agent2];
 
         let prop_id = Uuid::new_v4();
         let task1_id = Uuid::new_v4();
@@ -277,6 +355,7 @@ impl AppState {
         let mut review1 = ReviewTaskState::new(task1);
         review1.suggested_agent_name = Some("agent-backend".to_string());
         review1.overlap_warnings = vec![warning.clone()];
+        review1.progress_percent = Some(60);
 
         let mut review2 = ReviewTaskState::new(task2);
         review2.suggested_agent_name = Some("agent-infra".to_string());
@@ -351,6 +430,62 @@ impl AppState {
             return Some(TuiAction::Quit);
         }
 
+        // Modal dialogs capture keys when open
+        if self.show_help_modal {
+            match key.code {
+                KeyCode::Esc
+                | KeyCode::Char('?')
+                | KeyCode::Enter
+                | KeyCode::Char('q')
+                | KeyCode::Char('Q') => {
+                    self.show_help_modal = false;
+                }
+                _ => {}
+            }
+            return None;
+        }
+
+        if self.show_agent_inspector {
+            match key.code {
+                KeyCode::Esc
+                | KeyCode::Char('c')
+                | KeyCode::Char('C')
+                | KeyCode::Enter
+                | KeyCode::Char('q')
+                | KeyCode::Char('Q') => {
+                    self.show_agent_inspector = false;
+                }
+                _ => {}
+            }
+            return None;
+        }
+
+        if self.show_event_payload_modal {
+            match key.code {
+                KeyCode::Esc
+                | KeyCode::Enter
+                | KeyCode::Char('q')
+                | KeyCode::Char('Q') => {
+                    self.show_event_payload_modal = false;
+                }
+                _ => {}
+            }
+            return None;
+        }
+
+        if self.show_timeline_modal {
+            match key.code {
+                KeyCode::Esc
+                | KeyCode::Enter
+                | KeyCode::Char('q')
+                | KeyCode::Char('Q') => {
+                    self.show_timeline_modal = false;
+                }
+                _ => {}
+            }
+            return None;
+        }
+
         match self.input_mode {
             InputMode::Normal => self.handle_normal_mode_key(key),
             InputMode::EditingDescription => self.handle_editing_key(key),
@@ -360,6 +495,10 @@ impl AppState {
 
     fn handle_normal_mode_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
         match key.code {
+            KeyCode::Char('?') => {
+                self.show_help_modal = true;
+                None
+            }
             KeyCode::Char('q') | KeyCode::Char('Q') => {
                 self.should_quit = true;
                 Some(TuiAction::Quit)
@@ -405,21 +544,7 @@ impl AppState {
 
     fn handle_dashboard_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
         match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                if self.selected_overlap_index > 0 {
-                    self.selected_overlap_index -= 1;
-                }
-                None
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if !self.active_overlaps.is_empty()
-                    && self.selected_overlap_index + 1 < self.active_overlaps.len()
-                {
-                    self.selected_overlap_index += 1;
-                }
-                None
-            }
-            KeyCode::Char('a') | KeyCode::Char('A') | KeyCode::Enter => {
+            KeyCode::Char('a') | KeyCode::Char('A') => {
                 if !self.active_overlaps.is_empty()
                     && self.selected_overlap_index < self.active_overlaps.len()
                 {
@@ -444,31 +569,197 @@ impl AppState {
                     None
                 }
             }
-            _ => None,
+            KeyCode::Left | KeyCode::Char('h') | KeyCode::BackTab => {
+                self.dashboard_focus = match self.dashboard_focus {
+                    DashboardFocus::AgentsTable => DashboardFocus::OverlapsTable,
+                    DashboardFocus::TasksTable => DashboardFocus::AgentsTable,
+                    DashboardFocus::OverlapsTable => DashboardFocus::TasksTable,
+                };
+                None
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                self.dashboard_focus = match self.dashboard_focus {
+                    DashboardFocus::AgentsTable => DashboardFocus::TasksTable,
+                    DashboardFocus::TasksTable => DashboardFocus::OverlapsTable,
+                    DashboardFocus::OverlapsTable => DashboardFocus::AgentsTable,
+                };
+                None
+            }
+            _ => match self.dashboard_focus {
+                DashboardFocus::AgentsTable => match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if self.selected_agent_index > 0 {
+                            self.selected_agent_index -= 1;
+                        }
+                        None
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if !self.agents.is_empty()
+                            && self.selected_agent_index + 1 < self.agents.len()
+                        {
+                            self.selected_agent_index += 1;
+                        }
+                        None
+                    }
+                    KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Enter => {
+                        if !self.agents.is_empty() {
+                            self.show_agent_inspector = true;
+                        }
+                        None
+                    }
+                    _ => None,
+                },
+                DashboardFocus::TasksTable => match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if self.selected_dashboard_task_index > 0 {
+                            self.selected_dashboard_task_index -= 1;
+                        }
+                        None
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if !self.review_tasks.is_empty()
+                            && self.selected_dashboard_task_index + 1 < self.review_tasks.len()
+                        {
+                            self.selected_dashboard_task_index += 1;
+                        }
+                        None
+                    }
+                    KeyCode::Enter => {
+                        if let Some(rt) =
+                            self.review_tasks.get(self.selected_dashboard_task_index)
+                        {
+                            self.status_message = Some(format!(
+                                "Task [{}] {}: {:?} (Progress: {})",
+                                rt.task.short_id,
+                                rt.task.title,
+                                rt.task.status,
+                                rt.progress_percent
+                                    .map(|p| format!("{p}%"))
+                                    .unwrap_or_else(|| "N/A".to_string())
+                            ));
+                        }
+                        None
+                    }
+                    _ => None,
+                },
+                DashboardFocus::OverlapsTable => match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if self.selected_overlap_index > 0 {
+                            self.selected_overlap_index -= 1;
+                        }
+                        None
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if !self.active_overlaps.is_empty()
+                            && self.selected_overlap_index + 1 < self.active_overlaps.len()
+                        {
+                            self.selected_overlap_index += 1;
+                        }
+                        None
+                    }
+                    KeyCode::Char('a') | KeyCode::Char('A') | KeyCode::Enter => {
+                        if !self.active_overlaps.is_empty()
+                            && self.selected_overlap_index < self.active_overlaps.len()
+                        {
+                            let warning = self.active_overlaps.remove(self.selected_overlap_index);
+                            let warning_id = warning.id;
+                            for rt in &mut self.review_tasks {
+                                for w in &mut rt.overlap_warnings {
+                                    if w.id == warning_id {
+                                        w.acknowledged = true;
+                                    }
+                                }
+                            }
+                            if self.selected_overlap_index >= self.active_overlaps.len()
+                                && self.selected_overlap_index > 0
+                            {
+                                self.selected_overlap_index -= 1;
+                            }
+                            self.status_message =
+                                Some(format!("Acknowledged overlap on '{}'.", warning.resource));
+                            Some(TuiAction::AcknowledgeOverlap { warning_id })
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                },
+            },
         }
     }
 
     fn handle_diagnostics_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
         match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                if self.selected_event_index > 0 {
-                    self.selected_event_index -= 1;
-                }
+            KeyCode::Left | KeyCode::Right | KeyCode::BackTab => {
+                self.diagnostics_focus = match self.diagnostics_focus {
+                    DiagnosticsFocus::EventsStream => DiagnosticsFocus::Timeline,
+                    DiagnosticsFocus::Timeline => DiagnosticsFocus::EventsStream,
+                };
                 None
             }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if !self.recent_events.is_empty()
-                    && self.selected_event_index + 1 < self.recent_events.len()
-                {
-                    self.selected_event_index += 1;
-                }
-                None
-            }
-            _ => None,
+            _ => match self.diagnostics_focus {
+                DiagnosticsFocus::EventsStream => match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if self.selected_event_index > 0 {
+                            self.selected_event_index -= 1;
+                        }
+                        None
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if !self.recent_events.is_empty()
+                            && self.selected_event_index + 1 < self.recent_events.len()
+                        {
+                            self.selected_event_index += 1;
+                        }
+                        None
+                    }
+                    KeyCode::Enter => {
+                        if !self.recent_events.is_empty() {
+                            self.show_event_payload_modal = true;
+                        }
+                        None
+                    }
+                    _ => None,
+                },
+                DiagnosticsFocus::Timeline => match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if self.selected_task_index > 0 {
+                            self.selected_task_index -= 1;
+                        }
+                        None
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if !self.review_tasks.is_empty()
+                            && self.selected_task_index + 1 < self.review_tasks.len()
+                        {
+                            self.selected_task_index += 1;
+                        }
+                        None
+                    }
+                    KeyCode::Enter => {
+                        if !self.review_tasks.is_empty() {
+                            self.show_timeline_modal = true;
+                        }
+                        None
+                    }
+                    _ => None,
+                },
+            },
         }
     }
 
     fn handle_plan_review_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
+        if key.code == KeyCode::Char('g') || key.code == KeyCode::Char('G') {
+            self.show_dag_view = !self.show_dag_view;
+            self.status_message = Some(if self.show_dag_view {
+                "Switched to ASCII DAG Dependency Graph view. Press [G] to return to Task Cards."
+                    .to_string()
+            } else {
+                "Switched to Task Cards view. Press [G] for DAG Graph view.".to_string()
+            });
+            return None;
+        }
+
         if self.review_tasks.is_empty() {
             return None;
         }
@@ -593,26 +884,32 @@ impl AppState {
             }
             KeyCode::Backspace => {
                 if self.edit_cursor > 0 && !self.edit_buffer.is_empty() {
-                    self.edit_cursor -= 1;
-                    self.edit_buffer.remove(self.edit_cursor);
+                    if let Some((prev_idx, _)) = self.edit_buffer[..self.edit_cursor].char_indices().last() {
+                        self.edit_buffer.remove(prev_idx);
+                        self.edit_cursor = prev_idx;
+                    }
                 }
                 None
             }
             KeyCode::Left => {
                 if self.edit_cursor > 0 {
-                    self.edit_cursor -= 1;
+                    if let Some((prev_idx, _)) = self.edit_buffer[..self.edit_cursor].char_indices().last() {
+                        self.edit_cursor = prev_idx;
+                    }
                 }
                 None
             }
             KeyCode::Right => {
                 if self.edit_cursor < self.edit_buffer.len() {
-                    self.edit_cursor += 1;
+                    if let Some(ch) = self.edit_buffer[self.edit_cursor..].chars().next() {
+                        self.edit_cursor += ch.len_utf8();
+                    }
                 }
                 None
             }
             KeyCode::Char(c) => {
                 self.edit_buffer.insert(self.edit_cursor, c);
-                self.edit_cursor += 1;
+                self.edit_cursor += c.len_utf8();
                 None
             }
             _ => None,
@@ -683,11 +980,22 @@ impl AppState {
         self.review_tasks.get(self.selected_task_index)
     }
 
+    /// Helper to insert a recent event at the front and keep up to 200 events.
+    pub fn push_recent_event(&mut self, ev: crate::observability::CoordinatorEvent) {
+        self.recent_events.insert(0, ev);
+        if self.recent_events.len() > 200 {
+            self.recent_events.truncate(200);
+        }
+    }
+
     /// Updates local in-memory state based on incoming AgentMessage protocol events.
     pub fn apply_agent_message(&mut self, msg: &agent_protocol::AgentMessage) {
         match msg {
             agent_protocol::AgentMessage::TaskStarted {
-                agent_id, task_id, ..
+                agent_id,
+                task_id,
+                idempotency_key,
+                ..
             } => {
                 let mut short_id_opt = None;
                 if let Some(rt) = self
@@ -697,6 +1005,7 @@ impl AppState {
                 {
                     rt.task.status = TaskStatus::Executing;
                     rt.task.assigned_agent_id = Some(*agent_id);
+                    rt.progress_percent = Some(0);
                     short_id_opt = Some(rt.task.short_id.clone());
                 }
                 if let Some(agent) = self.agents.iter_mut().find(|a| a.id == *agent_id) {
@@ -706,6 +1015,22 @@ impl AppState {
                 let display_name =
                     short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
                 self.status_message = Some(format!("Task {display_name} is now EXECUTING."));
+
+                let ev = crate::observability::CoordinatorEvent {
+                    id: Uuid::new_v4(),
+                    timestamp: chrono::Utc::now(),
+                    event_type: "agent.task_started".to_string(),
+                    project_id: self.active_project.as_ref().map(|p| p.id),
+                    task_id: Some(*task_id),
+                    agent_id: Some(*agent_id),
+                    message: format!("Agent started task {display_name}"),
+                    payload: serde_json::json!({
+                        "agent_id": agent_id,
+                        "task_id": task_id,
+                        "idempotency_key": idempotency_key,
+                    }),
+                };
+                self.push_recent_event(ev);
             }
             agent_protocol::AgentMessage::ProgressUpdate {
                 task_id,
@@ -713,13 +1038,33 @@ impl AppState {
                 message,
                 ..
             } => {
-                let short_id = self
+                let short_id = if let Some(rt) = self
                     .review_tasks
-                    .iter()
+                    .iter_mut()
                     .find(|rt| rt.task.id == *task_id)
-                    .map(|rt| rt.task.short_id.clone())
-                    .unwrap_or_else(|| task_id.to_string()[..8].to_string());
+                {
+                    rt.progress_percent = Some(*percent);
+                    rt.task.short_id.clone()
+                } else {
+                    task_id.to_string()[..8].to_string()
+                };
                 self.status_message = Some(format!("Task {short_id} ({percent}%): {message}"));
+
+                let ev = crate::observability::CoordinatorEvent {
+                    id: Uuid::new_v4(),
+                    timestamp: chrono::Utc::now(),
+                    event_type: "agent.progress_update".to_string(),
+                    project_id: self.active_project.as_ref().map(|p| p.id),
+                    task_id: Some(*task_id),
+                    agent_id: None,
+                    message: format!("Task {short_id} ({percent}%): {message}"),
+                    payload: serde_json::json!({
+                        "task_id": task_id,
+                        "percent": percent,
+                        "message": message,
+                    }),
+                };
+                self.push_recent_event(ev);
             }
             agent_protocol::AgentMessage::Blocked {
                 agent_id,
@@ -742,6 +1087,22 @@ impl AppState {
                 let display_name =
                     short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
                 self.status_message = Some(format!("Task {display_name} is BLOCKED: {reason}"));
+
+                let ev = crate::observability::CoordinatorEvent {
+                    id: Uuid::new_v4(),
+                    timestamp: chrono::Utc::now(),
+                    event_type: "agent.task_blocked".to_string(),
+                    project_id: self.active_project.as_ref().map(|p| p.id),
+                    task_id: Some(*task_id),
+                    agent_id: Some(*agent_id),
+                    message: format!("Task {display_name} is BLOCKED: {reason}"),
+                    payload: serde_json::json!({
+                        "agent_id": agent_id,
+                        "task_id": task_id,
+                        "reason": reason,
+                    }),
+                };
+                self.push_recent_event(ev);
             }
             agent_protocol::AgentMessage::Completed {
                 agent_id,
@@ -756,6 +1117,7 @@ impl AppState {
                     .find(|rt| rt.task.id == *task_id)
                 {
                     rt.task.status = TaskStatus::Completed;
+                    rt.progress_percent = Some(100);
                     short_id_opt = Some(rt.task.short_id.clone());
                 }
                 if let Some(agent) = self.agents.iter_mut().find(|a| a.id == *agent_id) {
@@ -765,6 +1127,22 @@ impl AppState {
                 let display_name =
                     short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
                 self.status_message = Some(format!("Task {display_name} COMPLETED: {summary}"));
+
+                let ev = crate::observability::CoordinatorEvent {
+                    id: Uuid::new_v4(),
+                    timestamp: chrono::Utc::now(),
+                    event_type: "agent.task_completed".to_string(),
+                    project_id: self.active_project.as_ref().map(|p| p.id),
+                    task_id: Some(*task_id),
+                    agent_id: Some(*agent_id),
+                    message: format!("Task {display_name} COMPLETED: {summary}"),
+                    payload: serde_json::json!({
+                        "agent_id": agent_id,
+                        "task_id": task_id,
+                        "summary": summary,
+                    }),
+                };
+                self.push_recent_event(ev);
             }
             agent_protocol::AgentMessage::Failed {
                 agent_id,
@@ -788,6 +1166,22 @@ impl AppState {
                 let display_name =
                     short_id_opt.unwrap_or_else(|| task_id.to_string()[..8].to_string());
                 self.status_message = Some(format!("Task {display_name} FAILED: {error}"));
+
+                let ev = crate::observability::CoordinatorEvent {
+                    id: Uuid::new_v4(),
+                    timestamp: chrono::Utc::now(),
+                    event_type: "agent.task_failed".to_string(),
+                    project_id: self.active_project.as_ref().map(|p| p.id),
+                    task_id: Some(*task_id),
+                    agent_id: Some(*agent_id),
+                    message: format!("Task {display_name} FAILED: {error}"),
+                    payload: serde_json::json!({
+                        "agent_id": agent_id,
+                        "task_id": task_id,
+                        "error": error,
+                    }),
+                };
+                self.push_recent_event(ev);
             }
             agent_protocol::AgentMessage::Heartbeat {
                 agent_id,
@@ -893,12 +1287,8 @@ impl AppState {
             TuiUpdateEvent::StatusMessage(msg) => self.status_message = Some(msg),
             TuiUpdateEvent::Metrics(m) => self.metrics = Some(m),
             TuiUpdateEvent::Timeline(tl) => self.selected_timeline = Some(tl),
-            TuiUpdateEvent::ObservabilityEvent(ev) => {
-                self.recent_events.insert(0, ev);
-                if self.recent_events.len() > 100 {
-                    self.recent_events.truncate(100);
-                }
-            }
+            TuiUpdateEvent::ObservabilityEvent(ev) => self.push_recent_event(ev),
+            TuiUpdateEvent::RecentEvents(events) => self.recent_events = events,
         }
     }
 }

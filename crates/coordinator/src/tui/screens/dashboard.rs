@@ -85,17 +85,40 @@ impl DashboardScreen {
 
         Self::render_task_metrics(frame, bottom_chunks[0], state);
         Self::render_overlap_warnings(frame, bottom_chunks[1], state);
+
+        // If agent inspector modal is open, render overlay
+        if state.show_agent_inspector {
+            crate::tui::widgets::AgentInspectorWidget::render(frame, area, state);
+        }
     }
 
     /// Renders the fleet table: name, owner, current task, status.
     fn render_agents_table(frame: &mut Frame, area: Rect, state: &AppState) {
+        let is_focused = state.dashboard_focus == crate::tui::state::DashboardFocus::AgentsTable;
+        let border_color = if is_focused {
+            Color::Cyan
+        } else {
+            Color::DarkGray
+        };
+        let border_type = if is_focused {
+            BorderType::Thick
+        } else {
+            BorderType::Plain
+        };
+        let title_text = if is_focused {
+            " Registered Agents (Mesh Fleet) [Focused: C/Enter to Inspect Capabilities] "
+        } else {
+            " Registered Agents (Mesh Fleet) "
+        };
+
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray))
+            .border_type(border_type)
+            .border_style(Style::default().fg(border_color))
             .title(Span::styled(
-                " Registered Agents (Mesh Fleet) ",
+                title_text,
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(border_color)
                     .add_modifier(Modifier::BOLD),
             ));
 
@@ -110,10 +133,11 @@ impl DashboardScreen {
             state
                 .agents
                 .iter()
-                .map(|a| {
-                    let (name, owner) = if let Some(idx) = a.human_owner.find(" (") {
-                        let name = &a.human_owner[..idx];
-                        let owner = a.human_owner[idx + 2..].trim_end_matches(')');
+                .enumerate()
+                .map(|(idx, a)| {
+                    let (name, owner) = if let Some(first_idx) = a.human_owner.find(" (") {
+                        let name = &a.human_owner[..first_idx];
+                        let owner = a.human_owner[first_idx + 2..].trim_end_matches(')');
                         (name.to_string(), owner.to_string())
                     } else {
                         (
@@ -140,8 +164,17 @@ impl DashboardScreen {
                         AgentStatus::Offline => ("OFFLINE", Color::DarkGray),
                     };
 
-                    Row::new(vec![name, owner, current_task, status_str.to_string()])
-                        .style(Style::default().fg(color))
+                    let is_selected = idx == state.selected_agent_index;
+                    let prefix = if is_selected && is_focused { "▶ " } else { "  " };
+                    let display_name = format!("{prefix}{name}");
+
+                    let mut row_style = Style::default().fg(color);
+                    if is_selected && is_focused {
+                        row_style = row_style.add_modifier(Modifier::BOLD);
+                    }
+
+                    Row::new(vec![display_name, owner, current_task, status_str.to_string()])
+                        .style(row_style)
                 })
                 .collect()
         };
@@ -167,15 +200,33 @@ impl DashboardScreen {
         frame.render_widget(table, area);
     }
 
-    /// Renders the tasks table: short ID, title, status, assigned agent.
+    /// Renders the tasks table: short ID, title, status, progress, assigned agent.
     fn render_tasks_table(frame: &mut Frame, area: Rect, state: &AppState) {
+        let is_focused = state.dashboard_focus == crate::tui::state::DashboardFocus::TasksTable;
+        let border_color = if is_focused {
+            Color::Cyan
+        } else {
+            Color::DarkGray
+        };
+        let border_type = if is_focused {
+            BorderType::Thick
+        } else {
+            BorderType::Plain
+        };
+        let title_text = if is_focused {
+            " All Tasks Overview [Focused: ↑/↓ to Navigate, Enter for Details] "
+        } else {
+            " All Tasks Overview "
+        };
+
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray))
+            .border_type(border_type)
+            .border_style(Style::default().fg(border_color))
             .title(Span::styled(
-                " All Tasks Overview ",
+                title_text,
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(border_color)
                     .add_modifier(Modifier::BOLD),
             ));
 
@@ -185,12 +236,14 @@ impl DashboardScreen {
                 "No tasks currently in project.".to_string(),
                 "-".to_string(),
                 "-".to_string(),
+                "-".to_string(),
             ])]
         } else {
             state
                 .review_tasks
                 .iter()
-                .map(|item| {
+                .enumerate()
+                .map(|(idx, item)| {
                     let task = &item.task;
                     let (status_str, status_color) = match task.status {
                         TaskStatus::Proposed => ("Proposed", Color::DarkGray),
@@ -205,6 +258,16 @@ impl DashboardScreen {
                         TaskStatus::Cancelled => ("Cancelled", Color::DarkGray),
                     };
 
+                    let progress_str = if let Some(pct) = item.progress_percent {
+                        format!("{pct}%")
+                    } else if task.status == TaskStatus::Executing {
+                        "0%".to_string()
+                    } else if task.status == TaskStatus::Completed {
+                        "100%".to_string()
+                    } else {
+                        "-".to_string()
+                    };
+
                     let assigned_agent = if let Some(agent_id) = task.assigned_agent_id {
                         if let Some(a) = state.agents.iter().find(|a| a.id == agent_id) {
                             a.human_owner.clone()
@@ -217,13 +280,23 @@ impl DashboardScreen {
                         "- (Unassigned)".to_string()
                     };
 
+                    let is_selected = idx == state.selected_dashboard_task_index;
+                    let prefix = if is_selected && is_focused { "▶ " } else { "  " };
+                    let short_id_display = format!("{prefix}{}", task.short_id);
+
+                    let mut row_style = Style::default().fg(status_color);
+                    if is_selected && is_focused {
+                        row_style = row_style.add_modifier(Modifier::BOLD);
+                    }
+
                     Row::new(vec![
-                        task.short_id.clone(),
+                        short_id_display,
                         task.title.clone(),
                         status_str.to_string(),
+                        progress_str,
                         assigned_agent,
                     ])
-                    .style(Style::default().fg(status_color))
+                    .style(row_style)
                 })
                 .collect()
         };
@@ -232,13 +305,14 @@ impl DashboardScreen {
             rows,
             [
                 Constraint::Length(12),
-                Constraint::Percentage(45),
-                Constraint::Length(16),
-                Constraint::Percentage(25),
+                Constraint::Percentage(38),
+                Constraint::Length(14),
+                Constraint::Length(10),
+                Constraint::Percentage(26),
             ],
         )
         .header(
-            Row::new(vec!["Short ID", "Title", "Status", "Assigned Agent"]).style(
+            Row::new(vec!["Short ID", "Title", "Status", "Progress", "Assigned Agent"]).style(
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),

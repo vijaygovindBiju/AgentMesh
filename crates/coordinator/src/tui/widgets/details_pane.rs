@@ -132,18 +132,44 @@ impl DetailsPaneWidget {
                 .dependencies
                 .iter()
                 .map(|d| {
+                    let (target_id_str, target_title) = if let Some(dep_task) = state
+                        .review_tasks
+                        .iter()
+                        .find(|t| t.task.id == d.depends_on_id)
+                    {
+                        (
+                            format!("[{}] ", dep_task.task.short_id),
+                            dep_task.task.title.clone(),
+                        )
+                    } else {
+                        (
+                            format!("[{}] ", &d.depends_on_id.to_string()[..8]),
+                            "External Prerequisite".to_string(),
+                        )
+                    };
+
+                    let kind_label = match d.kind {
+                        crate::domain::DependencyKind::Blocks => " [Blocks] ",
+                        crate::domain::DependencyKind::RelatesTo => " [RelatesTo] ",
+                    };
+
                     Line::from(vec![
                         Span::styled(
-                            "  ↳ Depends on Task ID: ",
+                            "  ↳ Depends on: ",
                             Style::default().fg(Color::DarkGray),
                         ),
                         Span::styled(
-                            d.depends_on_id.to_string(),
-                            Style::default().fg(Color::Cyan),
+                            target_id_str,
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
                         ),
+                        Span::styled(target_title, Style::default().fg(Color::White)),
                         Span::styled(
-                            format!(" [{:?}]", d.kind),
-                            Style::default().fg(Color::Yellow),
+                            kind_label,
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
                         ),
                     ])
                 })

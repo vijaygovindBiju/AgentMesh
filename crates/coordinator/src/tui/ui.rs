@@ -7,7 +7,7 @@ use crate::tui::screens::{
     DashboardScreen, DiagnosticsScreen, PlanReviewScreen, ProjectInputScreen,
 };
 use crate::tui::state::{AppState, CurrentScreen};
-use crate::tui::widgets::{FooterWidget, HeaderWidget};
+use crate::tui::widgets::{FooterWidget, HeaderWidget, HelpModalWidget};
 
 /// Top-level layout orchestrator
 pub fn render(frame: &mut Frame, state: &AppState) {
@@ -35,4 +35,9 @@ pub fn render(frame: &mut Frame, state: &AppState) {
 
     // 3. Footer
     FooterWidget::render(frame, chunks[2], state);
+
+    // 4. Global Help Modal Dialog
+    if state.show_help_modal {
+        HelpModalWidget::render(frame, size, state);
+    }
 }
