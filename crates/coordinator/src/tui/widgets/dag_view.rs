@@ -43,8 +43,19 @@ impl DagViewWidget {
         let total_lines = lines.len();
         let visible_height = inner_area.height as usize;
         let scroll_offset = if total_lines > visible_height {
-            // Keep selected task visible if possible
-            0
+            let max_offset = total_lines.saturating_sub(visible_height);
+            if let Some(target_line) = lines
+                .iter()
+                .position(|l| l.spans.iter().any(|s| s.content.contains('▶')))
+            {
+                let half_height = visible_height / 2;
+                target_line.saturating_sub(half_height).min(max_offset)
+            } else if !state.review_tasks.is_empty() {
+                let progress = state.selected_task_index as f64 / state.review_tasks.len() as f64;
+                ((max_offset as f64) * progress).round() as usize
+            } else {
+                0
+            }
         } else {
             0
         };

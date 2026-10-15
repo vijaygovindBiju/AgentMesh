@@ -101,7 +101,17 @@ impl DetailsPaneWidget {
             });
 
         let desc_text = if state.input_mode == InputMode::EditingDescription {
-            format!("{}_", state.edit_buffer)
+            let cursor = state.edit_cursor.min(state.edit_buffer.len());
+            let safe_cursor = if state.edit_buffer.is_char_boundary(cursor) {
+                cursor
+            } else {
+                state.edit_buffer.len()
+            };
+            let mut s = String::with_capacity(state.edit_buffer.len() + 1);
+            s.push_str(&state.edit_buffer[..safe_cursor]);
+            s.push('_');
+            s.push_str(&state.edit_buffer[safe_cursor..]);
+            s
         } else {
             selected.task.description.clone()
         };

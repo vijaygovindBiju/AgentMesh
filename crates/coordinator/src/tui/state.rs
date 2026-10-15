@@ -796,58 +796,58 @@ impl AppState {
             }
 
             KeyCode::Char('y') | KeyCode::Char('Y') => {
-                let task_id = self.review_tasks[self.selected_task_index].task.id;
-                let short_id = self.review_tasks[self.selected_task_index]
-                    .task
-                    .short_id
-                    .clone();
-                self.review_tasks[self.selected_task_index].human_decision =
-                    Some(ApprovalStatus::Approved);
-                self.review_tasks[self.selected_task_index].task.status = TaskStatus::Approved;
-                self.status_message = Some(format!("Task {short_id} marked Approved."));
+                if let Some(item) = self.review_tasks.get_mut(self.selected_task_index) {
+                    let task_id = item.task.id;
+                    let short_id = item.task.short_id.clone();
+                    item.human_decision = Some(ApprovalStatus::Approved);
+                    item.task.status = TaskStatus::Approved;
+                    self.status_message = Some(format!("Task {short_id} marked Approved."));
 
-                // Advance selection if not at end
-                if self.selected_task_index + 1 < self.review_tasks.len() {
-                    self.selected_task_index += 1;
+                    // Advance selection if not at end
+                    if self.selected_task_index + 1 < self.review_tasks.len() {
+                        self.selected_task_index += 1;
+                    }
+                    Some(TuiAction::ApproveTask { task_id })
+                } else {
+                    None
                 }
-                Some(TuiAction::ApproveTask { task_id })
             }
             KeyCode::Char('n') | KeyCode::Char('N') => {
-                let task_id = self.review_tasks[self.selected_task_index].task.id;
-                let short_id = self.review_tasks[self.selected_task_index]
-                    .task
-                    .short_id
-                    .clone();
-                self.review_tasks[self.selected_task_index].human_decision =
-                    Some(ApprovalStatus::Rejected);
-                self.status_message = Some(format!("Task {short_id} marked Rejected."));
+                if let Some(item) = self.review_tasks.get_mut(self.selected_task_index) {
+                    let task_id = item.task.id;
+                    let short_id = item.task.short_id.clone();
+                    item.human_decision = Some(ApprovalStatus::Rejected);
+                    self.status_message = Some(format!("Task {short_id} marked Rejected."));
 
-                if self.selected_task_index + 1 < self.review_tasks.len() {
-                    self.selected_task_index += 1;
+                    if self.selected_task_index + 1 < self.review_tasks.len() {
+                        self.selected_task_index += 1;
+                    }
+                    Some(TuiAction::RejectTask { task_id })
+                } else {
+                    None
                 }
-                Some(TuiAction::RejectTask { task_id })
             }
             KeyCode::Char('e') | KeyCode::Char('E') => {
-                let current_desc = self.review_tasks[self.selected_task_index]
-                    .task
-                    .description
-                    .clone();
-                self.edit_buffer = current_desc;
-                self.edit_cursor = self.edit_buffer.len();
-                self.input_mode = InputMode::EditingDescription;
-                self.status_message = Some(
-                    "Editing description inline. [Enter] save & approve, [Esc] cancel.".to_string(),
-                );
+                if let Some(item) = self.review_tasks.get(self.selected_task_index) {
+                    let current_desc = item.task.description.clone();
+                    self.edit_buffer = current_desc;
+                    self.edit_cursor = self.edit_buffer.len();
+                    self.input_mode = InputMode::EditingDescription;
+                    self.status_message = Some(
+                        "Editing description inline. [Enter] save & approve, [Esc] cancel.".to_string(),
+                    );
+                }
                 None
             }
             KeyCode::Char('c') | KeyCode::Char('C') => {
-                let task_id = self.review_tasks[self.selected_task_index].task.id;
-                let short_id = self.review_tasks[self.selected_task_index]
-                    .task
-                    .short_id
-                    .clone();
-                self.status_message = Some(format!("Cancelling task {short_id}..."));
-                Some(TuiAction::CancelTask { task_id })
+                if let Some(item) = self.review_tasks.get(self.selected_task_index) {
+                    let task_id = item.task.id;
+                    let short_id = item.task.short_id.clone();
+                    self.status_message = Some(format!("Cancelling task {short_id}..."));
+                    Some(TuiAction::CancelTask { task_id })
+                } else {
+                    None
+                }
             }
             _ => None,
         }
@@ -862,25 +862,24 @@ impl AppState {
             }
             KeyCode::Enter => {
                 self.input_mode = InputMode::Normal;
-                let task_id = self.review_tasks[self.selected_task_index].task.id;
-                let short_id = self.review_tasks[self.selected_task_index]
-                    .task
-                    .short_id
-                    .clone();
                 let new_desc = self.edit_buffer.trim().to_string();
+                if let Some(item) = self.review_tasks.get_mut(self.selected_task_index) {
+                    let task_id = item.task.id;
+                    let short_id = item.task.short_id.clone();
+                    item.task.description = new_desc.clone();
+                    // Acceptance criteria: [E] edit description, Enter confirms edit + approves
+                    item.human_decision = Some(ApprovalStatus::EditedAndApproved);
+                    item.task.status = TaskStatus::Approved;
+                    self.status_message =
+                        Some(format!("Updated {short_id} description & marked Approved."));
 
-                self.review_tasks[self.selected_task_index].task.description = new_desc.clone();
-                // Acceptance criteria: [E] edit description, Enter confirms edit + approves
-                self.review_tasks[self.selected_task_index].human_decision =
-                    Some(ApprovalStatus::EditedAndApproved);
-                self.review_tasks[self.selected_task_index].task.status = TaskStatus::Approved;
-                self.status_message =
-                    Some(format!("Updated {short_id} description & marked Approved."));
-
-                Some(TuiAction::EditTaskDescription {
-                    task_id,
-                    new_description: new_desc,
-                })
+                    Some(TuiAction::EditTaskDescription {
+                        task_id,
+                        new_description: new_desc,
+                    })
+                } else {
+                    None
+                }
             }
             KeyCode::Backspace => {
                 if self.edit_cursor > 0 && !self.edit_buffer.is_empty() {
@@ -1281,9 +1280,27 @@ impl AppState {
         match event {
             TuiUpdateEvent::AgentMessage(msg) => self.apply_agent_message(&msg),
             TuiUpdateEvent::CoordinatorEvent(evt) => self.apply_coordinator_event(&evt),
-            TuiUpdateEvent::Tasks(tasks) => self.review_tasks = tasks,
-            TuiUpdateEvent::Agents(agents) => self.agents = agents,
-            TuiUpdateEvent::Overlaps(overlaps) => self.active_overlaps = overlaps,
+            TuiUpdateEvent::Tasks(tasks) => {
+                self.review_tasks = tasks;
+                if self.selected_task_index >= self.review_tasks.len() {
+                    self.selected_task_index = self.review_tasks.len().saturating_sub(1);
+                }
+                if self.selected_dashboard_task_index >= self.review_tasks.len() {
+                    self.selected_dashboard_task_index = self.review_tasks.len().saturating_sub(1);
+                }
+            }
+            TuiUpdateEvent::Agents(agents) => {
+                self.agents = agents;
+                if self.selected_agent_index >= self.agents.len() {
+                    self.selected_agent_index = self.agents.len().saturating_sub(1);
+                }
+            }
+            TuiUpdateEvent::Overlaps(overlaps) => {
+                self.active_overlaps = overlaps;
+                if self.selected_overlap_index >= self.active_overlaps.len() {
+                    self.selected_overlap_index = self.active_overlaps.len().saturating_sub(1);
+                }
+            }
             TuiUpdateEvent::StatusMessage(msg) => self.status_message = Some(msg),
             TuiUpdateEvent::Metrics(m) => self.metrics = Some(m),
             TuiUpdateEvent::Timeline(tl) => self.selected_timeline = Some(tl),
