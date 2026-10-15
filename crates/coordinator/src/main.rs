@@ -3,6 +3,9 @@ use std::time::Duration;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
+pub mod cli;
+use cli::CliArgs;
+
 use coordinator::ai::{
     create_provider_from_env, AvailableAgentContext, PlanningRequest, PlanningService,
 };
@@ -32,10 +35,31 @@ async fn main() -> Result<()> {
         )
         .init();
 
+    let _ = dotenvy::dotenv();
+
+    // 2. Parse command-line arguments
+    let args = match CliArgs::parse() {
+        Ok(a) => a,
+        Err(err) => {
+            eprintln!("Error: {err}");
+            std::process::exit(1);
+        }
+    };
+
+    if args.show_help {
+        println!("{}", CliArgs::help_text());
+        return Ok(());
+    }
+
+    if args.show_version {
+        println!("{}", CliArgs::version_text());
+        return Ok(());
+    }
+
     info!("Starting AgentMesh Coordinator v0.1.0");
 
-    let _ = dotenvy::dotenv();
-    let is_interactive = crossterm::tty::IsTty::is_tty(&std::io::stdout());
+    let stdout_is_tty = crossterm::tty::IsTty::is_tty(&std::io::stdout());
+    let is_headless = args.is_headless(stdout_is_tty);
 
     let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
         "postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh".to_string()
@@ -45,9 +69,24 @@ async fn main() -> Result<()> {
     let nats_token =
         std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
 
-    // 2. Attempt connection to PostgreSQL and NATS JetStream
+    // 3. Attempt connection to PostgreSQL and NATS JetStream
     let pool_res = create_pool(&db_url).await;
     let nats_res = connect(&nats_url, Some(&nats_token)).await;
+
+    // Handle --status flag before entering daemon/TUI loops
+    if args.status {
+        match pool_res {
+            Ok(pool) => {
+                let _ = run_migrations(&pool).await;
+                print_system_status(&pool).await?;
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("Error: Failed to connect to database at {db_url}: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
 
     match (pool_res, nats_res) {
         (Ok(pool), Ok((nats_client, jetstream))) => {
@@ -175,6 +214,15 @@ async fn main() -> Result<()> {
                     {
                         let _ = metrics_tx.send(TuiUpdateEvent::Metrics(m));
                     }
+                    if let Ok(events) =
+                        coordinator::observability::CoordinatorEventRepository::find_recent(
+                            &metrics_pool,
+                            50,
+                        )
+                        .await
+                    {
+                        let _ = metrics_tx.send(TuiUpdateEvent::RecentEvents(events));
+                    }
                 }
             });
 
@@ -257,9 +305,29 @@ async fn main() -> Result<()> {
             let mut app_state = AppState::new();
             app_state.agents = AgentRepository::list(&pool).await.unwrap_or_default();
 
-            // Check if there is an existing active project to resume
+            // Check if there is a target project specified by CLI or an existing active project to resume
             let projects = ProjectRepository::list(&pool).await.unwrap_or_default();
-            if let Some(active_proj) = projects.first() {
+            let selected_project = if let Some(ref target) = args.project_id {
+                let found = if let Ok(target_uuid) = Uuid::parse_str(target) {
+                    projects.iter().find(|p| p.id == target_uuid).cloned()
+                } else {
+                    projects
+                        .iter()
+                        .find(|p| p.name.eq_ignore_ascii_case(target))
+                        .cloned()
+                };
+
+                if let Some(ref p) = found {
+                    info!(project_id = %p.id, project_name = %p.name, "Target project selected via CLI");
+                } else {
+                    warn!(target = %target, "Specified project ID or name not found in database");
+                }
+                found
+            } else {
+                projects.first().cloned()
+            };
+
+            if let Some(active_proj) = selected_project {
                 coordinator.set_active_project(active_proj.id);
                 app_state.active_project = Some(active_proj.clone());
                 let (review_tasks, overlaps) =
@@ -271,7 +339,71 @@ async fn main() -> Result<()> {
                 }
             }
 
-            if !is_interactive {
+            // Spawn auto-approval worker if --auto-approve is enabled
+            if args.auto_approve {
+                info!("Auto-approve mode active: proposed tasks without critical overlap warnings will be approved automatically");
+                let auto_pool = pool.clone();
+                let auto_js = jetstream.clone();
+                tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(Duration::from_secs(2));
+                    loop {
+                        interval.tick().await;
+                        let projects = ProjectRepository::list(&auto_pool).await.unwrap_or_default();
+                        for proj in projects {
+                            if let Ok(tasks) = TaskRepository::list_by_status(
+                                &auto_pool,
+                                proj.id,
+                                TaskStatus::HumanReview,
+                            )
+                            .await
+                            {
+                                for task in tasks {
+                                    match CommandHandler::execute_approve_task(
+                                        &auto_pool,
+                                        task.id,
+                                        "AutoApproveDaemon",
+                                    )
+                                    .await
+                                    {
+                                        Ok(approved) => {
+                                            info!(
+                                                task_id = %task.id,
+                                                short_id = %approved.short_id,
+                                                "Auto-approved task without critical conflicts"
+                                            );
+                                            let _ = coordinator::coordinator::AssignmentService::assign_ready_tasks(
+                                                &auto_pool,
+                                                None,
+                                                Some(&auto_js),
+                                            )
+                                            .await;
+                                        }
+                                        Err(ApprovalGateError::BlockedByCriticalOverlap {
+                                            resources,
+                                            ..
+                                        }) => {
+                                            warn!(
+                                                task_id = %task.id,
+                                                ?resources,
+                                                "Auto-approval skipped: task blocked by critical resource conflict"
+                                            );
+                                        }
+                                        Err(e) => {
+                                            warn!(
+                                                task_id = %task.id,
+                                                error = %e,
+                                                "Auto-approval error"
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            if is_headless {
                 info!("Running in non-interactive daemon mode. Registration, heartbeat, and JetStream listeners active.");
                 tokio::signal::ctrl_c().await?;
                 info!("Coordinator shutting down gracefully");
@@ -282,11 +414,12 @@ async fn main() -> Result<()> {
             let mut app = TerminalApp::new()?;
             let loop_pool = pool.clone();
             let mut loop_coord = coordinator;
+            let action_tx = tui_tx.clone();
 
             app.run_with_channel(&mut app_state, tui_rx, |action, state| {
                 tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(async {
-                        handle_tui_action(&loop_pool, &mut loop_coord, action, state).await;
+                        handle_tui_action(&loop_pool, &mut loop_coord, action, state, &action_tx).await;
                     });
                 });
             })?;
@@ -297,7 +430,7 @@ async fn main() -> Result<()> {
                 "PostgreSQL or NATS JetStream not reachable. Falling back to Standalone Mock Mode."
             );
 
-            if !is_interactive {
+            if is_headless {
                 info!("Non-interactive terminal detected. Start PostgreSQL & NATS with `docker compose up -d`.");
                 return Ok(());
             }
@@ -381,6 +514,65 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Prints real-time system metrics, fleet status, and task summary to stdout for `--status`.
+async fn print_system_status(pool: &sqlx::PgPool) -> Result<()> {
+    let metrics = coordinator::observability::MetricsCollector::collect(pool).await?;
+    let agents = AgentRepository::list(pool).await.unwrap_or_default();
+    let projects = ProjectRepository::list(pool).await.unwrap_or_default();
+
+    println!("========================================================================");
+    println!("                     AgentMesh Fleet & System Status                    ");
+    println!("========================================================================");
+    println!("Projects ({} total):", projects.len());
+    for p in projects.iter().take(5) {
+        println!("  - [{}] {} (Status: {:?})", p.id, p.name, p.status);
+    }
+    if projects.len() > 5 {
+        println!("  ... and {} more", projects.len() - 5);
+    }
+    println!();
+    println!("Tasks Summary:");
+    println!("  Total Tasks:          {}", metrics.total_tasks);
+    println!("  Proposed / Review:    {}", metrics.tasks_proposed);
+    println!("  Approved:             {}", metrics.tasks_approved);
+    println!("  Executing / Assigned: {}", metrics.tasks_executing);
+    println!("  Completed:            {}", metrics.tasks_completed);
+    println!("  Failed:               {}", metrics.tasks_failed);
+    println!("  Blocked:              {}", metrics.tasks_blocked);
+    println!();
+    println!("Agent Fleet Summary:");
+    println!(
+        "  Total Agents:         {} ({} Idle, {} Busy, {} Offline)",
+        metrics.total_agents, metrics.agents_idle, metrics.agents_busy, metrics.agents_offline
+    );
+    println!(
+        "  Fleet Health:         {} Healthy, {} Degraded, {} Unhealthy",
+        metrics.agents_healthy, metrics.agents_degraded, metrics.agents_unhealthy
+    );
+    println!();
+    if !agents.is_empty() {
+        println!("Connected Agents:");
+        for a in &agents {
+            println!(
+                "  - [{}] {:?} | Status: {:?} | Capabilities: [{}]",
+                a.id,
+                a.adapter_type,
+                a.status,
+                a.capabilities_list().join(", ")
+            );
+        }
+        println!();
+    }
+    println!("Delivery & Reliability:");
+    println!("  Total Deliveries:     {}", metrics.total_deliveries);
+    println!("  Success Rate:         {:.1}%", metrics.delivery_success_rate_percent);
+    println!("  Resource Conflicts:   {}", metrics.total_conflicts);
+    println!("  Audit Alerts:         {}", metrics.total_audit_alerts);
+    println!("========================================================================");
+
+    Ok(())
+}
+
 /// Loads tasks, dependencies, and overlap warnings for a project into `ReviewTaskState`.
 async fn load_project_review_state(
     pool: &sqlx::PgPool,
@@ -407,109 +599,105 @@ async fn load_project_review_state(
 }
 
 /// Dispatches a user action from the TUI to coordinator core and PostgreSQL.
+/// Long operations (such as AI planning) run asynchronously without blocking the TUI event loop.
 async fn handle_tui_action(
     pool: &sqlx::PgPool,
     coordinator: &mut CoordinatorCore,
     action: TuiAction,
     state: &mut AppState,
+    action_tx: &tokio::sync::mpsc::UnboundedSender<TuiUpdateEvent>,
 ) {
     match action {
         TuiAction::SubmitProject { name, description } => {
-            state.status_message = Some(format!("Decomposing project '{name}' with AI planner..."));
+            state.status_message = Some(format!("Decomposing project '{name}' with AI planner in background..."));
+            state.current_screen = CurrentScreen::PlanReview;
 
-            let project = match ProjectRepository::create(
-                pool,
-                &NewProject {
-                    name: name.clone(),
-                    description: description.clone(),
-                },
-            )
-            .await
-            {
-                Ok(p) => p,
-                Err(e) => {
-                    state.status_message = Some(format!("Failed to create project: {e}"));
-                    return;
+            let pool = pool.clone();
+            let action_tx = action_tx.clone();
+            tokio::spawn(async move {
+                let project = match ProjectRepository::create(
+                    &pool,
+                    &NewProject {
+                        name: name.clone(),
+                        description: description.clone(),
+                    },
+                )
+                .await
+                {
+                    Ok(p) => p,
+                    Err(e) => {
+                        let _ = action_tx.send(TuiUpdateEvent::StatusMessage(format!("Failed to create project: {e}")));
+                        return;
+                    }
+                };
+
+                // Discover repository Git identity if running inside a Git repository
+                let current_repo = std::env::current_dir().unwrap_or_default();
+                if let Ok(git_id) = coordinator::git::RepositoryIdentity::discover(&current_repo).await {
+                    let _ = ProjectRepository::update_git_identity(
+                        &pool,
+                        project.id,
+                        &git_id.repo_root.to_string_lossy(),
+                        &git_id.base_branch,
+                        Some(&git_id.head_commit_sha),
+                    )
+                    .await;
                 }
-            };
 
-            state.active_project = Some(project.clone());
-            coordinator.set_active_project(project.id);
+                // Fetch available agents for planning
+                let agents = AgentRepository::list(&pool).await.unwrap_or_default();
+                let agent_contexts: Vec<AvailableAgentContext> = agents
+                    .iter()
+                    .map(|a| AvailableAgentContext {
+                        agent_id: a.id,
+                        human_owner: a.human_owner.clone(),
+                        adapter_type: format!("{:?}", a.adapter_type),
+                        capabilities: a.capabilities_list(),
+                    })
+                    .collect();
 
-            // Discover repository Git identity if running inside a Git repository
-            let current_repo = std::env::current_dir().unwrap_or_default();
-            if let Ok(git_id) = coordinator::git::RepositoryIdentity::discover(&current_repo).await
-            {
-                let _ = ProjectRepository::update_git_identity(
-                    pool,
-                    project.id,
-                    &git_id.repo_root.to_string_lossy(),
-                    &git_id.base_branch,
-                    Some(&git_id.head_commit_sha),
+                // Run AI Planning
+                let provider = create_provider_from_env()
+                    .unwrap_or_else(|_| std::sync::Arc::new(coordinator::ai::MockLlmProvider::new()));
+
+                let repo_context = coordinator::ai::RepositoryScanner::scan(&current_repo)
+                    .await
+                    .ok();
+
+                let plan_result = PlanningService::generate_and_persist_plan(
+                    &pool,
+                    provider.as_ref(),
+                    &PlanningRequest {
+                        project_id: project.id,
+                        project_name: project.name.clone(),
+                        project_description: project.description.clone(),
+                        available_agents: agent_contexts,
+                        existing_tasks: vec![],
+                        repo_context,
+                    },
                 )
                 .await;
-            }
 
-            let _ = coordinator.transition_state(CoordinatorState::Planning);
-
-            // Fetch available agents for planning
-            let agents = AgentRepository::list(pool).await.unwrap_or_default();
-            let agent_contexts: Vec<AvailableAgentContext> = agents
-                .iter()
-                .map(|a| AvailableAgentContext {
-                    agent_id: a.id,
-                    human_owner: a.human_owner.clone(),
-                    adapter_type: format!("{:?}", a.adapter_type),
-                    capabilities: a.capabilities_list(),
-                })
-                .collect();
-
-            // Run AI Planning
-            let provider = create_provider_from_env()
-                .unwrap_or_else(|_| std::sync::Arc::new(coordinator::ai::MockLlmProvider::new()));
-
-            let current_repo = std::env::current_dir().unwrap_or_default();
-            let repo_context = coordinator::ai::RepositoryScanner::scan(&current_repo)
-                .await
-                .ok();
-
-            let plan_result = PlanningService::generate_and_persist_plan(
-                pool,
-                provider.as_ref(),
-                &PlanningRequest {
-                    project_id: project.id,
-                    project_name: project.name.clone(),
-                    project_description: project.description.clone(),
-                    available_agents: agent_contexts,
-                    existing_tasks: vec![],
-                    repo_context,
-                },
-            )
-            .await;
-
-            match plan_result {
-                Ok(_proposal_id) => {
-                    let _ = coordinator.transition_state(CoordinatorState::HumanReview);
-
-                    // Load tasks & detect resource overlaps
-                    if let Ok((review_tasks, overlaps)) =
-                        load_project_review_state(pool, project.id).await
-                    {
-                        let task_count = review_tasks.len();
-                        let overlap_count = overlaps.len();
-                        state.review_tasks = review_tasks;
-                        state.active_overlaps = overlaps;
-                        state.current_screen = CurrentScreen::PlanReview;
-                        state.selected_task_index = 0;
-                        state.status_message = Some(format!(
-                            "Project planned: {task_count} tasks generated, {overlap_count} overlap warning(s). Review with [y/n/e/a]."
-                        ));
+                match plan_result {
+                    Ok(_proposal_id) => {
+                        // Load tasks & detect resource overlaps
+                        if let Ok((review_tasks, overlaps)) =
+                            load_project_review_state(&pool, project.id).await
+                        {
+                            let task_count = review_tasks.len();
+                            let overlap_count = overlaps.len();
+                            let _ = action_tx.send(TuiUpdateEvent::Tasks(review_tasks));
+                            let _ = action_tx.send(TuiUpdateEvent::Overlaps(overlaps));
+                            let _ = action_tx.send(TuiUpdateEvent::StatusMessage(format!(
+                                "Project '{name}' planned: {task_count} tasks generated, {overlap_count} overlap warning(s). Review with [y/n/e/a]."
+                            )));
+                        }
+                    }
+                    Err(e) => {
+                        let _ = action_tx.send(TuiUpdateEvent::StatusMessage(format!("AI Planning error: {e}")));
                     }
                 }
-                Err(e) => {
-                    state.status_message = Some(format!("AI Planning error: {e}"));
-                }
-            }
+            });
         }
 
         TuiAction::ApproveTask { task_id } => {
