@@ -27,8 +27,10 @@ impl HeartbeatMonitor {
             SET status = 'offline',
                 health_status = 'offline'
             WHERE status NOT IN ('offline')
-              AND last_seen IS NOT NULL
-              AND last_seen < $1
+              AND (
+                  (last_seen IS NOT NULL AND last_seen < $1)
+                  OR (last_seen IS NULL AND created_at < $1)
+              )
             RETURNING id
             "#,
             threshold

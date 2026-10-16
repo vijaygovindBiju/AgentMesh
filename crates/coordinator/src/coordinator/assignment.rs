@@ -103,6 +103,10 @@ impl AssignmentService {
                       AND (api_key_expires_at IS NULL OR api_key_expires_at > NOW())
                       AND active_tasks_count < max_concurrency
                       AND health_status IN ('healthy', 'degraded')
+                      AND (
+                          (last_seen IS NOT NULL AND last_seen >= NOW() - INTERVAL '30 seconds')
+                          OR (last_seen IS NULL AND created_at >= NOW() - INTERVAL '30 seconds')
+                      )
                     FOR UPDATE SKIP LOCKED
                     "#,
                     target_agent_id
@@ -134,6 +138,10 @@ impl AssignmentService {
                           AND (a.api_key_expires_at IS NULL OR a.api_key_expires_at > NOW())
                           AND a.active_tasks_count < a.max_concurrency
                           AND a.health_status IN ('healthy', 'degraded')
+                          AND (
+                              (a.last_seen IS NOT NULL AND a.last_seen >= NOW() - INTERVAL '30 seconds')
+                              OR (a.last_seen IS NULL AND a.created_at >= NOW() - INTERVAL '30 seconds')
+                          )
                           AND NOT EXISTS (
                               SELECT 1 FROM tasks t
                               WHERE t.assigned_agent_id = a.id

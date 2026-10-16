@@ -39,14 +39,14 @@ impl StaleTaskSweeper {
         let threshold = Utc::now() - heartbeat_timeout;
         let stale_tasks = sqlx::query!(
             r#"
-            SELECT t.id as "id!", t.short_id as "short_id!", t.assigned_agent_id as "assigned_agent_id!"
+            SELECT t.id as "id!", t.project_id as "project_id!", t.short_id as "short_id!", t.assigned_agent_id as "assigned_agent_id!"
             FROM tasks t
             JOIN agents a ON t.assigned_agent_id = a.id
             WHERE t.status IN ('assigned', 'executing')
               AND (
                     a.status = 'offline'
-                 OR a.last_seen IS NULL
-                 OR a.last_seen < $1
+                 OR (a.last_seen IS NULL AND a.created_at < $1 AND t.updated_at < $1)
+                 OR (a.last_seen IS NOT NULL AND a.last_seen < $1 AND t.updated_at < $1)
               )
             "#,
             threshold
@@ -57,6 +57,7 @@ impl StaleTaskSweeper {
 
         for row in stale_tasks {
             let task_id = row.id;
+            let project_id = row.project_id;
             let agent_id = row.assigned_agent_id;
             let short_id = row.short_id;
 
@@ -79,6 +80,20 @@ impl StaleTaskSweeper {
                 TaskStatus::Approved
             };
 
+            // Terminate any active delivery for this task so it does not linger and trigger duplicate expiration
+            let _ = sqlx::query!(
+                r#"
+                UPDATE task_deliveries
+                SET status = 'terminal',
+                    ack_kind = 'term',
+                    failure_reason = 'Reclaimed due to agent heartbeat timeout'
+                WHERE task_id = $1 AND status = 'delivered'
+                "#,
+                task_id
+            )
+            .execute(pool)
+            .await;
+
             // Unassign agent and revert task status
             TaskRepository::assign_agent(pool, task_id, None).await?;
             TaskRepository::update_status(pool, task_id, target_status).await?;
@@ -91,11 +106,11 @@ impl StaleTaskSweeper {
             )
             .await;
 
-            // Record coordinator observability event
+            // Record coordinator observability event with real project_id
             let _ = CoordinatorEventRepository::record(
                 pool,
                 "task.reclaimed",
-                None,
+                Some(project_id),
                 Some(task_id),
                 Some(agent_id),
                 format!(
@@ -104,6 +119,7 @@ impl StaleTaskSweeper {
                 ),
                 serde_json::json!({
                     "task_id": task_id,
+                    "project_id": project_id,
                     "agent_id": agent_id,
                     "attempts": attempts,
                     "new_status": target_status,
@@ -146,10 +162,18 @@ impl StaleTaskSweeper {
             let _ = TaskRepository::assign_agent(pool, del.task_id, None).await;
             let _ = TaskRepository::update_status(pool, del.task_id, TaskStatus::Approved).await;
 
+            let proj_id = sqlx::query_scalar!(
+                r#"SELECT project_id FROM tasks WHERE id = $1"#,
+                del.task_id
+            )
+            .fetch_optional(pool)
+            .await
+            .unwrap_or_default();
+
             let _ = CoordinatorEventRepository::record(
                 pool,
                 "delivery.expired",
-                None,
+                proj_id,
                 Some(del.task_id),
                 Some(del.agent_id),
                 format!("Delivery attempt #{} expired before agent ACK", del.attempt),

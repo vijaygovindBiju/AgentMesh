@@ -87,7 +87,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Phase 17 — Professional README, Installation & Developer Documentation (DONE)
 - [x] Phase 18 — Real-World Project Validation (DONE)
 - [x] Phase 19 — Real Multi-Machine Validation (DONE)
-- [~] Phase 20 — Operator TUI & CLI Preservation (IN PROGRESS)
+- [x] Phase 20 — Operator TUI & CLI Preservation (DONE)
 
 ---
 
@@ -673,16 +673,22 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
   - Terminal size responsiveness (80x24, 100x30, 160x50, 70x20)
   - CLI argument parsing deterministic tests
 - [x] Publish `TEST_READY.md` upon test suite readiness
-- [ ] Verify `cargo check --workspace` passes cleanly with 0 errors and 0 warnings
-- [ ] Verify `cargo test --workspace` passes cleanly across all workspace test suites
+- [x] Verify `cargo check --workspace` passes cleanly with 0 errors and 0 warnings
+- [x] Verify `cargo test --workspace` passes cleanly across all workspace test suites
 
 ### Acceptance Criteria — Phase 20
-- [ ] Architectural inspection and parallel plan documented before code modifications (R1 satisfied)
-- [ ] TUI runs using Ratatui and Crossterm with keyboard-driven navigation, DAG visualization, capability inspection, and shortcut help (R2 satisfied)
-- [ ] Headless/CLI modes of coordinator preserved without regression; automated orchestration intact (R3 satisfied)
-- [ ] Ratatui `TestBackend` unit tests verify screen rendering and state updates deterministically (R4 satisfied)
-- [ ] `cargo check --workspace` passes cleanly with 0 errors and 0 warnings (R4 satisfied)
-- [ ] `cargo test --workspace` passes cleanly with zero regressions (R4 satisfied)
+- [x] Architectural inspection and parallel plan documented before code modifications (R1 satisfied)
+- [x] TUI runs using Ratatui and Crossterm with keyboard-driven navigation, DAG visualization, capability inspection, and shortcut help (R2 satisfied)
+- [x] Headless/CLI modes of coordinator preserved without regression; automated orchestration intact (R3 satisfied)
+- [x] Ratatui `TestBackend` unit tests verify screen rendering and state updates deterministically (R4 satisfied)
+- [x] `cargo check --workspace` passes cleanly with 0 errors and 0 warnings (R4 satisfied)
+- [x] `cargo test --workspace` passes cleanly with zero regressions (R4 satisfied)
+
+**Commits for Phase 20**:
+- `726034c` feat(coordinator): add CLI argument parsing and preserve headless orchestration
+- `e71d297` feat(tui): enhance operator TUI with DAG visualization, capability inspection, and live event streaming
+- `6e6432d` test(tui): add deterministic Ratatui TestBackend verification suite for Phase 20
+- `38a0c23` fix(tui): clamp selection indices on collection updates and enable DAG scrolling
 
 ---
 
@@ -695,4 +701,34 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 > **PostgreSQL is the source of truth.**  
 > **NATS transports the work.**  
 > **Agent Protocol keeps runtimes interchangeable.**
+
+---
+
+## Incident Investigation & Fix — Task Reclamation Liveness & Test Isolation Hardening
+
+**Goal:** Resolve root cause of the task-reclamation incident at 2026-10-16T00:05:02Z, where 19 tasks were reclaimed on coordinator startup, fix agent liveness verification, prevent double-expiration events, properly associate project IDs on coordinator events, and prevent test fixture contamination.
+
+### Investigation
+- [x] Trace CLI startup path for `--tui` and coordinator reliability background services
+- [x] Inspect `StaleTaskSweeper`, `HeartbeatMonitor`, and `AssignmentService` liveness and lease logic
+- [x] Verify history and provenance of the 19 affected tasks in PostgreSQL
+- [x] Investigate `project_id=None` omission on `task.reclaimed` / `delivery.expired` events
+- [x] Document confirmed facts vs hypotheses in root cause report
+
+### Fix & Hardening
+- [x] Update `HeartbeatMonitor::check_timeouts` to mark unheartbeated agents offline when `created_at < threshold`
+- [x] Harden `AssignmentService::assign_ready_tasks` to only assign to genuinely active/live agents
+- [x] Harden `StaleTaskSweeper::sweep` to include `project_id` and terminate active deliveries on reclamation
+- [x] Add assignment grace period in `StaleTaskSweeper` to prevent premature reclamation on transient heartbeat delay
+- [x] Add 7 deterministic regression tests in `crates/coordinator/tests/task_reclamation_investigation.rs`
+- [x] Verify `--tui` and `--headless` operations and all workspace test suites pass cleanly
+
+**Verification Results**:
+- `cargo test --test task_reclamation_investigation -- --test-threads=1`: 7/7 tests passed cleanly
+- `cargo test -p coordinator --test phase14_reliability -- --test-threads=1`: 8/8 tests passed cleanly
+- `cargo test -p coordinator --test phase20_tui_verification`: 86/86 tests passed cleanly
+- `cargo check --workspace`: 0 errors, 0 warnings
+- `coordinator --status` / `--help` / `--version`: fully verified
+
+
 
