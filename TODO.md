@@ -88,6 +88,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Phase 18 — Real-World Project Validation (DONE)
 - [x] Phase 19 — Real Multi-Machine Validation (DONE)
 - [x] Phase 20 — Operator TUI & CLI Preservation (DONE)
+- [~] Phase 21 — Operator TUI Enhancement & Production Console (IN PROGRESS)
 
 ---
 
@@ -729,6 +730,36 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 - `cargo test -p coordinator --test phase20_tui_verification`: 86/86 tests passed cleanly
 - `cargo check --workspace`: 0 errors, 0 warnings
 - `coordinator --status` / `--help` / `--version`: fully verified
+
+---
+
+## Phase 21 — Operator TUI Enhancement & Production Console
+
+**Goal:** Enhance the AgentMesh Coordinator Terminal User Interface (TUI) into a comprehensive, production-grade, and user-friendly operator console with unified navigation, project lifecycle management, interactive DAG plan review and human approval gating, deep agent fleet inspection, live event streaming diagnostics, bounded ring buffer, and global command palette while maintaining full CLI compatibility and resilience across terminal dimensions.
+
+### Milestones & Status
+- [x] M1: Core State, Channel & State Machine Extensions [DONE]
+- [ ] M2: Responsive Header, Contextual Footer, Command Palette & Resize Resilience [TODO]
+- [ ] M3: Project Lifecycle, Recursive DAG & Action Gating [TODO]
+- [ ] M4: Deep Fleet Telemetry, Bounded Event Stream & Real Timelines [TODO]
+- [~] M_TEST: E2E Testing Track: Comprehensive TestBackend Suite [IN PROGRESS]
+- [ ] M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening [TODO]
+
+### Milestone Breakdown
+- [x] **M1: Core State, Channel & State Machine Extensions**
+  - [x] Copy/sync Phase 21 PROJECT.md and track Phase 21 in TODO.md
+  - [x] Allow (Cancelled -> Approved) and (Cancelled -> HumanReview) in `TaskStatus::can_transition_to`
+  - [x] Implement `execute_retry_task` in `crates/coordinator/src/coordinator/commands.rs`
+  - [x] Extend `AppState` in `crates/coordinator/src/tui/state.rs` (5 screens, connectivity, ring buffer, filters, modal states, clamp helpers)
+  - [x] Extend `TuiAction` and `TuiUpdateEvent` enums
+  - [x] Drop unpolled `tui_rx` in daemon mode in `crates/coordinator/src/main.rs`
+  - [x] Verify `cargo check --workspace` and 86 tests in `phase20_tui_verification.rs`
+- [ ] **M2: Responsive Header, Contextual Footer, Command Palette & Resize Resilience**
+- [ ] **M3: Project Lifecycle, Recursive DAG & Action Gating**
+- [ ] **M4: Deep Fleet Telemetry, Bounded Event Stream & Real Timelines**
+- [ ] **M_TEST: E2E Testing Track: Comprehensive TestBackend Suite**
+- [ ] **M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening**
+
 
 
 

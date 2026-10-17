@@ -47,8 +47,9 @@ impl TaskStatus {
     ///
     /// This is the canonical definition of allowed transitions.
     /// Coordinator logic MUST call this before persisting any status change.
-    pub fn can_transition_to(&self, next: &TaskStatus) -> bool {
+    pub fn can_transition_to<B: std::borrow::Borrow<TaskStatus>>(&self, next: B) -> bool {
         use TaskStatus::*;
+        let next = next.borrow();
         matches!(
             (self, next),
             // Planning → Review → Decision
@@ -63,8 +64,11 @@ impl TaskStatus {
                 | (Executing, Completed)
                 | (Executing, Failed)
                 | (Blocked, Executing)
-                // Reassignment path (human approves reassignment of failed task)
+                // Reassignment / retry path
                 | (Failed, Approved)
+                | (Failed, HumanReview)
+                | (Cancelled, Approved)
+                | (Cancelled, HumanReview)
                 // Cancellation (allowed from non-terminal active states)
                 | (Approved, Cancelled)
                 | (Assigned, Cancelled)
@@ -221,6 +225,9 @@ mod tests {
             (TaskStatus::Blocked, TaskStatus::Executing),
             (TaskStatus::Approved, TaskStatus::Cancelled),
             (TaskStatus::Executing, TaskStatus::Cancelled),
+            (TaskStatus::Cancelled, TaskStatus::Approved),
+            (TaskStatus::Cancelled, TaskStatus::HumanReview),
+            (TaskStatus::Failed, TaskStatus::HumanReview),
         ];
         for (from, to) in valid {
             assert!(
@@ -241,10 +248,10 @@ mod tests {
     #[test]
     fn invalid_transitions_are_rejected() {
         let invalid = vec![
-            // Terminal states have no exits
+            // Terminal states have no exits (except retry from Failed/Cancelled to Approved/HumanReview)
             (TaskStatus::Completed, TaskStatus::Executing),
             (TaskStatus::Rejected, TaskStatus::HumanReview),
-            (TaskStatus::Cancelled, TaskStatus::Approved),
+            (TaskStatus::Cancelled, TaskStatus::Executing),
             // Cannot skip states
             (TaskStatus::Approved, TaskStatus::Executing),
             (TaskStatus::HumanReview, TaskStatus::Executing),

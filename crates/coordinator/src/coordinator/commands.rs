@@ -101,6 +101,21 @@ pub enum ApprovalGateError {
     Database(#[from] anyhow::Error),
 }
 
+/// Errors occurring during coordinator command execution.
+#[derive(Debug, thiserror::Error)]
+pub enum CoordinatorError {
+    #[error("Task {0} not found")]
+    TaskNotFound(Uuid),
+    #[error("Cannot retry task {task_id}: status is {current:?}, expected Failed or Cancelled")]
+    InvalidTaskStatus { task_id: Uuid, current: TaskStatus },
+    #[error("Approval gate error: {0}")]
+    ApprovalGate(#[from] ApprovalGateError),
+    #[error("Database error: {0}")]
+    Database(#[from] sqlx::Error),
+    #[error("Error: {0}")]
+    Other(#[from] anyhow::Error),
+}
+
 pub struct CommandHandler;
 
 impl CommandHandler {
@@ -448,4 +463,88 @@ impl CommandHandler {
 
         Ok(updated)
     }
+
+    /// Retries a failed or cancelled task, resetting its state to Approved, terminating previous
+    /// deliveries, and emitting a coordinator event.
+    pub async fn execute_retry_task(
+        pool: &PgPool,
+        task_id: Uuid,
+        retried_by: &str,
+    ) -> Result<Task, CoordinatorError> {
+        // 1. Fetch task and check status
+        let task = TaskRepository::find_by_id(pool, task_id)
+            .await
+            .map_err(CoordinatorError::Other)?
+            .ok_or(CoordinatorError::TaskNotFound(task_id))?;
+
+        if task.status != TaskStatus::Failed && task.status != TaskStatus::Cancelled {
+            return Err(CoordinatorError::InvalidTaskStatus {
+                task_id,
+                current: task.status,
+            });
+        }
+
+        // 2. Terminate any previous non-terminal deliveries
+        let deliveries = TaskDeliveryRepository::list_by_task(pool, task_id)
+            .await
+            .unwrap_or_default();
+        for del in deliveries {
+            if del.status == DeliveryStatus::Pending
+                || del.status == DeliveryStatus::Delivered
+                || del.status == DeliveryStatus::Acknowledged
+            {
+                let _ = TaskDeliveryRepository::mark_terminal(pool, del.id, "Task retried by operator").await;
+            }
+        }
+
+        // 3. Clear assigned agent so it can be cleanly reassigned by AssignmentService
+        let _ = TaskRepository::assign_agent(pool, task_id, None).await;
+
+        // 4. Record approval in task_approvals
+        let _ = ProposalRepository::record_approval(
+            pool,
+            &NewTaskApproval {
+                task_id,
+                proposal_id: task.proposal_id,
+                status: ApprovalStatus::Approved,
+                edited_desc: None,
+                approved_by: retried_by.to_string(),
+            },
+        )
+        .await;
+
+        // 5. Update task status to Approved
+        let updated = TaskRepository::update_status(pool, task_id, TaskStatus::Approved)
+            .await
+            .map_err(CoordinatorError::Other)?
+            .ok_or(CoordinatorError::TaskNotFound(task_id))?;
+
+        // 6. Record coordinator event
+        let _ = CoordinatorEventRepository::record(
+            pool,
+            "task.retried",
+            Some(task.project_id),
+            Some(task.id),
+            None,
+            format!("Task {} retried by {}", task.short_id, retried_by),
+            serde_json::json!({
+                "task_id": task.id,
+                "short_id": task.short_id,
+                "retried_by": retried_by,
+                "previous_status": task.status,
+            }),
+        )
+        .await;
+
+        Ok(updated)
+    }
+}
+
+/// Convenience wrapper around `CommandHandler::execute_retry_task`.
+pub async fn execute_retry_task(
+    pool: &PgPool,
+    task_id: Uuid,
+    retried_by: &str,
+) -> Result<Task, CoordinatorError> {
+    CommandHandler::execute_retry_task(pool, task_id, retried_by).await
 }

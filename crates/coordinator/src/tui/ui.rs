@@ -27,9 +27,9 @@ pub fn render(frame: &mut Frame, state: &AppState) {
 
     // 2. Main Screen Body
     match state.current_screen {
-        CurrentScreen::ProjectInput => ProjectInputScreen::render(frame, chunks[1], state),
+        CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => ProjectInputScreen::render(frame, chunks[1], state),
         CurrentScreen::PlanReview => PlanReviewScreen::render(frame, chunks[1], state),
-        CurrentScreen::Dashboard => DashboardScreen::render(frame, chunks[1], state),
+        CurrentScreen::Dashboard | CurrentScreen::FleetInspector => DashboardScreen::render(frame, chunks[1], state),
         CurrentScreen::Diagnostics => DiagnosticsScreen::render(frame, chunks[1], state),
     }
 

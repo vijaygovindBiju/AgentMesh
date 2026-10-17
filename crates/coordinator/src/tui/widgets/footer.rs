@@ -129,7 +129,7 @@ impl FooterWidget {
                             Span::raw("Quit"),
                         ]
                     }
-                    CurrentScreen::ProjectInput => vec![
+                    CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => vec![
                         Span::styled(
                             " [Enter/i] ",
                             Style::default()
@@ -144,7 +144,7 @@ impl FooterWidget {
                         Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
                         Span::raw("Quit"),
                     ],
-                    CurrentScreen::Dashboard => match state.dashboard_focus {
+                    CurrentScreen::Dashboard | CurrentScreen::FleetInspector => match state.dashboard_focus {
                         crate::tui::state::DashboardFocus::AgentsTable => vec![
                             Span::styled(" [←/→] ", Style::default().fg(Color::Cyan)),
                             Span::raw("Focus  "),

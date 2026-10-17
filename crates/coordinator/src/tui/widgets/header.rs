@@ -68,9 +68,9 @@ impl HeaderWidget {
             Line::from("4: Diagnostics"),
         ];
         let selected_idx = match state.current_screen {
-            CurrentScreen::ProjectInput => 0,
+            CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => 0,
             CurrentScreen::PlanReview => 1,
-            CurrentScreen::Dashboard => 2,
+            CurrentScreen::Dashboard | CurrentScreen::FleetInspector => 2,
             CurrentScreen::Diagnostics => 3,
         };
 

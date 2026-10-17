@@ -1,9 +1,13 @@
+use std::collections::VecDeque;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use uuid::Uuid;
 
 use crate::domain::{
     Agent, ApprovalStatus, OverlapWarning, Project, Task, TaskDependency, TaskStatus,
 };
+
+/// Maximum capacity of the bounded in-memory recent events ring buffer.
+pub const MAX_RECENT_EVENTS: usize = 300;
 
 /// Actions emitted by the TUI to be handled by the outer application or coordinator.
 /// The TUI NEVER performs side effects (DB writes, NATS publishes, LLM requests) directly.
@@ -28,6 +32,12 @@ pub enum TuiAction {
     RefreshData,
     /// Human requested exit
     Quit,
+    /// Human selected and requested loading an existing project
+    LoadProject { project_id: Uuid },
+    /// Human requested retrying a failed or cancelled task
+    RetryTask { task_id: Uuid },
+    /// Human requested deep timeline drilldown inspection for a task
+    InspectTaskTimeline { task_id: Uuid },
 }
 
 /// Incoming real-time events sent to the TUI from NATS subscriber or coordinator.
@@ -43,27 +53,51 @@ pub enum TuiUpdateEvent {
     Timeline(crate::observability::TaskTimeline),
     ObservabilityEvent(crate::observability::CoordinatorEvent),
     RecentEvents(Vec<crate::observability::CoordinatorEvent>),
+    Projects(Vec<Project>),
+    ActiveProject(Project),
+    Connectivity { pg: bool, nats: bool },
 }
 
 /// Active top-level screen
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CurrentScreen {
+    Dashboard,
     #[default]
     ProjectInput,
+    ProjectManagement,
     PlanReview,
-    Dashboard,
+    FleetInspector,
     Diagnostics,
 }
+
+pub type Screen = CurrentScreen;
 
 impl CurrentScreen {
     pub fn title(&self) -> &'static str {
         match self {
+            CurrentScreen::Dashboard => "1. Dashboard",
             CurrentScreen::ProjectInput => "1. Project Input",
+            CurrentScreen::ProjectManagement => "2. Project Management",
             CurrentScreen::PlanReview => "2. Plan Review",
-            CurrentScreen::Dashboard => "3. Dashboard",
+            CurrentScreen::FleetInspector => "4. Fleet Inspector",
             CurrentScreen::Diagnostics => "4. Diagnostics",
         }
     }
+}
+
+/// Destructive action requiring operator safety confirmation before execution
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DestructiveAction {
+    CancelTask { task_id: Uuid, short_id: String },
+    RejectTask { task_id: Uuid, short_id: String },
+}
+
+/// State model for safety confirmation modal dialog
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfirmationModalState {
+    pub title: String,
+    pub message: String,
+    pub action: DestructiveAction,
 }
 
 /// Active focus pane on the Dashboard screen
@@ -121,6 +155,10 @@ pub struct AppState {
     pub current_screen: CurrentScreen,
     pub input_mode: InputMode,
 
+    // Connectivity state
+    pub pg_connected: bool,
+    pub nats_connected: bool,
+
     // Project input fields
     pub project_name_input: String,
     pub project_desc_input: String,
@@ -128,8 +166,10 @@ pub struct AppState {
     /// 0 = Name, 1 = Description
     pub project_focus_field: usize,
 
-    // Active project context
+    // Project management & context
     pub active_project: Option<Project>,
+    pub available_projects: Vec<Project>,
+    pub selected_project_index: usize,
 
     // Plan review state
     pub review_tasks: Vec<ReviewTaskState>,
@@ -151,11 +191,22 @@ pub struct AppState {
     // Diagnostics / Observability
     pub metrics: Option<crate::observability::SystemMetrics>,
     pub recent_events: Vec<crate::observability::CoordinatorEvent>,
+    pub event_ring_buffer: VecDeque<crate::observability::CoordinatorEvent>,
     pub selected_timeline: Option<crate::observability::TaskTimeline>,
     pub selected_event_index: usize,
     pub diagnostics_focus: DiagnosticsFocus,
     pub show_event_payload_modal: bool,
     pub show_timeline_modal: bool,
+    pub event_filter_severity: Option<String>,
+    pub event_filter_entity: Option<String>,
+
+    // Command palette state
+    pub show_command_palette: bool,
+    pub command_palette_query: String,
+    pub command_palette_selected_index: usize,
+
+    // Safety confirmation dialog
+    pub pending_confirmation: Option<ConfirmationModalState>,
 
     // Global modal dialogs
     pub show_help_modal: bool,
@@ -177,12 +228,17 @@ impl AppState {
             current_screen: CurrentScreen::ProjectInput,
             input_mode: InputMode::Normal,
 
+            pg_connected: false,
+            nats_connected: false,
+
             project_name_input: String::new(),
             project_desc_input: String::new(),
             project_input_cursor: 0,
             project_focus_field: 0,
 
             active_project: None,
+            available_projects: Vec::new(),
+            selected_project_index: 0,
 
             review_tasks: Vec::new(),
             selected_task_index: 0,
@@ -201,11 +257,20 @@ impl AppState {
 
             metrics: None,
             recent_events: Vec::new(),
+            event_ring_buffer: VecDeque::new(),
             selected_timeline: None,
             selected_event_index: 0,
             diagnostics_focus: DiagnosticsFocus::EventsStream,
             show_event_payload_modal: false,
             show_timeline_modal: false,
+            event_filter_severity: None,
+            event_filter_entity: None,
+
+            show_command_palette: false,
+            command_palette_query: String::new(),
+            command_palette_selected_index: 0,
+
+            pending_confirmation: None,
 
             show_help_modal: false,
 
@@ -413,6 +478,13 @@ impl AppState {
                 payload: serde_json::json!({ "resource": "crates/db" }),
             },
         ];
+        self.pg_connected = true;
+        self.nats_connected = true;
+        if let Some(ref proj) = self.active_project {
+            self.available_projects = vec![proj.clone()];
+            self.selected_project_index = 0;
+        }
+        self.event_ring_buffer = VecDeque::from(self.recent_events.clone());
         self.current_screen = CurrentScreen::PlanReview;
         self
     }
@@ -523,20 +595,24 @@ impl AppState {
                 self.current_screen = CurrentScreen::Diagnostics;
                 None
             }
+            KeyCode::Char('5') => {
+                self.current_screen = CurrentScreen::FleetInspector;
+                None
+            }
             KeyCode::Char('r') | KeyCode::Char('R') => {
                 self.status_message = Some("Refreshed data.".to_string());
                 Some(TuiAction::RefreshData)
             }
             _ => match self.current_screen {
                 CurrentScreen::PlanReview => self.handle_plan_review_key(key),
-                CurrentScreen::ProjectInput => {
+                CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => {
                     if key.code == KeyCode::Enter || key.code == KeyCode::Char('i') {
                         self.input_mode = InputMode::EnteringProject;
                         self.status_message = Some("Entering project details. [Tab] switch field, [Enter] submit, [Esc] cancel.".to_string());
                     }
                     None
                 }
-                CurrentScreen::Dashboard => self.handle_dashboard_key(key),
+                CurrentScreen::Dashboard | CurrentScreen::FleetInspector => self.handle_dashboard_key(key),
                 CurrentScreen::Diagnostics => self.handle_diagnostics_key(key),
             },
         }
@@ -968,9 +1044,9 @@ impl AppState {
 
     pub fn cycle_screen(&mut self) {
         self.current_screen = match self.current_screen {
-            CurrentScreen::ProjectInput => CurrentScreen::PlanReview,
+            CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => CurrentScreen::PlanReview,
             CurrentScreen::PlanReview => CurrentScreen::Dashboard,
-            CurrentScreen::Dashboard => CurrentScreen::Diagnostics,
+            CurrentScreen::Dashboard | CurrentScreen::FleetInspector => CurrentScreen::Diagnostics,
             CurrentScreen::Diagnostics => CurrentScreen::ProjectInput,
         };
     }
@@ -979,8 +1055,79 @@ impl AppState {
         self.review_tasks.get(self.selected_task_index)
     }
 
-    /// Helper to insert a recent event at the front and keep up to 200 events.
+    /// Returns the number of currently active agents (Idle or Busy) alongside total agents.
+    pub fn active_agent_count(&self) -> (usize, usize) {
+        let total = self.agents.len();
+        let active = self
+            .agents
+            .iter()
+            .filter(|a| {
+                matches!(
+                    a.status,
+                    crate::domain::AgentStatus::Idle | crate::domain::AgentStatus::Busy
+                )
+            })
+            .count();
+        (active, total)
+    }
+
+    /// Returns the number of tasks pending human approval.
+    pub fn pending_approvals_count(&self) -> usize {
+        self.review_tasks
+            .iter()
+            .filter(|rt| {
+                matches!(rt.task.status, TaskStatus::HumanReview | TaskStatus::Proposed)
+                    && rt.human_decision.is_none()
+            })
+            .count()
+    }
+
+    /// Clamps all selection and scroll indices safely to their valid bounds.
+    pub fn clamp_all_indices(&mut self) {
+        if self.review_tasks.is_empty() {
+            self.selected_task_index = 0;
+            self.selected_dashboard_task_index = 0;
+        } else {
+            if self.selected_task_index >= self.review_tasks.len() {
+                self.selected_task_index = self.review_tasks.len().saturating_sub(1);
+            }
+            if self.selected_dashboard_task_index >= self.review_tasks.len() {
+                self.selected_dashboard_task_index = self.review_tasks.len().saturating_sub(1);
+            }
+        }
+
+        if self.agents.is_empty() {
+            self.selected_agent_index = 0;
+        } else if self.selected_agent_index >= self.agents.len() {
+            self.selected_agent_index = self.agents.len().saturating_sub(1);
+        }
+
+        if self.active_overlaps.is_empty() {
+            self.selected_overlap_index = 0;
+        } else if self.selected_overlap_index >= self.active_overlaps.len() {
+            self.selected_overlap_index = self.active_overlaps.len().saturating_sub(1);
+        }
+
+        if self.recent_events.is_empty() {
+            self.selected_event_index = 0;
+        } else if self.selected_event_index >= self.recent_events.len() {
+            self.selected_event_index = self.recent_events.len().saturating_sub(1);
+        }
+
+        if self.available_projects.is_empty() {
+            self.selected_project_index = 0;
+        } else if self.selected_project_index >= self.available_projects.len() {
+            self.selected_project_index = self.available_projects.len().saturating_sub(1);
+        }
+    }
+
+    /// Helper to insert a recent event at the front and keep up to bounded capacity.
     pub fn push_recent_event(&mut self, ev: crate::observability::CoordinatorEvent) {
+        self.event_ring_buffer.push_front(ev.clone());
+        if self.event_ring_buffer.len() > MAX_RECENT_EVENTS {
+            self.event_ring_buffer.truncate(MAX_RECENT_EVENTS);
+        }
+
         self.recent_events.insert(0, ev);
         if self.recent_events.len() > 200 {
             self.recent_events.truncate(200);
@@ -1305,7 +1452,27 @@ impl AppState {
             TuiUpdateEvent::Metrics(m) => self.metrics = Some(m),
             TuiUpdateEvent::Timeline(tl) => self.selected_timeline = Some(tl),
             TuiUpdateEvent::ObservabilityEvent(ev) => self.push_recent_event(ev),
-            TuiUpdateEvent::RecentEvents(events) => self.recent_events = events,
+            TuiUpdateEvent::RecentEvents(events) => {
+                let mut ring = events.clone();
+                if ring.len() > MAX_RECENT_EVENTS {
+                    ring.truncate(MAX_RECENT_EVENTS);
+                }
+                self.event_ring_buffer = VecDeque::from(ring);
+                self.recent_events = events;
+            }
+            TuiUpdateEvent::Projects(projects) => {
+                self.available_projects = projects;
+                if self.selected_project_index >= self.available_projects.len() {
+                    self.selected_project_index = self.available_projects.len().saturating_sub(1);
+                }
+            }
+            TuiUpdateEvent::ActiveProject(project) => {
+                self.active_project = Some(project);
+            }
+            TuiUpdateEvent::Connectivity { pg, nats } => {
+                self.pg_connected = pg;
+                self.nats_connected = nats;
+            }
         }
     }
 }
@@ -1592,5 +1759,134 @@ mod tests {
         assert_eq!(state.review_tasks[0].task.status, TaskStatus::Completed);
         assert_eq!(state.agents[0].status, crate::domain::AgentStatus::Idle);
         assert_eq!(state.agents[0].current_task_id, None);
+    }
+
+    #[test]
+    fn test_phase21_screen_hierarchy_and_aliases() {
+        let mut state = AppState::new();
+        assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+        assert_eq!(state.current_screen.title(), "1. Project Input");
+
+        state.current_screen = CurrentScreen::ProjectManagement;
+        assert_eq!(state.current_screen.title(), "2. Project Management");
+
+        state.current_screen = CurrentScreen::FleetInspector;
+        assert_eq!(state.current_screen.title(), "4. Fleet Inspector");
+
+        let screen_alias: Screen = CurrentScreen::Dashboard;
+        assert_eq!(screen_alias, CurrentScreen::Dashboard);
+    }
+
+    #[test]
+    fn test_phase21_connectivity_and_project_updates() {
+        let mut state = AppState::new();
+        assert!(!state.pg_connected);
+        assert!(!state.nats_connected);
+
+        state.apply_update(TuiUpdateEvent::Connectivity { pg: true, nats: true });
+        assert!(state.pg_connected);
+        assert!(state.nats_connected);
+
+        let proj = Project {
+            id: Uuid::new_v4(),
+            name: "New Test Project".to_string(),
+            description: "Test description".to_string(),
+            status: crate::domain::ProjectStatus::Planning,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        state.apply_update(TuiUpdateEvent::Projects(vec![proj.clone()]));
+        assert_eq!(state.available_projects.len(), 1);
+        assert_eq!(state.selected_project_index, 0);
+
+        state.apply_update(TuiUpdateEvent::ActiveProject(proj.clone()));
+        assert_eq!(state.active_project.as_ref().map(|p| p.id), Some(proj.id));
+    }
+
+    #[test]
+    fn test_phase21_active_agent_count_and_pending_approvals() {
+        let state = AppState::new().with_mock_data();
+        // Mock data has 2 agents: 1 Idle, 1 Busy
+        let (active, total) = state.active_agent_count();
+        assert_eq!(total, 2);
+        assert_eq!(active, 2);
+
+        // Mock data has 3 tasks in HumanReview with no human_decision
+        assert_eq!(state.pending_approvals_count(), 3);
+    }
+
+    #[test]
+    fn test_phase21_clamp_all_indices_helper() {
+        let mut state = AppState::new().with_mock_data();
+        state.selected_task_index = 999;
+        state.selected_dashboard_task_index = 999;
+        state.selected_agent_index = 999;
+        state.selected_overlap_index = 999;
+        state.selected_event_index = 999;
+        state.selected_project_index = 999;
+
+        state.clamp_all_indices();
+
+        assert_eq!(state.selected_task_index, state.review_tasks.len() - 1);
+        assert_eq!(state.selected_dashboard_task_index, state.review_tasks.len() - 1);
+        assert_eq!(state.selected_agent_index, state.agents.len() - 1);
+        assert_eq!(state.selected_overlap_index, state.active_overlaps.len() - 1);
+        assert_eq!(state.selected_event_index, state.recent_events.len() - 1);
+        assert_eq!(state.selected_project_index, state.available_projects.len() - 1);
+    }
+
+    #[test]
+    fn test_phase21_recent_events_clamped_on_apply_update() {
+        let mut state = AppState::new();
+        let large_batch: Vec<crate::observability::CoordinatorEvent> = (0..500)
+            .map(|i| crate::observability::CoordinatorEvent {
+                id: Uuid::new_v4(),
+                timestamp: chrono::Utc::now(),
+                event_type: "burst.test".to_string(),
+                project_id: None,
+                task_id: None,
+                agent_id: None,
+                message: format!("Burst #{i}"),
+                payload: serde_json::json!({ "i": i }),
+            })
+            .collect();
+
+        state.apply_update(TuiUpdateEvent::RecentEvents(large_batch));
+        assert!(state.event_ring_buffer.len() <= MAX_RECENT_EVENTS);
+        assert_eq!(state.event_ring_buffer.len(), 300);
+    }
+
+    #[test]
+    fn test_phase21_confirmation_modal_and_new_actions() {
+        let mut state = AppState::new();
+        let task_id = Uuid::new_v4();
+        let proj_id = Uuid::new_v4();
+
+        state.pending_confirmation = Some(ConfirmationModalState {
+            title: "Confirm Cancellation".to_string(),
+            message: "Are you sure you want to cancel this task?".to_string(),
+            action: DestructiveAction::CancelTask {
+                task_id,
+                short_id: "PLAN-1".to_string(),
+            },
+        });
+
+        assert!(state.pending_confirmation.is_some());
+        assert_eq!(
+            state.pending_confirmation.as_ref().unwrap().action,
+            DestructiveAction::CancelTask {
+                task_id,
+                short_id: "PLAN-1".to_string()
+            }
+        );
+
+        let action1 = TuiAction::LoadProject { project_id: proj_id };
+        let action2 = TuiAction::RetryTask { task_id };
+        let action3 = TuiAction::InspectTaskTimeline { task_id };
+
+        assert_eq!(action1, TuiAction::LoadProject { project_id: proj_id });
+        assert_eq!(action2, TuiAction::RetryTask { task_id });
+        assert_eq!(action3, TuiAction::InspectTaskTimeline { task_id });
     }
 }

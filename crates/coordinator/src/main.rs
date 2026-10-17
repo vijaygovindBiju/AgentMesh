@@ -16,7 +16,9 @@ use coordinator::db::pool::{create_pool, run_migrations};
 use coordinator::db::repositories::{
     AgentRepository, OverlapWarningRepository, ProjectRepository, TaskRepository,
 };
-use coordinator::domain::{AdapterType, AgentStatus, NewAgent, NewProject, TaskStatus};
+use coordinator::domain::{
+    AdapterType, AgentStatus, ApprovalStatus, NewAgent, NewProject, TaskStatus,
+};
 use coordinator::messaging::{
     connect, ensure_streams, EventSubscriber, HeartbeatMonitor, RegistrationHandler,
 };
@@ -405,6 +407,7 @@ async fn main() -> Result<()> {
 
             if is_headless {
                 info!("Running in non-interactive daemon mode. Registration, heartbeat, and JetStream listeners active.");
+                drop(tui_rx);
                 tokio::signal::ctrl_c().await?;
                 info!("Coordinator shutting down gracefully");
                 return Ok(());
@@ -859,6 +862,45 @@ async fn handle_tui_action(
 
         TuiAction::Quit => {
             state.should_quit = true;
+        }
+
+        TuiAction::LoadProject { project_id } => {
+            state.status_message = Some(format!("Loading project {project_id}..."));
+            if let Ok(Some(proj)) = ProjectRepository::find_by_id(pool, project_id).await {
+                state.active_project = Some(proj);
+                if let Ok((rts, overlaps)) = load_project_review_state(pool, project_id).await {
+                    state.review_tasks = rts;
+                    state.active_overlaps = overlaps;
+                }
+            }
+        }
+
+        TuiAction::RetryTask { task_id } => {
+            state.status_message = Some(format!("Retrying task {task_id}..."));
+            match CommandHandler::execute_retry_task(pool, task_id, "operator").await {
+                Ok(updated_task) => {
+                    if let Some(rt) = state
+                        .review_tasks
+                        .iter_mut()
+                        .find(|rt| rt.task.id == task_id)
+                    {
+                        rt.task = updated_task;
+                        rt.human_decision = Some(ApprovalStatus::Approved);
+                    }
+                    state.status_message = Some(format!("Task {task_id} reset to Approved."));
+                }
+                Err(e) => {
+                    state.status_message = Some(format!("Retry error: {e}"));
+                }
+            }
+        }
+
+        TuiAction::InspectTaskTimeline { task_id } => {
+            state.status_message = Some(format!("Inspecting timeline for task {task_id}..."));
+            if let Ok(timeline) = coordinator::observability::TimelineService::build_task_timeline(pool, task_id).await {
+                state.selected_timeline = Some(timeline);
+                state.show_timeline_modal = true;
+            }
         }
     }
 }

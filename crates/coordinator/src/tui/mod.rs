@@ -22,7 +22,10 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 
-pub use state::{AppState, CurrentScreen, InputMode, ReviewTaskState, TuiAction, TuiUpdateEvent};
+pub use state::{
+    AppState, ConfirmationModalState, CurrentScreen, DestructiveAction, InputMode,
+    ReviewTaskState, Screen, TuiAction, TuiUpdateEvent, MAX_RECENT_EVENTS,
+};
 pub use ui::render;
 
 /// Manages terminal initialization, event loop, and cleanup.

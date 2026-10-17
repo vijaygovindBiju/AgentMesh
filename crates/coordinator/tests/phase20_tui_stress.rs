@@ -118,6 +118,7 @@ fn test_stress_deep_screen_cycling() {
             CurrentScreen::PlanReview => assert_eq!(state.current_screen, CurrentScreen::Dashboard),
             CurrentScreen::Dashboard => assert_eq!(state.current_screen, CurrentScreen::Diagnostics),
             CurrentScreen::Diagnostics => assert_eq!(state.current_screen, CurrentScreen::ProjectInput),
+            _ => {}
         }
     }
 
