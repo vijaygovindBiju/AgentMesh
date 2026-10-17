@@ -37,7 +37,14 @@ impl FooterWidget {
         };
 
         // Keybinding hints based on modals, input mode, screen, and focused pane
-        let spans = if state.show_command_palette {
+        let spans = if state.pending_confirmation.is_some() {
+            vec![
+                Span::styled(" [Y/Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::raw("Confirm  "),
+                Span::styled(" [N/Esc] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::raw("Cancel"),
+            ]
+        } else if state.show_command_palette {
             vec![
                 Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
                 Span::raw("Navigate  "),
@@ -455,6 +462,35 @@ mod tests {
         assert!(rend.contains("Navigate"));
         assert!(rend.contains("[Enter]"));
         assert!(rend.contains("Execute"));
+    }
+
+    #[test]
+    fn test_footer_confirmation_modal_hints() {
+        let backend = TestBackend::new(100, 3);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let mut state = AppState::new();
+        state.pending_confirmation = Some(crate::tui::ConfirmationModalState {
+            title: "Confirm".to_string(),
+            message: "Are you sure?".to_string(),
+            action: crate::tui::DestructiveAction::CancelTask {
+                task_id: Uuid::new_v4(),
+                short_id: "TASK-1".to_string(),
+            },
+        });
+
+        terminal
+            .draw(|f| {
+                FooterWidget::render(f, f.area(), &state);
+            })
+            .unwrap();
+
+        let buf = terminal.backend().buffer();
+        let rend: String = buf.content().iter().map(|c| c.symbol()).collect();
+        assert!(rend.contains("[Y/Enter]"));
+        assert!(rend.contains("Confirm"));
+        assert!(rend.contains("[N/Esc]"));
+        assert!(rend.contains("Cancel"));
     }
 }
 

@@ -245,6 +245,7 @@ pub struct AppState {
 
     // Safety confirmation dialog
     pub pending_confirmation: Option<ConfirmationModalState>,
+    pub confirm_destructive_actions: bool,
 
     // Global modal dialogs
     pub show_help_modal: bool,
@@ -310,6 +311,7 @@ impl AppState {
             command_palette_selected_index: 0,
 
             pending_confirmation: None,
+            confirm_destructive_actions: true,
 
             show_help_modal: false,
 
@@ -524,6 +526,7 @@ impl AppState {
             self.selected_project_index = 0;
         }
         self.event_ring_buffer = VecDeque::from(self.recent_events.clone());
+        self.confirm_destructive_actions = false;
         self.current_screen = CurrentScreen::PlanReview;
         self
     }
@@ -717,7 +720,12 @@ impl AppState {
                         "task:reject" => {
                             if let Some(task) = self.selected_task() {
                                 let task_id = task.task.id;
-                                Some(TuiAction::RejectTask { task_id })
+                                if self.confirm_destructive_actions {
+                                    self.prompt_reject_task(task_id);
+                                    None
+                                } else {
+                                    Some(TuiAction::RejectTask { task_id })
+                                }
                             } else {
                                 None
                             }
@@ -725,7 +733,12 @@ impl AppState {
                         "task:cancel" => {
                             if let Some(task) = self.selected_task() {
                                 let task_id = task.task.id;
-                                Some(TuiAction::CancelTask { task_id })
+                                if self.confirm_destructive_actions {
+                                    self.prompt_cancel_task(task_id);
+                                    None
+                                } else {
+                                    Some(TuiAction::CancelTask { task_id })
+                                }
                             } else {
                                 None
                             }
@@ -1215,14 +1228,19 @@ impl AppState {
             KeyCode::Char('n') | KeyCode::Char('N') => {
                 if let Some(item) = self.review_tasks.get_mut(self.selected_task_index) {
                     let task_id = item.task.id;
-                    let short_id = item.task.short_id.clone();
-                    item.human_decision = Some(ApprovalStatus::Rejected);
-                    self.status_message = Some(format!("Task {short_id} marked Rejected."));
+                    if self.confirm_destructive_actions {
+                        self.prompt_reject_task(task_id);
+                        None
+                    } else {
+                        let short_id = item.task.short_id.clone();
+                        item.human_decision = Some(ApprovalStatus::Rejected);
+                        self.status_message = Some(format!("Task {short_id} marked Rejected."));
 
-                    if self.selected_task_index + 1 < self.review_tasks.len() {
-                        self.selected_task_index += 1;
+                        if self.selected_task_index + 1 < self.review_tasks.len() {
+                            self.selected_task_index += 1;
+                        }
+                        Some(TuiAction::RejectTask { task_id })
                     }
-                    Some(TuiAction::RejectTask { task_id })
                 } else {
                     None
                 }
@@ -1242,9 +1260,14 @@ impl AppState {
             KeyCode::Char('c') | KeyCode::Char('C') => {
                 if let Some(item) = self.review_tasks.get(self.selected_task_index) {
                     let task_id = item.task.id;
-                    let short_id = item.task.short_id.clone();
-                    self.status_message = Some(format!("Cancelling task {short_id}..."));
-                    Some(TuiAction::CancelTask { task_id })
+                    if self.confirm_destructive_actions {
+                        self.prompt_cancel_task(task_id);
+                        None
+                    } else {
+                        let short_id = item.task.short_id.clone();
+                        self.status_message = Some(format!("Cancelling task {short_id}..."));
+                        Some(TuiAction::CancelTask { task_id })
+                    }
                 } else {
                     None
                 }
@@ -1940,12 +1963,11 @@ impl AppState {
             TuiUpdateEvent::Metrics(m) => self.metrics = Some(m),
             TuiUpdateEvent::Timeline(tl) => self.selected_timeline = Some(tl),
             TuiUpdateEvent::ObservabilityEvent(ev) => self.push_recent_event(ev),
-            TuiUpdateEvent::RecentEvents(events) => {
-                let mut ring = events.clone();
-                if ring.len() > MAX_RECENT_EVENTS {
-                    ring.truncate(MAX_RECENT_EVENTS);
+            TuiUpdateEvent::RecentEvents(mut events) => {
+                if events.len() > MAX_RECENT_EVENTS {
+                    events.truncate(MAX_RECENT_EVENTS);
                 }
-                self.event_ring_buffer = VecDeque::from(ring);
+                self.event_ring_buffer = VecDeque::from(events.clone());
                 self.recent_events = events;
             }
             TuiUpdateEvent::Projects(projects) => {
@@ -2343,6 +2365,8 @@ mod tests {
         state.apply_update(TuiUpdateEvent::RecentEvents(large_batch));
         assert!(state.event_ring_buffer.len() <= MAX_RECENT_EVENTS);
         assert_eq!(state.event_ring_buffer.len(), 300);
+        assert!(state.recent_events.len() <= MAX_RECENT_EVENTS);
+        assert_eq!(state.recent_events.len(), 300);
     }
 
     #[test]
