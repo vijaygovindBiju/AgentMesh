@@ -741,7 +741,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 - [x] M1: Core State, Channel & State Machine Extensions [DONE]
 - [x] M2: Responsive Header, Contextual Footer, Command Palette & Resize Resilience [DONE]
 - [x] M3: Project Lifecycle, Recursive DAG & Action Gating [DONE]
-- [ ] M4: Deep Fleet Telemetry, Bounded Event Stream & Real Timelines [TODO]
+- [x] M4: Deep Fleet Telemetry, Bounded Event Stream & Real Timelines [DONE]
 - [~] M_TEST: E2E Testing Track: Comprehensive TestBackend Suite [IN PROGRESS]
 - [ ] M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening [TODO]
 
@@ -772,7 +772,16 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
   - [x] Action gating in `state.rs`: confirmation dialog confirmation (`y`/`Enter`) and cancellation (`n`/`Esc`), retry task key shortcut (`r`) for Failed/Cancelled tasks
   - [x] Wire `LoadProject`, `RetryTask`, and `SubmitProject` active project state updates in `main.rs`
   - [x] All 86 Phase 20 tests and 65 Phase 21 tests pass cleanly
-- [ ] **M4: Deep Fleet Telemetry, Bounded Event Stream & Real Timelines**
+- [x] **M4: Deep Fleet Telemetry, Bounded Event Stream & Real Timelines**
+  - [x] Enriched structured telemetry cards in `AgentInspectorWidget` (liveness & heartbeat latency color-coding, health badges, error alert banner, active delivery concurrency and draining, runtime & hardware specs, toolchains, tools, and domain tags, role & revoked security status)
+  - [x] Created `FleetInspectorScreen` with adaptive responsive layout (<100 vs >=100 cols), connected fleet table (`Agent Name`, `Human Owner`, `Runtime`, `Status`, `Health`, `Latency`, `Current Task`) and `AgentInspectorWidget` panel details
+  - [x] Exported `FleetInspectorScreen` in `screens/mod.rs` and routed in `ui.rs` for `CurrentScreen::FleetInspector`
+  - [x] Enriched dashboard agents table with health status badges and heartbeat latency
+  - [x] Multi-axis event filtering in `diagnostics.rs` and `state.rs`: severity (`ALL`, `ERROR`, `WARN`, `INFO`) and entity (`ALL`, `TASK`, `AGENT`, `COORDINATOR`) with shortcuts `f` and `e` and auto-clamping `clamp_event_selection`
+  - [x] Rendered filter indicator `[Filter: Severity: ALL | Entity: ALL]` in Event Log block header
+  - [x] Purged synthetic fake timestamps in diagnostics timeline drill-down and rendered real recorded milestones or clean fallback message
+  - [x] Handled `InspectTaskTimeline` in `main.rs` asynchronously via `TimelineService::build_task_timeline` and deduplicated periodic SQL events into ring buffer preserving live NATS events
+  - [x] All 86 Phase 20 tests and 65 Phase 21 tests pass cleanly
 - [ ] **M_TEST: E2E Testing Track: Comprehensive TestBackend Suite**
 - [ ] **M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening**
 

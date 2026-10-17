@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::tui::screens::{
-    DashboardScreen, DiagnosticsScreen, PlanReviewScreen, ProjectInputScreen,
+    DashboardScreen, DiagnosticsScreen, FleetInspectorScreen, PlanReviewScreen, ProjectInputScreen,
 };
 use crate::tui::state::{AppState, CurrentScreen};
 use crate::tui::widgets::{
@@ -47,9 +47,8 @@ pub fn render(frame: &mut Frame, state: &AppState) {
             ProjectInputScreen::render(frame, chunks[1], state)
         }
         CurrentScreen::PlanReview => PlanReviewScreen::render(frame, chunks[1], state),
-        CurrentScreen::Dashboard | CurrentScreen::FleetInspector => {
-            DashboardScreen::render(frame, chunks[1], state)
-        }
+        CurrentScreen::Dashboard => DashboardScreen::render(frame, chunks[1], state),
+        CurrentScreen::FleetInspector => FleetInspectorScreen::render(frame, chunks[1], state),
         CurrentScreen::Diagnostics => DiagnosticsScreen::render(frame, chunks[1], state),
     }
 

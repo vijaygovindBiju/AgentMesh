@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::domain::{AgentStatus, HealthStatus, TaskStatus};
+use crate::domain::{AgentStatus, HealthStatus};
 use crate::tui::state::AppState;
 
 pub struct DiagnosticsScreen;
@@ -401,14 +401,14 @@ impl DiagnosticsScreen {
                 ]),
                 Line::from(""),
                 Line::from(Span::styled(
-                    "Press [Enter] to display full chronological lifecycle stages.",
+                    "No timeline loaded. Press [Enter] on a task to query real timeline.",
                     Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
                 )),
             ];
             let p = Paragraph::new(lines).block(block);
             frame.render_widget(p, area);
         } else {
-            let p = Paragraph::new("No task selected for timeline inspection.").block(block);
+            let p = Paragraph::new("No timeline loaded. Press [Enter] on a task to query real timeline.").block(block);
             frame.render_widget(p, area);
         }
     }
@@ -427,20 +427,34 @@ impl DiagnosticsScreen {
             BorderType::Plain
         };
 
+        let sev_filter = state.event_filter_severity.as_deref().unwrap_or("ALL");
+        let ent_filter = state.event_filter_entity.as_deref().unwrap_or("ALL");
+
+        let filtered = state.filtered_recent_events();
+        let selected_idx = if filtered.is_empty() {
+            0
+        } else {
+            state.selected_event_index.min(filtered.len() - 1)
+        };
+
         let title_text = if is_focused {
             format!(
-                " Coordinator Events Stream ({}/{} events) [Focused: ↑/↓ Scroll, Enter Inspect Payload] ",
-                if state.recent_events.is_empty() {
+                " Coordinator Events Stream ({}/{} events) [Focused: ↑/↓ Scroll, Enter Payload, f: Severity, e: Entity] [Filter: Severity: {} | Entity: {}] ",
+                if filtered.is_empty() {
                     0
                 } else {
-                    state.selected_event_index + 1
+                    selected_idx + 1
                 },
-                state.recent_events.len()
+                filtered.len(),
+                sev_filter,
+                ent_filter
             )
         } else {
             format!(
-                " Coordinator Events Stream ({} events) ",
-                state.recent_events.len()
+                " Coordinator Events Stream ({} events) [Filter: Severity: {} | Entity: {}] ",
+                filtered.len(),
+                sev_filter,
+                ent_filter
             )
         };
 
@@ -456,8 +470,8 @@ impl DiagnosticsScreen {
             ));
 
         let visible_rows = (area.height.saturating_sub(4)).max(5) as usize;
-        let scroll_offset = if state.selected_event_index >= visible_rows {
-            state.selected_event_index - visible_rows + 1
+        let scroll_offset = if selected_idx >= visible_rows {
+            selected_idx - visible_rows + 1
         } else {
             0
         };
@@ -471,9 +485,16 @@ impl DiagnosticsScreen {
                     .to_string(),
                 "-".to_string(),
             ])]
+        } else if filtered.is_empty() {
+            vec![Row::new(vec![
+                "-".to_string(),
+                "INFO".to_string(),
+                "no.events".to_string(),
+                format!("No events matching filter [Severity: {sev_filter} | Entity: {ent_filter}]. Press [f] or [e] to change filters."),
+                "-".to_string(),
+            ])]
         } else {
-            state
-                .recent_events
+            filtered
                 .iter()
                 .enumerate()
                 .skip(scroll_offset)
@@ -507,7 +528,7 @@ impl DiagnosticsScreen {
                         })
                         .unwrap_or_else(|| "-".to_string());
 
-                    let is_selected = idx == state.selected_event_index;
+                    let is_selected = idx == selected_idx;
                     let prefix = if is_selected && is_focused { "▶ " } else { "  " };
                     let time_display = format!("{prefix}{ts_str}");
 
@@ -552,9 +573,13 @@ impl DiagnosticsScreen {
 
     /// Renders event detail & structured JSON payload modal dialog.
     fn render_event_payload_modal(frame: &mut Frame, area: Rect, state: &AppState) {
-        let ev = match state.recent_events.get(state.selected_event_index) {
+        let filtered = state.filtered_recent_events();
+        let ev = match filtered.get(state.selected_event_index).copied() {
             Some(e) => e,
-            None => return,
+            None => match state.recent_events.get(state.selected_event_index) {
+                Some(e) => e,
+                None => return,
+            },
         };
 
         let popup_width = (area.width * 75 / 100).clamp(55, 85).min(area.width);
@@ -710,79 +735,32 @@ impl DiagnosticsScreen {
             )]),
         ];
 
-        // If active selected_timeline has events, render them; otherwise synthesize stages
+        // If active selected_timeline has events, render real recorded milestones; otherwise render clean prompt
         if let Some(tl) = &state.selected_timeline {
-            for item in &tl.events {
-                let elapsed_str = item
-                    .elapsed_since_start_ms
-                    .map(|ms| format!("+{}ms", ms))
-                    .unwrap_or_else(|| "0ms".to_string());
-                lines.push(Line::from(vec![
-                    Span::styled(format!("[{:>7}] ", elapsed_str), Style::default().fg(Color::DarkGray)),
-                    Span::styled(format!("{:<14} ", item.stage), Style::default().fg(Color::Cyan)),
-                    Span::styled(format!("{:<16} ", item.actor), Style::default().fg(Color::Yellow)),
-                    Span::raw(&item.message),
-                ]));
+            if tl.events.is_empty() {
+                lines.push(Line::from(Span::styled(
+                    "No timeline milestones recorded yet.",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            } else {
+                for item in &tl.events {
+                    let elapsed_str = item
+                        .elapsed_since_start_ms
+                        .map(|ms| format!("+{}ms", ms))
+                        .unwrap_or_else(|| "0ms".to_string());
+                    lines.push(Line::from(vec![
+                        Span::styled(format!("[{:>7}] ", elapsed_str), Style::default().fg(Color::DarkGray)),
+                        Span::styled(format!("{:<14} ", item.stage), Style::default().fg(Color::Cyan)),
+                        Span::styled(format!("{:<16} ", item.actor), Style::default().fg(Color::Yellow)),
+                        Span::raw(&item.message),
+                    ]));
+                }
             }
         } else {
-            lines.push(Line::from(vec![
-                Span::styled("[0ms]     ", Style::default().fg(Color::DarkGray)),
-                Span::styled("Proposed       ", Style::default().fg(Color::Cyan)),
-                Span::styled("coordinator      ", Style::default().fg(Color::Yellow)),
-                Span::raw("Task generated during LLM project decomposition."),
-            ]));
-
-            let review_done = selected_task.human_decision.is_some() || selected_task.task.status != TaskStatus::HumanReview;
-            if review_done {
-                let dec_str = match selected_task.human_decision {
-                    Some(crate::domain::ApprovalStatus::Approved) => "Task approved by operator without modification.",
-                    Some(crate::domain::ApprovalStatus::EditedAndApproved) => "Task description edited and approved by operator.",
-                    Some(crate::domain::ApprovalStatus::Rejected) => "Task rejected by operator.",
-                    _ => "Task marked Approved.",
-                };
-                lines.push(Line::from(vec![
-                    Span::styled("[+150ms]  ", Style::default().fg(Color::DarkGray)),
-                    Span::styled("HumanReview    ", Style::default().fg(Color::Green)),
-                    Span::styled("human-operator   ", Style::default().fg(Color::Yellow)),
-                    Span::raw(dec_str),
-                ]));
-            } else {
-                lines.push(Line::from(vec![
-                    Span::styled("[+150ms]  ", Style::default().fg(Color::DarkGray)),
-                    Span::styled("HumanReview    ", Style::default().fg(Color::Yellow)),
-                    Span::styled("coordinator      ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Waiting for operator approval/rejection decision."),
-                ]));
-            }
-
-            if let Some(agent_id) = selected_task.task.assigned_agent_id {
-                let agent_name = state.agents.iter().find(|a| a.id == agent_id)
-                    .map(|a| a.human_owner.as_str())
-                    .unwrap_or("agent-worker");
-                lines.push(Line::from(vec![
-                    Span::styled("[+320ms]  ", Style::default().fg(Color::DarkGray)),
-                    Span::styled("Assigned       ", Style::default().fg(Color::Cyan)),
-                    Span::styled(format!("{:<16} ", agent_name), Style::default().fg(Color::Yellow)),
-                    Span::raw("Task dispatched via NATS JetStream assignment queue."),
-                ]));
-            }
-
-            if selected_task.task.status == TaskStatus::Executing {
-                let pct = selected_task.progress_percent.unwrap_or(0);
-                lines.push(Line::from(vec![
-                    Span::styled("[+500ms]  ", Style::default().fg(Color::DarkGray)),
-                    Span::styled("Executing      ", Style::default().fg(Color::Cyan)),
-                    Span::styled("agent-worker     ", Style::default().fg(Color::Yellow)),
-                    Span::raw(format!("Task execution in progress ({pct}%).")),
-                ]));
-            } else if selected_task.task.status == TaskStatus::Completed {
-                lines.push(Line::from(vec![
-                    Span::styled("[+1200ms] ", Style::default().fg(Color::DarkGray)),
-                    Span::styled("Completed      ", Style::default().fg(Color::Green)),
-                    Span::styled("agent-worker     ", Style::default().fg(Color::Yellow)),
-                    Span::raw("Task completed successfully with output artifacts verified."),
-                ]));
-            }
+            lines.push(Line::from(Span::styled(
+                "No timeline loaded. Press [Enter] on a task to query real timeline.",
+                Style::default().fg(Color::Yellow),
+            )));
         }
 
         lines.push(Line::from(""));

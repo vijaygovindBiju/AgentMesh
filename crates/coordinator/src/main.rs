@@ -209,6 +209,7 @@ async fn main() -> Result<()> {
             let metrics_tx = tui_tx.clone();
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(2));
+                let mut known_event_ids = std::collections::HashSet::<uuid::Uuid>::new();
                 loop {
                     interval.tick().await;
                     if let Ok(m) =
@@ -223,7 +224,13 @@ async fn main() -> Result<()> {
                         )
                         .await
                     {
-                        let _ = metrics_tx.send(TuiUpdateEvent::RecentEvents(events));
+                        // Deduplicate and merge SQL events into recent_events ring buffer instead of overwriting,
+                        // preserving live NATS events
+                        for ev in events.into_iter().rev() {
+                            if known_event_ids.insert(ev.id) {
+                                let _ = metrics_tx.send(TuiUpdateEvent::ObservabilityEvent(ev));
+                            }
+                        }
                     }
                 }
             });
@@ -948,10 +955,14 @@ async fn handle_tui_action(
 
         TuiAction::InspectTaskTimeline { task_id } => {
             state.status_message = Some(format!("Inspecting timeline for task {task_id}..."));
-            if let Ok(timeline) = coordinator::observability::TimelineService::build_task_timeline(pool, task_id).await {
-                state.selected_timeline = Some(timeline);
-                state.show_timeline_modal = true;
-            }
+            let query_pool = pool.clone();
+            let query_tx = action_tx.clone();
+            tokio::spawn(async move {
+                if let Ok(timeline) = coordinator::observability::TimelineService::build_task_timeline(&query_pool, task_id).await {
+                    let _ = query_tx.send(TuiUpdateEvent::Timeline(timeline));
+                }
+            });
+            state.show_timeline_modal = true;
         }
     }
 }

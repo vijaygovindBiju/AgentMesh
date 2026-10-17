@@ -885,7 +885,8 @@ impl AppState {
                         _ => None,
                     }
                 }
-                CurrentScreen::Dashboard | CurrentScreen::FleetInspector => self.handle_dashboard_key(key),
+                CurrentScreen::Dashboard => self.handle_dashboard_key(key),
+                CurrentScreen::FleetInspector => self.handle_fleet_inspector_key(key),
                 CurrentScreen::Diagnostics => self.handle_diagnostics_key(key),
             },
         }
@@ -1037,6 +1038,30 @@ impl AppState {
         }
     }
 
+    fn handle_fleet_inspector_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.selected_agent_index > 0 {
+                    self.selected_agent_index -= 1;
+                }
+                None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !self.agents.is_empty() && self.selected_agent_index + 1 < self.agents.len() {
+                    self.selected_agent_index += 1;
+                }
+                None
+            }
+            KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Enter => {
+                if !self.agents.is_empty() {
+                    self.show_agent_inspector = true;
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
     fn handle_diagnostics_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
         match key.code {
             KeyCode::Left | KeyCode::Right | KeyCode::BackTab => {
@@ -1044,6 +1069,30 @@ impl AppState {
                     DiagnosticsFocus::EventsStream => DiagnosticsFocus::Timeline,
                     DiagnosticsFocus::Timeline => DiagnosticsFocus::EventsStream,
                 };
+                None
+            }
+            KeyCode::Char('f') | KeyCode::Char('F') => {
+                let next = match self.event_filter_severity.as_deref() {
+                    Some("ALL") | None => Some("ERROR".to_string()),
+                    Some("ERROR") => Some("WARN".to_string()),
+                    Some("WARN") => Some("INFO".to_string()),
+                    Some("INFO") => Some("ALL".to_string()),
+                    _ => Some("ALL".to_string()),
+                };
+                self.event_filter_severity = next;
+                self.clamp_event_selection();
+                None
+            }
+            KeyCode::Char('e') | KeyCode::Char('E') => {
+                let next = match self.event_filter_entity.as_deref() {
+                    Some("ALL") | None => Some("TASK".to_string()),
+                    Some("TASK") => Some("AGENT".to_string()),
+                    Some("AGENT") => Some("COORDINATOR".to_string()),
+                    Some("COORDINATOR") => Some("ALL".to_string()),
+                    _ => Some("ALL".to_string()),
+                };
+                self.event_filter_entity = next;
+                self.clamp_event_selection();
                 None
             }
             _ => match self.diagnostics_focus {
@@ -1055,15 +1104,14 @@ impl AppState {
                         None
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
-                        if !self.recent_events.is_empty()
-                            && self.selected_event_index + 1 < self.recent_events.len()
-                        {
+                        let count = self.filtered_events_count();
+                        if count > 0 && self.selected_event_index + 1 < count {
                             self.selected_event_index += 1;
                         }
                         None
                     }
                     KeyCode::Enter => {
-                        if !self.recent_events.is_empty() {
+                        if self.filtered_events_count() > 0 {
                             self.show_event_payload_modal = true;
                         }
                         None
@@ -1086,10 +1134,13 @@ impl AppState {
                         None
                     }
                     KeyCode::Enter => {
-                        if !self.review_tasks.is_empty() {
+                        if let Some(rt) = self.review_tasks.get(self.selected_task_index) {
+                            let task_id = rt.task.id;
                             self.show_timeline_modal = true;
+                            Some(TuiAction::InspectTaskTimeline { task_id })
+                        } else {
+                            None
                         }
-                        None
                     }
                     _ => None,
                 },
@@ -1496,11 +1547,65 @@ impl AppState {
         } else if self.selected_event_index >= self.recent_events.len() {
             self.selected_event_index = self.recent_events.len().saturating_sub(1);
         }
+        self.clamp_event_selection();
 
         if self.available_projects.is_empty() {
             self.selected_project_index = 0;
         } else if self.selected_project_index >= self.available_projects.len() {
             self.selected_project_index = self.available_projects.len().saturating_sub(1);
+        }
+    }
+
+    /// Returns filtered references to recent events according to current multi-axis filters.
+    pub fn filtered_recent_events(&self) -> Vec<&crate::observability::CoordinatorEvent> {
+        let sev_filter = self.event_filter_severity.as_deref().unwrap_or("ALL");
+        let ent_filter = self.event_filter_entity.as_deref().unwrap_or("ALL");
+
+        self.recent_events
+            .iter()
+            .filter(|ev| {
+                if !sev_filter.eq_ignore_ascii_case("ALL") {
+                    let event_sev = if ev.event_type.contains("fail") || ev.event_type.contains("error") || ev.event_type.contains("alert") {
+                        "ERROR"
+                    } else if ev.event_type.contains("warn") || ev.event_type.contains("overlap") || ev.event_type.contains("blocked") || ev.event_type.contains("degraded") {
+                        "WARN"
+                    } else {
+                        "INFO"
+                    };
+                    if !event_sev.eq_ignore_ascii_case(sev_filter) {
+                        return false;
+                    }
+                }
+
+                if !ent_filter.eq_ignore_ascii_case("ALL") {
+                    let matches_entity = match ent_filter.to_uppercase().as_str() {
+                        "TASK" => ev.event_type.to_lowercase().starts_with("task") || ev.task_id.is_some(),
+                        "AGENT" => ev.event_type.to_lowercase().starts_with("agent") || ev.agent_id.is_some(),
+                        "COORDINATOR" => (!ev.event_type.to_lowercase().starts_with("task") && !ev.event_type.to_lowercase().starts_with("agent") && ev.task_id.is_none() && ev.agent_id.is_none()) || ev.event_type.to_lowercase().starts_with("coord"),
+                        other => ev.event_type.to_lowercase().starts_with(&other.to_lowercase()),
+                    };
+                    if !matches_entity {
+                        return false;
+                    }
+                }
+
+                true
+            })
+            .collect()
+    }
+
+    /// Count of events currently visible under active filters.
+    pub fn filtered_events_count(&self) -> usize {
+        self.filtered_recent_events().len()
+    }
+
+    /// Clamps selected_event_index safely to the filtered event count.
+    pub fn clamp_event_selection(&mut self) {
+        let count = self.filtered_events_count();
+        if count == 0 {
+            self.selected_event_index = 0;
+        } else if self.selected_event_index >= count {
+            self.selected_event_index = count - 1;
         }
     }
 

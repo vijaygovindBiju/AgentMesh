@@ -6,21 +6,30 @@ use ratatui::{
     Frame,
 };
 
-use crate::domain::AgentStatus;
+use crate::domain::{AgentStatus, HealthStatus};
 use crate::tui::state::AppState;
 
 pub struct AgentInspectorWidget;
 
 impl AgentInspectorWidget {
+    /// Dispatches between modal dialog rendering and panel rendering.
     pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
-        let agent = match state.agents.get(state.selected_agent_index) {
-            Some(a) => a,
-            None => return,
-        };
+        if state.show_agent_inspector && area == frame.area() {
+            Self::render_modal(frame, area, state);
+        } else {
+            Self::render_panel(frame, area, state);
+        }
+    }
 
-        // Center a modal dialog in the area
-        let popup_width = (area.width * 75 / 100).clamp(60, 90).min(area.width);
-        let popup_height = (area.height * 75 / 100).clamp(18, 28).min(area.height);
+    /// Renders the inspector directly into a designated panel area (e.g. in FleetInspectorScreen).
+    pub fn render_panel(frame: &mut Frame, area: Rect, state: &AppState) {
+        Self::render_to_area(frame, area, state, false);
+    }
+
+    /// Renders the inspector as a centered popup dialog with a Clear backdrop.
+    pub fn render_modal(frame: &mut Frame, area: Rect, state: &AppState) {
+        let popup_width = (area.width * 85 / 100).clamp(60, 95).min(area.width);
+        let popup_height = (area.height * 85 / 100).clamp(18, 30).min(area.height);
 
         let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
         let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
@@ -32,22 +41,51 @@ impl AgentInspectorWidget {
             height: popup_height,
         };
 
-        // Clear beneath modal
         frame.render_widget(Clear, popup_area);
+        Self::render_to_area(frame, popup_area, state, true);
+    }
+
+    fn render_to_area(frame: &mut Frame, area: Rect, state: &AppState, is_modal: bool) {
+        let border_type = if is_modal {
+            BorderType::Double
+        } else {
+            BorderType::Plain
+        };
+
+        let title_text = if is_modal {
+            " Connected Agent Capability Profile & Hardware Telemetry [Esc/C: Close] "
+        } else {
+            " Connected Agent Capability Profile & Telemetry "
+        };
 
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_type(BorderType::Double)
+            .border_type(border_type)
             .border_style(Style::default().fg(Color::Cyan))
             .title(Span::styled(
-                " Connected Agent Capability Profile & Hardware Telemetry [Esc/C: Close] ",
+                title_text,
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ));
 
-        let inner = block.inner(popup_area);
-        frame.render_widget(block, popup_area);
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        let agent = match state.agents.get(state.selected_agent_index) {
+            Some(a) => a,
+            None => {
+                let empty = Paragraph::new(vec![
+                    Line::from(""),
+                    Line::from(Span::styled(
+                        "No agent selected for capability and telemetry inspection.",
+                        Style::default().fg(Color::DarkGray),
+                    )),
+                ]);
+                frame.render_widget(empty, inner);
+                return;
+            }
+        };
 
         let (name, owner) = if let Some(idx) = agent.human_owner.find(" (") {
             let name = &agent.human_owner[..idx];
@@ -68,12 +106,47 @@ impl AgentInspectorWidget {
             AgentStatus::Offline => ("OFFLINE", Color::DarkGray),
         };
 
+        let (health_badge, health_style) = match agent.health_status {
+            HealthStatus::Healthy => ("[Healthy]", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            HealthStatus::Degraded => ("[Degraded]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            HealthStatus::Unhealthy => ("[Unhealthy]", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            HealthStatus::Offline => ("[Offline]", Style::default().fg(Color::DarkGray)),
+        };
+
+        let (latency_str, latency_style) = if let Some(lat) = agent.heartbeat_latency_ms {
+            let col = if lat > 5000 {
+                Color::Red
+            } else if lat > 1000 {
+                Color::Yellow
+            } else {
+                Color::Green
+            };
+            (format!("{lat}ms"), Style::default().fg(col).add_modifier(Modifier::BOLD))
+        } else {
+            ("-".to_string(), Style::default().fg(Color::DarkGray))
+        };
+
         let profile = agent.capabilities_profile();
         let capabilities = agent.capabilities_list();
 
         let mut lines = Vec::new();
 
-        // 1. Identity & Status Bar
+        // 1. Alert Banner (if error reported)
+        if let Some(ref err) = agent.last_error {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    "⚠ ERROR BANNER: ",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    err,
+                    Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+                ),
+            ]));
+            lines.push(Line::from(""));
+        }
+
+        // 2. Identity & Health Status Bar
         lines.push(Line::from(vec![
             Span::styled(" Agent: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
@@ -84,6 +157,8 @@ impl AgentInspectorWidget {
             ),
             Span::styled("  |  Owner: ", Style::default().fg(Color::DarkGray)),
             Span::styled(owner, Style::default().fg(Color::Yellow)),
+            Span::styled("  |  Health: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(health_badge, health_style),
             Span::styled("  |  Status: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 format!(" {status_str} "),
@@ -95,20 +170,100 @@ impl AgentInspectorWidget {
             Span::styled("  |  Adapter: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 format!("{:?}", agent.adapter_type),
-                Style::default().fg(Color::Cyan),
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
             ),
         ]));
 
+        // 3. Liveness & Heartbeat Telemetry
+        let last_seen_str = agent
+            .last_seen
+            .map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+            .unwrap_or_else(|| "Never".to_string());
+
         lines.push(Line::from(vec![
-            Span::styled(" ID: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(agent.id.to_string(), Style::default().fg(Color::DarkGray)),
+            Span::styled(" Last Seen: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(last_seen_str, Style::default().fg(Color::White)),
+            Span::styled("  |  Heartbeat Latency: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(latency_str, latency_style),
+            Span::styled("  |  Failures: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                agent.consecutive_failures.to_string(),
+                if agent.consecutive_failures > 0 {
+                    Style::default().fg(Color::Red)
+                } else {
+                    Style::default().fg(Color::Green)
+                },
+            ),
+            Span::styled(" (Done: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(agent.tasks_completed_count.to_string(), Style::default().fg(Color::Green)),
+            Span::styled(", Failed: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(agent.tasks_failed_count.to_string(), Style::default().fg(Color::Red)),
+            Span::styled(")", Style::default().fg(Color::DarkGray)),
+        ]));
+
+        // 4. Active Delivery & Concurrency
+        let active_task_str = if let Some(tid) = agent.current_task_id {
+            if let Some(rt) = state.review_tasks.iter().find(|rt| rt.task.id == tid) {
+                format!("[{}] {}", rt.task.short_id, rt.task.title)
+            } else {
+                format!("[{}]", &tid.to_string()[..8])
+            }
+        } else {
+            "Idle (No Active Task)".to_string()
+        };
+
+        let draining_str = if agent.is_draining { "YES" } else { "NO" };
+        let draining_color = if agent.is_draining { Color::Yellow } else { Color::Green };
+
+        lines.push(Line::from(vec![
+            Span::styled(" Active Task: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                active_task_str,
+                if agent.current_task_id.is_some() {
+                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                },
+            ),
+            Span::styled("  |  Load: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("{}/{}", agent.active_tasks_count, agent.max_concurrency),
+                Style::default().fg(Color::Cyan),
+            ),
+            Span::styled("  |  Draining: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(draining_str, Style::default().fg(draining_color)),
+        ]));
+
+        // 5. Role, NATS & Security
+        let revoked_str = if agent.is_revoked {
+            "REVOKED"
+        } else {
+            "VALID"
+        };
+        let revoked_color = if agent.is_revoked {
+            Color::Red
+        } else {
+            Color::Green
+        };
+        let expires_str = agent
+            .api_key_expires_at
+            .map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+            .unwrap_or_else(|| "Never".to_string());
+
+        lines.push(Line::from(vec![
+            Span::styled(" Role: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&agent.role, Style::default().fg(Color::Yellow)),
+            Span::styled("  |  Key Status: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(revoked_str, Style::default().fg(revoked_color).add_modifier(Modifier::BOLD)),
+            Span::styled("  |  Key Expires: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(expires_str, Style::default().fg(Color::White)),
             Span::styled("  |  NATS: ", Style::default().fg(Color::DarkGray)),
             Span::styled(&agent.nats_subject, Style::default().fg(Color::Cyan)),
         ]));
 
         lines.push(Line::from(""));
 
-        // 2. Hardware & Runtime Telemetry
+        // 6. Hardware & Runtime Telemetry
         lines.push(Line::from(vec![Span::styled(
             "─── System Runtime & Hardware ──────────────────────────────────────────",
             Style::default().fg(Color::DarkGray),
@@ -161,7 +316,7 @@ impl AgentInspectorWidget {
 
         lines.push(Line::from(""));
 
-        // 3. Installed Languages & Toolchains
+        // 7. Installed Languages & Toolchains
         lines.push(Line::from(vec![Span::styled(
             "─── Installed Languages & Toolchains ───────────────────────────────────",
             Style::default().fg(Color::DarkGray),
@@ -207,7 +362,7 @@ impl AgentInspectorWidget {
 
         lines.push(Line::from(""));
 
-        // 4. Developer Tools & CLIs
+        // 8. Developer Tools & CLIs
         lines.push(Line::from(vec![Span::styled(
             "─── Developer Tools & CLI Utilities ────────────────────────────────────",
             Style::default().fg(Color::DarkGray),
@@ -245,7 +400,7 @@ impl AgentInspectorWidget {
 
         lines.push(Line::from(""));
 
-        // 5. Domain & Skill Tags
+        // 9. Domain & Skill Tags
         lines.push(Line::from(vec![Span::styled(
             "─── Domain & Skill Tags ────────────────────────────────────────────────",
             Style::default().fg(Color::DarkGray),
@@ -275,13 +430,13 @@ impl AgentInspectorWidget {
             lines.push(Line::from(tag_spans));
         }
 
-        lines.push(Line::from(""));
-
-        // Footer instructions
-        lines.push(Line::from(vec![Span::styled(
-            "Press [Esc], [C], or [Enter] to dismiss this inspector dialog.",
-            Style::default().fg(Color::DarkGray),
-        )]));
+        if is_modal {
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![Span::styled(
+                "Press [Esc], [C], or [Enter] to dismiss this inspector dialog.",
+                Style::default().fg(Color::DarkGray),
+            )]));
+        }
 
         let p = Paragraph::new(lines);
         frame.render_widget(p, inner);

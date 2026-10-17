@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::domain::{AgentStatus, ApprovalStatus, OverlapSeverity, TaskStatus};
+use crate::domain::{AgentStatus, ApprovalStatus, HealthStatus, OverlapSeverity, TaskStatus};
 use crate::tui::state::AppState;
 
 pub struct DashboardScreen;
@@ -128,6 +128,8 @@ impl DashboardScreen {
                 "-".to_string(),
                 "-".to_string(),
                 "-".to_string(),
+                "-".to_string(),
+                "-".to_string(),
             ])]
         } else {
             state
@@ -145,6 +147,18 @@ impl DashboardScreen {
                             a.human_owner.clone(),
                         )
                     };
+
+                    let (health_badge, _health_col) = match a.health_status {
+                        HealthStatus::Healthy => ("[Healthy]", Color::Green),
+                        HealthStatus::Degraded => ("[Degraded]", Color::Yellow),
+                        HealthStatus::Unhealthy => ("[Unhealthy]", Color::Red),
+                        HealthStatus::Offline => ("[Offline]", Color::DarkGray),
+                    };
+
+                    let latency_str = a
+                        .heartbeat_latency_ms
+                        .map(|ms| format!("{ms}ms"))
+                        .unwrap_or_else(|| "-".to_string());
 
                     let current_task = if let Some(tid) = a.current_task_id {
                         if let Some(t) = state.review_tasks.iter().find(|rt| rt.task.id == tid) {
@@ -173,8 +187,15 @@ impl DashboardScreen {
                         row_style = row_style.add_modifier(Modifier::BOLD);
                     }
 
-                    Row::new(vec![display_name, owner, current_task, status_str.to_string()])
-                        .style(row_style)
+                    Row::new(vec![
+                        display_name,
+                        owner,
+                        health_badge.to_string(),
+                        latency_str,
+                        current_task,
+                        status_str.to_string(),
+                    ])
+                    .style(row_style)
                 })
                 .collect()
         };
@@ -182,14 +203,16 @@ impl DashboardScreen {
         let table = Table::new(
             rows,
             [
-                Constraint::Percentage(25),
-                Constraint::Percentage(20),
-                Constraint::Percentage(40),
-                Constraint::Percentage(15),
+                Constraint::Percentage(22),
+                Constraint::Percentage(18),
+                Constraint::Percentage(14),
+                Constraint::Percentage(10),
+                Constraint::Percentage(24),
+                Constraint::Percentage(12),
             ],
         )
         .header(
-            Row::new(vec!["Agent Name", "Human Owner", "Current Task", "Status"]).style(
+            Row::new(vec!["Agent Name", "Human Owner", "Health", "Latency", "Current Task", "Status"]).style(
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
