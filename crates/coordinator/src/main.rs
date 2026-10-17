@@ -557,8 +557,27 @@ async fn handle_tui_action(
 
             tokio::spawn(async move {
 
-                // Discover repository Git identity if running inside a Git repository
-                let current_repo = std::env::current_dir().unwrap_or_default();
+                // Discover repository Git identity: check if a target repository was provided in description or default to current_dir
+                let current_repo = description
+                    .lines()
+                    .chain(description.split(['\n', ';', ',']))
+                    .find_map(|line| {
+                        let trimmed = line.trim();
+                        let candidate = if let Some(stripped) = trimmed.strip_prefix("Repository:") {
+                            stripped.trim()
+                        } else if let Some(stripped) = trimmed.strip_prefix("repo:") {
+                            stripped.trim()
+                        } else {
+                            trimmed
+                        };
+                        let p = std::path::Path::new(candidate);
+                        if p.is_dir() && p.exists() {
+                            Some(p.to_path_buf())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
                 if let Ok(git_id) = coordinator::git::RepositoryIdentity::discover(&current_repo).await {
                     let _ = ProjectRepository::update_git_identity(
                         &pool,
