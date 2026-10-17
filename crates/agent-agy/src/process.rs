@@ -108,9 +108,12 @@ impl AgyProcess {
             let mut final_result: Option<AgyResultPayload> = None;
 
             let execution_future = async {
-                loop {
+                let mut stdout_done = false;
+                let mut stderr_done = false;
+
+                while !stdout_done || !stderr_done {
                     tokio::select! {
-                        stdout_res = stdout_lines.next_line() => {
+                        stdout_res = stdout_lines.next_line(), if !stdout_done => {
                             match stdout_res {
                                 Ok(Some(line)) => {
                                     debug!(%line, "agy stdout line");
@@ -121,23 +124,28 @@ impl AgyProcess {
                                         let _ = tx.send(AgyProcessEvent::Stream(stream_event)).await;
                                     }
                                 }
-                                Ok(None) => break, // EOF on stdout
+                                Ok(None) => {
+                                    stdout_done = true;
+                                }
                                 Err(e) => {
                                     warn!(error = %e, "Error reading agy stdout line");
-                                    break;
+                                    stdout_done = true;
                                 }
                             }
                         }
-                        stderr_res = stderr_lines.next_line() => {
+                        stderr_res = stderr_lines.next_line(), if !stderr_done => {
                             match stderr_res {
                                 Ok(Some(line)) => {
                                     debug!(%line, "agy stderr line");
                                     collected_stderr.push(line.clone());
                                     let _ = tx.send(AgyProcessEvent::Stderr(line)).await;
                                 }
-                                Ok(None) => {}, // EOF on stderr
+                                Ok(None) => {
+                                    stderr_done = true;
+                                }
                                 Err(e) => {
                                     warn!(error = %e, "Error reading agy stderr line");
+                                    stderr_done = true;
                                 }
                             }
                         }
