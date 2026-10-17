@@ -482,13 +482,12 @@ fn test_stress_recent_events_update_capacity_bypass() {
         })
         .collect();
 
-    // When applied via RecentEvents, it directly assigns without truncation
+    // When applied via RecentEvents, in Phase 21 it is bounded by MAX_RECENT_EVENTS (300)
     state.apply_update(TuiUpdateEvent::RecentEvents(large_batch));
 
-    // Note: recent_events holds 350 events because apply_update does not truncate RecentEvents
-    assert_eq!(state.recent_events.len(), 350);
+    assert_eq!(state.recent_events.len(), 300);
 
-    // However, the very next single push_recent_event will truncate it down to 200
+    // The subsequent push_recent_event truncates recent_events down to 200
     state.push_recent_event(CoordinatorEvent {
         id: Uuid::new_v4(),
         timestamp: Utc::now(),

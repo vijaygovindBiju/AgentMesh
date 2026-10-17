@@ -805,6 +805,28 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 - `cargo test -p coordinator --lib`: 129/129 tests passed cleanly
 - `cargo check --workspace`: 0 errors, 0 warnings
 
+---
+
+## Phase 21 Post-Release Fix — Numeric Hotkey & Header Tab Alignment
+
+**Goal:** Resolve the mismatch where pressing key `1` routed to `ProjectInput` instead of `Dashboard` (`1:Dash`). Align numeric hotkeys `1`–`5`, `CurrentScreen` defaults, screen titles, and `cycle_screen` directly with the top header tabs: `1:Dash`, `2:Proj`, `3:Plan`, `4:Fleet`, `5:Diag`.
+
+- [x] Align numeric keys `1`–`5` and `cycle_screen` in `crates/coordinator/src/tui/state.rs`
+- [x] Update test suites in `phase21_tui_enhancements.rs`, `phase20_tui_verification.rs`, and `phase20_tui_stress.rs`
+- [x] Verify `cargo check --workspace` and all test suites pass cleanly
+
+**Verification Results**:
+- `cargo check --workspace`: 0 errors, 0 warnings
+- `cargo test -p coordinator --lib`: 129/129 tests passed cleanly
+- `cargo test -p coordinator --test phase21_tui_enhancements`: 65/65 tests passed cleanly
+- `cargo test -p coordinator --test phase21_challenger_stress`: 15/15 tests passed cleanly
+- `cargo test -p coordinator --test phase21_preview_challenger`: 12/12 tests passed cleanly
+- `cargo test -p coordinator --test phase20_tui_verification`: 86/86 tests passed cleanly
+- `cargo test -p coordinator --test phase20_tui_stress`: 20/20 tests passed cleanly
+- `cargo test -p coordinator --test phase20_challenger2_stress`: 9/9 tests passed cleanly
+- Total tests passed: 336/336 (100% pass rate)
+
+
 
 
 

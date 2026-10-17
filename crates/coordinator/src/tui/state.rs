@@ -61,8 +61,8 @@ pub enum TuiUpdateEvent {
 /// Active top-level screen
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CurrentScreen {
-    Dashboard,
     #[default]
+    Dashboard,
     ProjectInput,
     ProjectManagement,
     PlanReview,
@@ -76,11 +76,11 @@ impl CurrentScreen {
     pub fn title(&self) -> &'static str {
         match self {
             CurrentScreen::Dashboard => "1. Dashboard",
-            CurrentScreen::ProjectInput => "1. Project Input",
+            CurrentScreen::ProjectInput => "2. Project Input",
             CurrentScreen::ProjectManagement => "2. Project Management",
-            CurrentScreen::PlanReview => "2. Plan Review",
+            CurrentScreen::PlanReview => "3. Plan Review",
             CurrentScreen::FleetInspector => "4. Fleet Inspector",
-            CurrentScreen::Diagnostics => "4. Diagnostics",
+            CurrentScreen::Diagnostics => "5. Diagnostics",
         }
     }
 }
@@ -264,7 +264,7 @@ impl Default for AppState {
 impl AppState {
     pub fn new() -> Self {
         Self {
-            current_screen: CurrentScreen::ProjectInput,
+            current_screen: CurrentScreen::Dashboard,
             input_mode: InputMode::Normal,
 
             pg_connected: false,
@@ -804,23 +804,23 @@ impl AppState {
                 None
             }
             KeyCode::Char('1') => {
-                self.current_screen = CurrentScreen::ProjectInput;
-                None
-            }
-            KeyCode::Char('2') => {
-                self.current_screen = CurrentScreen::PlanReview;
-                None
-            }
-            KeyCode::Char('3') => {
                 self.current_screen = CurrentScreen::Dashboard;
                 None
             }
+            KeyCode::Char('2') => {
+                self.current_screen = CurrentScreen::ProjectManagement;
+                None
+            }
+            KeyCode::Char('3') => {
+                self.current_screen = CurrentScreen::PlanReview;
+                None
+            }
             KeyCode::Char('4') => {
-                self.current_screen = CurrentScreen::Diagnostics;
+                self.current_screen = CurrentScreen::FleetInspector;
                 None
             }
             KeyCode::Char('5') => {
-                self.current_screen = CurrentScreen::FleetInspector;
+                self.current_screen = CurrentScreen::Diagnostics;
                 None
             }
             KeyCode::Char('r') | KeyCode::Char('R') => {
@@ -1427,10 +1427,11 @@ impl AppState {
 
     pub fn cycle_screen(&mut self) {
         self.current_screen = match self.current_screen {
+            CurrentScreen::Dashboard => CurrentScreen::ProjectManagement,
             CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => CurrentScreen::PlanReview,
-            CurrentScreen::PlanReview => CurrentScreen::Dashboard,
-            CurrentScreen::Dashboard | CurrentScreen::FleetInspector => CurrentScreen::Diagnostics,
-            CurrentScreen::Diagnostics => CurrentScreen::ProjectInput,
+            CurrentScreen::PlanReview => CurrentScreen::FleetInspector,
+            CurrentScreen::FleetInspector => CurrentScreen::Diagnostics,
+            CurrentScreen::Diagnostics => CurrentScreen::Dashboard,
         };
     }
 
@@ -1998,7 +1999,7 @@ mod tests {
     #[test]
     fn test_initial_app_state() {
         let state = AppState::new();
-        assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+        assert_eq!(state.current_screen, CurrentScreen::Dashboard);
         assert_eq!(state.input_mode, InputMode::Normal);
         assert!(!state.should_quit);
     }
@@ -2006,32 +2007,38 @@ mod tests {
     #[test]
     fn test_screen_navigation_cycle() {
         let mut state = AppState::new();
-        assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+        assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+
+        state.handle_key(make_key(KeyCode::Tab));
+        assert_eq!(state.current_screen, CurrentScreen::ProjectManagement);
 
         state.handle_key(make_key(KeyCode::Tab));
         assert_eq!(state.current_screen, CurrentScreen::PlanReview);
 
         state.handle_key(make_key(KeyCode::Tab));
-        assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+        assert_eq!(state.current_screen, CurrentScreen::FleetInspector);
 
         state.handle_key(make_key(KeyCode::Tab));
         assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
         state.handle_key(make_key(KeyCode::Tab));
-        assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+        assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 
-        // Direct number keys
+        // Direct number keys (1:Dash, 2:Proj, 3:Plan, 4:Fleet, 5:Diag)
+        state.handle_key(make_key(KeyCode::Char('1')));
+        assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+
         state.handle_key(make_key(KeyCode::Char('2')));
-        assert_eq!(state.current_screen, CurrentScreen::PlanReview);
+        assert_eq!(state.current_screen, CurrentScreen::ProjectManagement);
 
         state.handle_key(make_key(KeyCode::Char('3')));
-        assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+        assert_eq!(state.current_screen, CurrentScreen::PlanReview);
 
         state.handle_key(make_key(KeyCode::Char('4')));
-        assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
+        assert_eq!(state.current_screen, CurrentScreen::FleetInspector);
 
-        state.handle_key(make_key(KeyCode::Char('1')));
-        assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+        state.handle_key(make_key(KeyCode::Char('5')));
+        assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
     }
 
     #[test]
@@ -2167,6 +2174,7 @@ mod tests {
     #[test]
     fn test_project_input_submission() {
         let mut state = AppState::new();
+        state.current_screen = CurrentScreen::ProjectManagement;
         state.handle_key(make_key(KeyCode::Char('i')));
         assert_eq!(state.input_mode, InputMode::EnteringProject);
 
@@ -2274,11 +2282,14 @@ mod tests {
     #[test]
     fn test_phase21_screen_hierarchy_and_aliases() {
         let mut state = AppState::new();
-        assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
-        assert_eq!(state.current_screen.title(), "1. Project Input");
+        assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+        assert_eq!(state.current_screen.title(), "1. Dashboard");
 
         state.current_screen = CurrentScreen::ProjectManagement;
         assert_eq!(state.current_screen.title(), "2. Project Management");
+
+        state.current_screen = CurrentScreen::ProjectInput;
+        assert_eq!(state.current_screen.title(), "2. Project Input");
 
         state.current_screen = CurrentScreen::FleetInspector;
         assert_eq!(state.current_screen.title(), "4. Fleet Inspector");

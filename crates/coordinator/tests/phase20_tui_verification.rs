@@ -81,8 +81,8 @@ fn sample_task(id: Uuid, project_id: Uuid, short_id: &str, title: &str, status: 
 #[test]
 fn test_tier1_screen_nav_initial_state() {
     let state = AppState::new();
-    assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
-    assert_eq!(state.current_screen.title(), "1. Project Input");
+    assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+    assert_eq!(state.current_screen.title(), "1. Dashboard");
     assert_eq!(state.input_mode, InputMode::Normal);
     assert!(!state.should_quit);
 }
@@ -90,23 +90,27 @@ fn test_tier1_screen_nav_initial_state() {
 #[test]
 fn test_tier1_screen_nav_tab_cycling() {
     let mut state = AppState::new();
-    assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+    assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 
-    // Tab 1: ProjectInput -> PlanReview
+    // Tab 1: Dashboard -> ProjectManagement
+    state.handle_key(press_key(KeyCode::Tab));
+    assert_eq!(state.current_screen, CurrentScreen::ProjectManagement);
+
+    // Tab 2: ProjectManagement -> PlanReview
     state.handle_key(press_key(KeyCode::Tab));
     assert_eq!(state.current_screen, CurrentScreen::PlanReview);
 
-    // Tab 2: PlanReview -> Dashboard
+    // Tab 3: PlanReview -> FleetInspector
     state.handle_key(press_key(KeyCode::Tab));
-    assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+    assert_eq!(state.current_screen, CurrentScreen::FleetInspector);
 
-    // Tab 3: Dashboard -> Diagnostics
+    // Tab 4: FleetInspector -> Diagnostics
     state.handle_key(press_key(KeyCode::Tab));
     assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
-    // Tab 4: Diagnostics -> ProjectInput
+    // Tab 5: Diagnostics -> Dashboard
     state.handle_key(press_key(KeyCode::Tab));
-    assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+    assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 }
 
 #[test]
@@ -114,16 +118,19 @@ fn test_tier1_screen_nav_numeric_hotkeys() {
     let mut state = AppState::new();
 
     state.handle_key(press_key(KeyCode::Char('2')));
-    assert_eq!(state.current_screen, CurrentScreen::PlanReview);
+    assert_eq!(state.current_screen, CurrentScreen::ProjectManagement);
 
     state.handle_key(press_key(KeyCode::Char('3')));
-    assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+    assert_eq!(state.current_screen, CurrentScreen::PlanReview);
 
     state.handle_key(press_key(KeyCode::Char('4')));
+    assert_eq!(state.current_screen, CurrentScreen::FleetInspector);
+
+    state.handle_key(press_key(KeyCode::Char('5')));
     assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
     state.handle_key(press_key(KeyCode::Char('1')));
-    assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+    assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 }
 
 #[test]
@@ -159,13 +166,13 @@ fn test_tier1_screen_nav_preserves_state_across_switches() {
     state.selected_task_index = 2;
 
     // Switch to Dashboard and back
-    state.handle_key(press_key(KeyCode::Char('3')));
+    state.handle_key(press_key(KeyCode::Char('1')));
     assert_eq!(state.current_screen, CurrentScreen::Dashboard);
     assert_eq!(state.project_name_input, "State Preservation Project");
     assert_eq!(state.selected_task_index, 2);
 
-    state.handle_key(press_key(KeyCode::Char('1')));
-    assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+    state.handle_key(press_key(KeyCode::Char('2')));
+    assert_eq!(state.current_screen, CurrentScreen::ProjectManagement);
     assert_eq!(state.project_name_input, "State Preservation Project");
 }
 
@@ -442,7 +449,8 @@ fn test_tier1_diagnostics_event_stream_navigation() {
 #[test]
 fn test_tier1_project_input_rendering_initial() {
     let mut terminal = create_terminal(100, 25);
-    let state = AppState::new();
+    let mut state = AppState::new();
+    state.current_screen = CurrentScreen::ProjectInput;
 
     terminal.draw(|f| render(f, &state)).unwrap();
     assert_buffer_contains(&terminal, "Project Definition & Planning Input");
@@ -454,6 +462,7 @@ fn test_tier1_project_input_rendering_initial() {
 #[test]
 fn test_tier1_project_input_enter_edit_mode() {
     let mut state = AppState::new();
+    state.current_screen = CurrentScreen::ProjectInput;
     assert_eq!(state.input_mode, InputMode::Normal);
 
     state.handle_key(press_key(KeyCode::Char('i')));
@@ -1367,8 +1376,10 @@ fn test_tier4_e2e_operator_review_flow() {
     let mut terminal = create_terminal(140, 40);
     let mut state = AppState::new();
 
-    // 1. Operator lands on ProjectInput
-    assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+    // 1. Operator lands on Dashboard and navigates to ProjectManagement / ProjectInput via [2]
+    assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+    state.handle_key(press_key(KeyCode::Char('2')));
+    assert_eq!(state.current_screen, CurrentScreen::ProjectManagement);
     terminal.draw(|f| render(f, &state)).unwrap();
 
     // 2. Enters project name and description
@@ -1397,8 +1408,8 @@ fn test_tier4_e2e_operator_review_flow() {
         ReviewTaskState::new(task3.clone()),
     ];
 
-    // 5. Operator switches to PlanReview
-    state.handle_key(press_key(KeyCode::Char('2')));
+    // 5. Operator switches to PlanReview via [3]
+    state.handle_key(press_key(KeyCode::Char('3')));
     assert_eq!(state.current_screen, CurrentScreen::PlanReview);
     terminal.draw(|f| render(f, &state)).unwrap();
     assert_buffer_contains(&terminal, "TASK-1");
@@ -1442,8 +1453,8 @@ fn test_tier4_e2e_operator_monitoring_flow() {
     let task1_id = state.review_tasks[1].task.id;
     let agent1_id = state.agents[1].id;
 
-    // 1. Operator switches to Dashboard
-    state.handle_key(press_key(KeyCode::Char('3')));
+    // 1. Operator switches to Dashboard via [1]
+    state.handle_key(press_key(KeyCode::Char('1')));
     assert_eq!(state.current_screen, CurrentScreen::Dashboard);
     terminal.draw(|f| render(f, &state)).unwrap();
 
@@ -1477,8 +1488,8 @@ fn test_tier4_e2e_operator_monitoring_flow() {
     assert_eq!(state.review_tasks[1].task.status, TaskStatus::Blocked);
     assert_eq!(state.agents[1].status, AgentStatus::Blocked);
 
-    // 5. Operator switches to Diagnostics to inspect KPIs & event stream
-    state.handle_key(press_key(KeyCode::Char('4')));
+    // 5. Operator switches to Diagnostics to inspect KPIs & event stream via [5]
+    state.handle_key(press_key(KeyCode::Char('5')));
     assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
     terminal.draw(|f| render(f, &state)).unwrap();
 

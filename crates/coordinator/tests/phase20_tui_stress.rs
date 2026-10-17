@@ -114,24 +114,27 @@ fn test_stress_deep_screen_cycling() {
         let prev = state.current_screen;
         state.handle_key(press(KeyCode::Tab));
         match prev {
-            CurrentScreen::ProjectInput => assert_eq!(state.current_screen, CurrentScreen::PlanReview),
-            CurrentScreen::PlanReview => assert_eq!(state.current_screen, CurrentScreen::Dashboard),
-            CurrentScreen::Dashboard => assert_eq!(state.current_screen, CurrentScreen::Diagnostics),
-            CurrentScreen::Diagnostics => assert_eq!(state.current_screen, CurrentScreen::ProjectInput),
-            _ => {}
+            CurrentScreen::Dashboard => assert_eq!(state.current_screen, CurrentScreen::ProjectManagement),
+            CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => {
+                assert_eq!(state.current_screen, CurrentScreen::PlanReview)
+            }
+            CurrentScreen::PlanReview => assert_eq!(state.current_screen, CurrentScreen::FleetInspector),
+            CurrentScreen::FleetInspector => assert_eq!(state.current_screen, CurrentScreen::Diagnostics),
+            CurrentScreen::Diagnostics => assert_eq!(state.current_screen, CurrentScreen::Dashboard),
         }
     }
 
     // 2,000 numeric screen switches
     let targets = [
-        (KeyCode::Char('1'), CurrentScreen::ProjectInput),
-        (KeyCode::Char('2'), CurrentScreen::PlanReview),
-        (KeyCode::Char('3'), CurrentScreen::Dashboard),
-        (KeyCode::Char('4'), CurrentScreen::Diagnostics),
+        (KeyCode::Char('1'), CurrentScreen::Dashboard),
+        (KeyCode::Char('2'), CurrentScreen::ProjectManagement),
+        (KeyCode::Char('3'), CurrentScreen::PlanReview),
+        (KeyCode::Char('4'), CurrentScreen::FleetInspector),
+        (KeyCode::Char('5'), CurrentScreen::Diagnostics),
     ];
 
     for i in 0..2000 {
-        let (key, expected) = targets[i % 4];
+        let (key, expected) = targets[i % 5];
         state.handle_key(press(key));
         assert_eq!(state.current_screen, expected);
     }
@@ -296,6 +299,7 @@ fn test_stress_large_task_count_100_tasks_navigation_and_review() {
     }
     state.review_tasks = tasks;
     state.current_screen = CurrentScreen::PlanReview;
+    state.confirm_destructive_actions = false;
 
     let mut terminal = create_terminal(120, 35);
 

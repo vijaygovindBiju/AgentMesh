@@ -117,31 +117,34 @@ fn sample_event(i: usize) -> CoordinatorEvent {
 
 #[test]
 fn test_tier1_screen_nav_5_screens_initial_and_titles() {
-    assert_eq!(CurrentScreen::default(), CurrentScreen::ProjectInput);
+    assert_eq!(CurrentScreen::default(), CurrentScreen::Dashboard);
     assert_eq!(CurrentScreen::Dashboard.title(), "1. Dashboard");
-    assert_eq!(CurrentScreen::ProjectInput.title(), "1. Project Input");
+    assert_eq!(CurrentScreen::ProjectInput.title(), "2. Project Input");
     assert_eq!(CurrentScreen::ProjectManagement.title(), "2. Project Management");
-    assert_eq!(CurrentScreen::PlanReview.title(), "2. Plan Review");
+    assert_eq!(CurrentScreen::PlanReview.title(), "3. Plan Review");
     assert_eq!(CurrentScreen::FleetInspector.title(), "4. Fleet Inspector");
-    assert_eq!(CurrentScreen::Diagnostics.title(), "4. Diagnostics");
+    assert_eq!(CurrentScreen::Diagnostics.title(), "5. Diagnostics");
 }
 
 #[test]
 fn test_tier1_screen_nav_5_screens_tab_cycling() {
     let mut state = AppState::new();
-    state.current_screen = CurrentScreen::ProjectInput;
+    assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+
+    state.cycle_screen();
+    assert_eq!(state.current_screen, CurrentScreen::ProjectManagement);
 
     state.cycle_screen();
     assert_eq!(state.current_screen, CurrentScreen::PlanReview);
 
     state.cycle_screen();
-    assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+    assert_eq!(state.current_screen, CurrentScreen::FleetInspector);
 
     state.cycle_screen();
     assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
     state.cycle_screen();
-    assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+    assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 }
 
 #[test]
@@ -149,23 +152,23 @@ fn test_tier1_screen_nav_numeric_hotkeys_1_to_5() {
     let mut state = AppState::new();
 
     state.handle_key(press_char('1'));
-    assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
-
-    state.handle_key(press_char('2'));
-    assert_eq!(state.current_screen, CurrentScreen::PlanReview);
-
-    state.handle_key(press_char('3'));
     assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 
+    state.handle_key(press_char('2'));
+    assert_eq!(state.current_screen, CurrentScreen::ProjectManagement);
+
+    state.handle_key(press_char('3'));
+    assert_eq!(state.current_screen, CurrentScreen::PlanReview);
+
     state.handle_key(press_char('4'));
-    assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
+    assert_eq!(state.current_screen, CurrentScreen::FleetInspector);
 
     state.handle_key(press_char('5'));
-    assert_eq!(state.current_screen, CurrentScreen::FleetInspector);
+    assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
     // Key '6' is unmapped and does not switch screen
     state.handle_key(press_char('6'));
-    assert_eq!(state.current_screen, CurrentScreen::FleetInspector);
+    assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 }
 
 #[test]
@@ -207,10 +210,10 @@ fn test_tier1_screen_nav_all_5_screen_headers_render() {
 #[test]
 fn test_tier1_screen_nav_preserves_backward_compatible_aliases() {
     let mut state = AppState::new();
-    assert_eq!(state.current_screen, CurrentScreen::ProjectInput);
+    assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 
     state.handle_key(press_key(KeyCode::Tab));
-    assert_eq!(state.current_screen, CurrentScreen::PlanReview);
+    assert_eq!(state.current_screen, CurrentScreen::ProjectManagement);
 }
 
 // ----------------------------------------------------------------------------
