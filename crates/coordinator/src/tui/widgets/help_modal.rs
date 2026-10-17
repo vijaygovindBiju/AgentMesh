@@ -12,8 +12,8 @@ pub struct HelpModalWidget;
 
 impl HelpModalWidget {
     pub fn render(frame: &mut Frame, area: Rect, _state: &AppState) {
-        let popup_width = area.width.saturating_sub(4).min(75);
-        let popup_height = area.height.saturating_sub(4).min(24);
+        let popup_width = area.width.saturating_sub(4).min(78);
+        let popup_height = area.height.saturating_sub(2).min(26);
 
         if popup_width < 10 || popup_height < 5 {
             return;
@@ -48,11 +48,15 @@ impl HelpModalWidget {
         let lines = vec![
             Line::from(vec![
                 Span::styled(" [1]..[5] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                Span::raw("Direct screen jump (1:Dash, 2:Proj, 3:Plan, 4:Fleet, 5:Diag)"),
+                Span::raw("Direct screen jump  |  "),
+                Span::styled(" [Tab / BackTab / [ / ]] ", Style::default().fg(Color::Cyan)),
+                Span::raw("Cycle screens"),
             ]),
             Line::from(vec![
-                Span::styled(" [Tab] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                Span::raw("Cycle screens  |  "),
+                Span::styled(" Mouse ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::raw("Click tabs to jump, wheel scroll across lists & DAG"),
+            ]),
+            Line::from(vec![
                 Span::styled(" [:] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
                 Span::raw("Command palette  |  "),
                 Span::styled(" [?] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
@@ -104,20 +108,20 @@ impl HelpModalWidget {
             Line::from(vec![
                 Span::styled(" [Y] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
                 Span::raw("Approve  |  "),
+                Span::styled(" [Shift+A] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::raw("Approve ALL  |  "),
                 Span::styled(" [N] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-                Span::raw("Reject  |  "),
-                Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                Span::raw("Edit description  |  "),
-                Span::styled(" [R] ", Style::default().fg(Color::Cyan)),
-                Span::raw("Retry"),
+                Span::raw("Reject"),
             ]),
             Line::from(vec![
-                Span::styled(" [A] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                Span::raw("Ack overlap  |  "),
+                Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::raw("Edit  |  "),
+                Span::styled(" [R] ", Style::default().fg(Color::Cyan)),
+                Span::raw("Retry  |  "),
                 Span::styled(" [C] ", Style::default().fg(Color::Red)),
-                Span::raw("Cancel task  |  "),
+                Span::raw("Cancel  |  "),
                 Span::styled(" [ [ / ] ] ", Style::default().fg(Color::Cyan)),
-                Span::raw("Jump to blocker / dependent"),
+                Span::raw("Blocker/Dep"),
             ]),
             Line::from(""),
             Line::from(vec![Span::styled(

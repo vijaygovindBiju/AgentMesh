@@ -106,7 +106,7 @@ impl DashboardScreen {
             BorderType::Plain
         };
         let title_text = if is_focused {
-            " Registered Agents (Mesh Fleet) [Focused: C/Enter to Inspect Capabilities] "
+            " [▶ FOCUSED] Registered Agents (Mesh Fleet) [C/Enter to Inspect Capabilities] "
         } else {
             " Registered Agents (Mesh Fleet) "
         };
@@ -237,7 +237,7 @@ impl DashboardScreen {
             BorderType::Plain
         };
         let title_text = if is_focused {
-            " All Tasks Overview [Focused: ↑/↓ to Navigate, Enter for Details] "
+            " [▶ FOCUSED] All Tasks Overview [↑/↓ to Navigate, Enter for Details] "
         } else {
             " All Tasks Overview "
         };
@@ -269,24 +269,26 @@ impl DashboardScreen {
                 .map(|(idx, item)| {
                     let task = &item.task;
                     let (status_str, status_color) = match task.status {
-                        TaskStatus::Proposed => ("Proposed", Color::DarkGray),
-                        TaskStatus::HumanReview => ("HumanReview", Color::Yellow),
-                        TaskStatus::Approved => ("Approved", Color::Green),
-                        TaskStatus::Rejected => ("Rejected", Color::Red),
-                        TaskStatus::Assigned => ("Assigned", Color::Cyan),
-                        TaskStatus::Executing => ("Executing", Color::Cyan),
-                        TaskStatus::Blocked => ("Blocked", Color::Magenta),
-                        TaskStatus::Completed => ("Completed", Color::Green),
-                        TaskStatus::Failed => ("Failed", Color::Red),
-                        TaskStatus::Cancelled => ("Cancelled", Color::DarkGray),
+                        TaskStatus::Proposed => ("? Proposed", Color::DarkGray),
+                        TaskStatus::HumanReview => ("? HumanReview", Color::Yellow),
+                        TaskStatus::Approved => ("⏳ Approved", Color::Green),
+                        TaskStatus::Rejected => ("✖ Rejected", Color::Red),
+                        TaskStatus::Assigned => ("▶ Assigned", Color::Cyan),
+                        TaskStatus::Executing => ("▶ Executing", Color::Cyan),
+                        TaskStatus::Blocked => ("⏸ Blocked", Color::Magenta),
+                        TaskStatus::Completed => ("✔ Completed", Color::Green),
+                        TaskStatus::Failed => ("✖ Failed", Color::Red),
+                        TaskStatus::Cancelled => ("⊘ Cancelled", Color::DarkGray),
                     };
 
                     let progress_str = if let Some(pct) = item.progress_percent {
-                        format!("{pct}%")
+                        let filled = ((pct as usize) * 5) / 100;
+                        let empty = 5 - filled;
+                        format!("[{}{}] {pct}%", "█".repeat(filled), "░".repeat(empty))
                     } else if task.status == TaskStatus::Executing {
-                        "0%".to_string()
+                        "[░░░░░] 0%".to_string()
                     } else if task.status == TaskStatus::Completed {
-                        "100%".to_string()
+                        "[█████] 100%".to_string()
                     } else {
                         "-".to_string()
                     };
@@ -328,9 +330,9 @@ impl DashboardScreen {
             rows,
             [
                 Constraint::Length(12),
-                Constraint::Percentage(38),
-                Constraint::Length(14),
-                Constraint::Length(10),
+                Constraint::Percentage(34),
+                Constraint::Length(16),
+                Constraint::Length(15),
                 Constraint::Percentage(26),
             ],
         )
@@ -433,24 +435,38 @@ impl DashboardScreen {
     }
 
     fn render_overlap_warnings(frame: &mut Frame, area: Rect, state: &AppState) {
+        let is_focused = state.dashboard_focus == crate::tui::state::DashboardFocus::OverlapsTable;
         let has_critical = state
             .active_overlaps
             .iter()
             .any(|w| w.severity == OverlapSeverity::Critical);
 
-        let border_color = if has_critical {
+        let border_color = if is_focused {
+            Color::Cyan
+        } else if has_critical {
             Color::Red
         } else if !state.active_overlaps.is_empty() {
             Color::Yellow
         } else {
             Color::DarkGray
         };
+        let border_type = if is_focused {
+            BorderType::Thick
+        } else {
+            BorderType::Plain
+        };
+        let title_text = if is_focused {
+            " [▶ FOCUSED] Active Overlap Warnings [Press 'A' to acknowledge] "
+        } else {
+            " Active Overlap Warnings [Press 'A' to acknowledge] "
+        };
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_type(border_type)
             .border_style(Style::default().fg(border_color))
             .title(Span::styled(
-                " Active Overlap Warnings [Press 'A' to acknowledge] ",
+                title_text,
                 Style::default()
                     .fg(border_color)
                     .add_modifier(Modifier::BOLD),

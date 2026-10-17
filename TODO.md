@@ -89,6 +89,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Phase 19 — Real Multi-Machine Validation (DONE)
 - [x] Phase 20 — Operator TUI & CLI Preservation (DONE)
 - [x] Phase 21 — Operator TUI Enhancement & Production Console (DONE)
+- [~] Phase 22 — Operator TUI Usability & Ergonomics Enhancement (IN PROGRESS)
 
 ---
 
@@ -951,6 +952,37 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
   - `README.md` (18 KB)
 - **Safety Boundary**: Pre-existing `src/main.rs` changes preserved 100% intact across all 6 merges.
 - **Worktree State**: 0 dangling worktrees, all temporary workspaces cleanly pruned.
+
+---
+
+## Phase 22 — Operator TUI Usability & Ergonomics Enhancement
+
+**Goal:** Elevate the Coordinator Terminal User Interface (TUI) into an intuitive, responsive, and delightful operator console with native mouse navigation (tab clicking, wheel scrolling), vibrant visual hierarchy and focus badges, bulk task approval workflow, rich toast notification banners, informative empty states, and expanded cheatsheets.
+
+- [x] Task 22.1: Native Mouse Interaction & Scroll Wheel Support
+  - [x] Enable `EnableMouseCapture` and `DisableMouseCapture` in `TerminalApp`
+  - [x] Handle mouse wheel scrolling across Plan Review, DAG view, Dashboard tables, and Diagnostics event logs
+  - [x] Handle mouse click on header tabs (`1:Dash`, `2:Proj`, `3:Plan`, `4:Fleet`, `5:Diag`) to directly switch screens
+  - [x] Handle mouse click on list items and buttons
+- [x] Task 22.2: Vibrant Visual Hierarchy & Pane Focus Highlighting
+  - [x] Distinct border styling and `[▶ FOCUSED]` badge for active panes vs muted borders for inactive panes
+  - [x] Unicode block progress bars (`[█████] 100%`, `[███░░] 60%`) in tasks tables
+  - [x] Color-coded status badges with icons (`✔ Completed`, `▶ Executing`, `⏳ Approved`, `? HumanReview`, `✖ Failed`, `⊘ Cancelled`)
+- [x] Task 22.3: Bulk Task Approval & Ergonomic Shortcuts
+  - [x] Support bulk plan approval (`Shift+A` or `Ctrl+A`) with confirmation modal (`Approve all X pending tasks?`)
+  - [x] Add `[` and `]` screen tab cycling hotkeys
+  - [x] Quick command palette trigger for bulk approval (`task:approve_all`)
+- [x] Task 22.4: Operator Toast Notification Banner & Status Feedback
+  - [x] Severity-colored status toasts with icons (`✔ SUCCESS`, `ℹ INFO`, `⚠ WARNING`, `✖ ERROR`) in status bar
+- [x] Task 22.5: Informative Empty States with Guided Action Steps
+  - [x] Step-by-step onboarding cards when no project, plan, or agents are loaded
+- [x] Task 22.6: Test Suite Validation & Zero-Regression Check
+  - [x] Comprehensive Ratatui test suite covering mouse events, bulk approval, tab clicks, and focus rendering (`phase22_tui_usability.rs` - 13/13 passed)
+  - [x] `cargo check --workspace` passes with 0 errors and 0 warnings
+  - [x] 100% pass rate across existing Phase 20 (`phase20_tui_verification.rs` - 86/86 passed) and Phase 21 (`phase21_tui_enhancements.rs` - 65/65 passed), and `mock_data_purged_verification.rs` (16/16 passed)
+
+### Acceptance Criteria:
+The Operator TUI provides an intuitive, high-ergonomics interface with full mouse support (scrolling across all scrollable lists, graphs, and logs; left-click on header tabs), one-key bulk task approvals (`Shift+A`) guarded by safety confirmation modals, Unicode block progress bars, color-coded status badges with icons, severity-styled toast banners, informative onboarding guidance for empty states, and fast tab cycling shortcuts (`[` and `]`, `BackTab`). All 180 TUI unit and integration tests across Phase 20, 21, and 22 pass cleanly with zero regressions.
 
 
 

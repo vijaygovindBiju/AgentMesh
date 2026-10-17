@@ -51,6 +51,11 @@ pub fn all_commands() -> Vec<CommandItem> {
             category: "Task".to_string(),
         },
         CommandItem {
+            name: "task:approve_all".to_string(),
+            description: "Approve All Tasks".to_string(),
+            category: "Task".to_string(),
+        },
+        CommandItem {
             name: "task:reject".to_string(),
             description: "Reject Task".to_string(),
             category: "Task".to_string(),

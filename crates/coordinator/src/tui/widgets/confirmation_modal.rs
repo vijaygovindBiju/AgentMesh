@@ -26,9 +26,10 @@ impl ConfirmationModalWidget {
 
         frame.render_widget(Clear, modal_area);
 
-        let action_badge = match &dialog.action {
-            DestructiveAction::CancelTask { short_id, .. } => format!("Cancel [{short_id}]"),
-            DestructiveAction::RejectTask { short_id, .. } => format!("Reject [{short_id}]"),
+        let (action_badge, border_color) = match &dialog.action {
+            DestructiveAction::CancelTask { short_id, .. } => (format!("Cancel [{short_id}]"), Color::Red),
+            DestructiveAction::RejectTask { short_id, .. } => (format!("Reject [{short_id}]"), Color::Red),
+            DestructiveAction::ApproveAllTasks => ("Approve All".to_string(), Color::Green),
         };
 
         let block = Block::default()
@@ -36,9 +37,9 @@ impl ConfirmationModalWidget {
             .border_type(BorderType::Rounded)
             .title(Span::styled(
                 format!(" ⚠ {} — {} ", dialog.title, action_badge),
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                Style::default().fg(border_color).add_modifier(Modifier::BOLD),
             ))
-            .border_style(Style::default().fg(Color::Red));
+            .border_style(Style::default().fg(border_color));
         frame.render_widget(block, modal_area);
 
         let inner = Layout::default()

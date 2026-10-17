@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::Span,
+    text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
     Frame,
 };
@@ -60,9 +60,39 @@ impl PlanReviewScreen {
         frame.render_widget(block, area);
 
         if state.review_tasks.is_empty() {
-            let empty =
-                Paragraph::new("No tasks proposed yet. Go to [2: Proj] to submit a project.")
-                    .style(Style::default().fg(Color::DarkGray));
+            let empty_lines = vec![
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("  ℹ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "No tasks proposed yet. Go to [2: Proj] to submit a project.",
+                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("  Quick Start Guide:", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                ]),
+                Line::from(vec![
+                    Span::styled("  1. Press ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("[2]", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(" to open Project Management.", Style::default().fg(Color::DarkGray)),
+                ]),
+                Line::from(vec![
+                    Span::styled("  2. Press ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("[I]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(" to enter a new repository path and development goal.", Style::default().fg(Color::DarkGray)),
+                ]),
+                Line::from(vec![
+                    Span::styled("  3. Press ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("[Enter]", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                    Span::styled(" to submit. Intelligent Planner will decompose it into a DAG.", Style::default().fg(Color::DarkGray)),
+                ]),
+                Line::from(vec![
+                    Span::styled("  4. Return here to review, inspect, edit, or approve tasks [Y] / [Shift+A].", Style::default().fg(Color::DarkGray)),
+                ]),
+            ];
+            let empty = Paragraph::new(empty_lines);
             frame.render_widget(empty, inner_area);
             return;
         }

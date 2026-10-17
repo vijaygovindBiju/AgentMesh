@@ -11,6 +11,7 @@
 # AgentMesh runtime data: per-task Git worktrees created by AgentWorkspace
 # (default location <repo>/.agentmesh/worktrees/<short-id>)
 .agentmesh/
+.agents/
 
 # Editor and OS
 .DS_Store

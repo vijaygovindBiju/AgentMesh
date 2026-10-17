@@ -34,11 +34,11 @@ pub struct TerminalApp {
 }
 
 impl TerminalApp {
-    /// Initializes terminal raw mode and alternate screen.
+    /// Initializes terminal raw mode, alternate screen, and mouse capture.
     pub fn new() -> Result<Self> {
         enable_raw_mode()?;
         let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen)?;
+        execute!(stdout, EnterAlternateScreen, event::EnableMouseCapture)?;
         let backend = CrosstermBackend::new(stdout);
         let terminal = Terminal::new(backend)?;
         Ok(Self { terminal })
@@ -66,10 +66,18 @@ impl TerminalApp {
             self.terminal.draw(|f| render(f, state))?;
 
             if event::poll(tick_rate)? {
-                if let Event::Key(key) = event::read()? {
-                    if let Some(action) = state.handle_key(key) {
-                        action_handler(action, state);
+                match event::read()? {
+                    Event::Key(key) => {
+                        if let Some(action) = state.handle_key(key) {
+                            action_handler(action, state);
+                        }
                     }
+                    Event::Mouse(mouse) => {
+                        if let Some(action) = state.handle_mouse(mouse) {
+                            action_handler(action, state);
+                        }
+                    }
+                    _ => {}
                 }
             }
         }
@@ -91,7 +99,7 @@ impl TerminalApp {
 impl Drop for TerminalApp {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
-        let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen);
+        let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen, event::DisableMouseCapture);
         let _ = self.terminal.show_cursor();
     }
 }

@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use uuid::Uuid;
 
 use crate::domain::{
@@ -15,6 +17,8 @@ pub const MAX_RECENT_EVENTS: usize = 300;
 pub enum TuiAction {
     /// Human approved a task
     ApproveTask { task_id: Uuid },
+    /// Human approved all pending tasks in the current plan
+    ApproveAllTasks,
     /// Human rejected a task
     RejectTask { task_id: Uuid },
     /// Human edited task description inline
@@ -90,6 +94,7 @@ impl CurrentScreen {
 pub enum DestructiveAction {
     CancelTask { task_id: Uuid, short_id: String },
     RejectTask { task_id: Uuid, short_id: String },
+    ApproveAllTasks,
 }
 
 /// State model for safety confirmation modal dialog
@@ -133,6 +138,14 @@ impl ConfirmationModalState {
                 task_id,
                 short_id: short,
             },
+        }
+    }
+
+    pub fn approve_all(pending_count: usize) -> Self {
+        Self {
+            title: "Confirm Bulk Task Approval".to_string(),
+            message: format!("Approve all {pending_count} pending tasks and dispatch to available agents?"),
+            action: DestructiveAction::ApproveAllTasks,
         }
     }
 }
@@ -532,6 +545,153 @@ impl AppState {
         self
     }
 
+    /// Handles a mouse event (wheel scrolling, tab clicking) and returns an optional `TuiAction`.
+    pub fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<TuiAction> {
+        match mouse.kind {
+            MouseEventKind::ScrollDown => {
+                match self.current_screen {
+                    CurrentScreen::PlanReview => {
+                        if self.show_dag_view {
+                            self.dag_scroll_offset = self.dag_scroll_offset.saturating_add(1);
+                        } else if !self.review_tasks.is_empty()
+                            && self.selected_task_index + 1 < self.review_tasks.len()
+                        {
+                            self.selected_task_index += 1;
+                        }
+                    }
+                    CurrentScreen::Dashboard => match self.dashboard_focus {
+                        DashboardFocus::AgentsTable => {
+                            if !self.agents.is_empty()
+                                && self.selected_agent_index + 1 < self.agents.len()
+                            {
+                                self.selected_agent_index += 1;
+                            }
+                        }
+                        DashboardFocus::TasksTable => {
+                            if !self.review_tasks.is_empty()
+                                && self.selected_dashboard_task_index + 1 < self.review_tasks.len()
+                            {
+                                self.selected_dashboard_task_index += 1;
+                            }
+                        }
+                        DashboardFocus::OverlapsTable => {
+                            if !self.active_overlaps.is_empty()
+                                && self.selected_overlap_index + 1 < self.active_overlaps.len()
+                            {
+                                self.selected_overlap_index += 1;
+                            }
+                        }
+                    },
+                    CurrentScreen::FleetInspector => {
+                        if !self.agents.is_empty()
+                            && self.selected_agent_index + 1 < self.agents.len()
+                        {
+                            self.selected_agent_index += 1;
+                        }
+                    }
+                    CurrentScreen::Diagnostics => match self.diagnostics_focus {
+                        DiagnosticsFocus::EventsStream => {
+                            let count = self.filtered_events_count();
+                            if count > 0 && self.selected_event_index + 1 < count {
+                                self.selected_event_index += 1;
+                            }
+                        }
+                        DiagnosticsFocus::Timeline => {
+                            if !self.review_tasks.is_empty()
+                                && self.selected_task_index + 1 < self.review_tasks.len()
+                            {
+                                self.selected_task_index += 1;
+                            }
+                        }
+                    },
+                    CurrentScreen::ProjectManagement | CurrentScreen::ProjectInput => {
+                        if !self.available_projects.is_empty()
+                            && self.selected_project_index + 1 < self.available_projects.len()
+                        {
+                            self.selected_project_index += 1;
+                        }
+                    }
+                }
+                None
+            }
+            MouseEventKind::ScrollUp => {
+                match self.current_screen {
+                    CurrentScreen::PlanReview => {
+                        if self.show_dag_view {
+                            self.dag_scroll_offset = self.dag_scroll_offset.saturating_sub(1);
+                        } else if self.selected_task_index > 0 {
+                            self.selected_task_index -= 1;
+                        }
+                    }
+                    CurrentScreen::Dashboard => match self.dashboard_focus {
+                        DashboardFocus::AgentsTable => {
+                            if self.selected_agent_index > 0 {
+                                self.selected_agent_index -= 1;
+                            }
+                        }
+                        DashboardFocus::TasksTable => {
+                            if self.selected_dashboard_task_index > 0 {
+                                self.selected_dashboard_task_index -= 1;
+                            }
+                        }
+                        DashboardFocus::OverlapsTable => {
+                            if self.selected_overlap_index > 0 {
+                                self.selected_overlap_index -= 1;
+                            }
+                        }
+                    },
+                    CurrentScreen::FleetInspector => {
+                        if self.selected_agent_index > 0 {
+                            self.selected_agent_index -= 1;
+                        }
+                    }
+                    CurrentScreen::Diagnostics => match self.diagnostics_focus {
+                        DiagnosticsFocus::EventsStream => {
+                            if self.selected_event_index > 0 {
+                                self.selected_event_index -= 1;
+                            }
+                        }
+                        DiagnosticsFocus::Timeline => {
+                            if self.selected_task_index > 0 {
+                                self.selected_task_index -= 1;
+                            }
+                        }
+                    },
+                    CurrentScreen::ProjectManagement | CurrentScreen::ProjectInput => {
+                        if self.selected_project_index > 0 {
+                            self.selected_project_index -= 1;
+                        }
+                    }
+                }
+                None
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                // If top header area (rows 0..=2)
+                if mouse.row <= 2 {
+                    let col = if mouse.column >= 68 {
+                        mouse.column.saturating_sub(68)
+                    } else {
+                        mouse.column
+                    };
+
+                    if col < 11 {
+                        self.current_screen = CurrentScreen::Dashboard;
+                    } else if col < 22 {
+                        self.current_screen = CurrentScreen::ProjectManagement;
+                    } else if col < 32 {
+                        self.current_screen = CurrentScreen::PlanReview;
+                    } else if col < 42 {
+                        self.current_screen = CurrentScreen::FleetInspector;
+                    } else if col < 55 {
+                        self.current_screen = CurrentScreen::Diagnostics;
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
     /// Handles a keyboard event and returns an optional `TuiAction` for outer handling.
     pub fn handle_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
         // Discard key releases to avoid duplicate handling
@@ -620,6 +780,18 @@ impl AppState {
                             }
                             self.status_message = Some(format!("Task {short_id} marked Rejected."));
                             return Some(TuiAction::RejectTask { task_id });
+                        }
+                        DestructiveAction::ApproveAllTasks => {
+                            let mut count = 0;
+                            for item in &mut self.review_tasks {
+                                if item.task.status == TaskStatus::HumanReview || item.task.status == TaskStatus::Proposed {
+                                    item.human_decision = Some(ApprovalStatus::Approved);
+                                    item.task.status = TaskStatus::Approved;
+                                    count += 1;
+                                }
+                            }
+                            self.status_message = Some(format!("Approved all {count} tasks."));
+                            return Some(TuiAction::ApproveAllTasks);
                         }
                     }
                 }
@@ -718,6 +890,10 @@ impl AppState {
                                 None
                             }
                         }
+                        "task:approve_all" => {
+                            self.prompt_approve_all_tasks();
+                            None
+                        }
                         "task:reject" => {
                             if let Some(task) = self.selected_task() {
                                 let task_id = task.task.id;
@@ -802,6 +978,26 @@ impl AppState {
             }
             KeyCode::Tab => {
                 self.cycle_screen();
+                None
+            }
+            KeyCode::BackTab => {
+                self.cycle_screen_back();
+                None
+            }
+            KeyCode::Char('[') => {
+                if self.current_screen == CurrentScreen::PlanReview && self.show_dag_view {
+                    self.jump_to_blocker();
+                } else {
+                    self.cycle_screen_back();
+                }
+                None
+            }
+            KeyCode::Char(']') => {
+                if self.current_screen == CurrentScreen::PlanReview && self.show_dag_view {
+                    self.jump_to_dependent();
+                } else {
+                    self.cycle_screen();
+                }
                 None
             }
             KeyCode::Char('1') => {
@@ -1174,6 +1370,14 @@ impl AppState {
             return None;
         }
 
+        // Shift+A or Ctrl+A triggers bulk task approval (even when empty, which displays toast notification)
+        if key.code == KeyCode::Char('A')
+            || (key.code == KeyCode::Char('a') && key.modifiers.contains(KeyModifiers::CONTROL))
+        {
+            self.prompt_approve_all_tasks();
+            return None;
+        }
+
         if self.review_tasks.is_empty() {
             return None;
         }
@@ -1195,7 +1399,7 @@ impl AppState {
                 self.show_details_pane = !self.show_details_pane;
                 None
             }
-            KeyCode::Char('a') | KeyCode::Char('A') => {
+            KeyCode::Char('a') => {
                 if let Some(item) = self.review_tasks.get_mut(self.selected_task_index) {
                     if let Some(pos) = item.overlap_warnings.iter().position(|w| !w.acknowledged) {
                         let warning_id = item.overlap_warnings[pos].id;
@@ -1438,6 +1642,30 @@ impl AppState {
             CurrentScreen::FleetInspector => CurrentScreen::Diagnostics,
             CurrentScreen::Diagnostics => CurrentScreen::Dashboard,
         };
+    }
+
+    pub fn cycle_screen_back(&mut self) {
+        self.current_screen = match self.current_screen {
+            CurrentScreen::Dashboard => CurrentScreen::Diagnostics,
+            CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => CurrentScreen::Dashboard,
+            CurrentScreen::PlanReview => CurrentScreen::ProjectManagement,
+            CurrentScreen::FleetInspector => CurrentScreen::PlanReview,
+            CurrentScreen::Diagnostics => CurrentScreen::FleetInspector,
+        };
+    }
+
+    /// Prompts confirmation modal for bulk approving all pending tasks
+    pub fn prompt_approve_all_tasks(&mut self) {
+        let count = self
+            .review_tasks
+            .iter()
+            .filter(|t| t.task.status == TaskStatus::HumanReview || t.task.status == TaskStatus::Proposed)
+            .count();
+        if count == 0 {
+            self.status_message = Some("No pending tasks to approve.".to_string());
+            return;
+        }
+        self.pending_confirmation = Some(ConfirmationModalState::approve_all(count));
     }
 
     pub fn selected_task(&self) -> Option<&ReviewTaskState> {

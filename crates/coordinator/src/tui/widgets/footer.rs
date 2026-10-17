@@ -183,6 +183,8 @@ impl FooterWidget {
                                     hints.extend([
                                         Span::styled(" [Y] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
                                         Span::raw("Approve "),
+                                        Span::styled(" [Shift+A] ", Style::default().fg(Color::Green)),
+                                        Span::raw("All "),
                                         Span::styled(" [N] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
                                         Span::raw("Reject "),
                                         Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
@@ -353,9 +355,36 @@ impl FooterWidget {
                 .status_message
                 .as_deref()
                 .unwrap_or("Ready. One-human operator mode active.");
+
+            let lower = status_text.to_lowercase();
+            let (icon, icon_color, text_color) = if lower.contains("fail")
+                || lower.contains("error")
+                || lower.contains("cancel")
+                || lower.starts_with('✖')
+            {
+                ("✖ ", Color::Red, Color::LightRed)
+            } else if lower.contains("warn")
+                || lower.contains("block")
+                || lower.contains("overlap")
+                || lower.starts_with('⚠')
+            {
+                ("⚠ ", Color::Yellow, Color::LightYellow)
+            } else if lower.contains("complet")
+                || lower.contains("approv")
+                || lower.contains("success")
+                || lower.contains("refresh")
+                || lower.contains("acknowledg")
+                || lower.starts_with('✔')
+            {
+                ("✔ ", Color::Green, Color::LightGreen)
+            } else {
+                ("ℹ ", Color::Cyan, Color::White)
+            };
+
             let status_p = Paragraph::new(Line::from(vec![
                 Span::styled(" Status: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(status_text, Style::default().fg(Color::White)),
+                Span::styled(icon, Style::default().fg(icon_color).add_modifier(Modifier::BOLD)),
+                Span::styled(status_text, Style::default().fg(text_color)),
             ]))
             .block(
                 Block::default()

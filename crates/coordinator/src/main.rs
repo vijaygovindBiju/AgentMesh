@@ -707,6 +707,36 @@ async fn handle_tui_action(
             }
         }
 
+        TuiAction::ApproveAllTasks => {
+            let pending_ids: Vec<Uuid> = state
+                .review_tasks
+                .iter()
+                .filter(|rt| {
+                    rt.task.status == coordinator::domain::TaskStatus::HumanReview
+                        || rt.task.status == coordinator::domain::TaskStatus::Proposed
+                })
+                .map(|rt| rt.task.id)
+                .collect();
+            let mut approved_count = 0;
+            for tid in pending_ids {
+                if let Ok(task) = CommandHandler::execute_approve_task(pool, tid, "Operator").await {
+                    if let Some(rt) = state.review_tasks.iter_mut().find(|rt| rt.task.id == tid) {
+                        rt.task.status = task.status;
+                        rt.human_decision = Some(coordinator::domain::ApprovalStatus::Approved);
+                    }
+                    approved_count += 1;
+                }
+            }
+            state.status_message = Some(format!("Approved {approved_count} tasks in plan."));
+            let _ = coordinator.transition_state(CoordinatorState::Assigning);
+            let _ = coordinator.run_assignment_cycle().await;
+            if let Some(proj) = &state.active_project {
+                if let Ok((rts, _)) = load_project_review_state(pool, proj.id).await {
+                    state.review_tasks = rts;
+                }
+            }
+        }
+
         TuiAction::RejectTask { task_id } => {
             match CommandHandler::execute_reject_task(pool, task_id, "Operator").await {
                 Ok(task) => {

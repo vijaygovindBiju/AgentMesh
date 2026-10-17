@@ -53,17 +53,17 @@ impl TaskCardWidget {
 
         // 2. Status Badge & Review Decision
         let (status_text, status_color) = match item.human_decision {
-            Some(ApprovalStatus::Approved) => (" APPROVED ", Color::Green),
-            Some(ApprovalStatus::EditedAndApproved) => (" EDITED & APPROVED ", Color::Green),
-            Some(ApprovalStatus::Rejected) => (" REJECTED ", Color::Red),
+            Some(ApprovalStatus::Approved) => (" ✔ APPROVED ", Color::Green),
+            Some(ApprovalStatus::EditedAndApproved) => (" ✔ EDITED & APPROVED ", Color::Green),
+            Some(ApprovalStatus::Rejected) => (" ✖ REJECTED ", Color::Red),
             None => match item.task.status {
-                TaskStatus::HumanReview => (" HUMAN REVIEW ", Color::Yellow),
-                TaskStatus::Approved => (" APPROVED ", Color::Green),
-                TaskStatus::Rejected => (" REJECTED ", Color::Red),
-                TaskStatus::Executing => (" EXECUTING ", Color::Cyan),
-                TaskStatus::Completed => (" COMPLETED ", Color::Blue),
-                TaskStatus::Failed => (" FAILED ", Color::Red),
-                _ => (" PROPOSED ", Color::DarkGray),
+                TaskStatus::HumanReview => (" ? HUMAN REVIEW ", Color::Yellow),
+                TaskStatus::Approved => (" ⏳ APPROVED ", Color::Green),
+                TaskStatus::Rejected => (" ✖ REJECTED ", Color::Red),
+                TaskStatus::Executing => (" ▶ EXECUTING ", Color::Cyan),
+                TaskStatus::Completed => (" ✔ COMPLETED ", Color::Green),
+                TaskStatus::Failed => (" ✖ FAILED ", Color::Red),
+                _ => (" ⊘ PROPOSED ", Color::DarkGray),
             },
         };
 
@@ -94,6 +94,14 @@ impl TaskCardWidget {
                 bar,
                 Style::default()
                     .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        } else if item.task.status == TaskStatus::Completed {
+            status_line_spans.push(Span::raw("  Progress: "));
+            status_line_spans.push(Span::styled(
+                " [██████████] 100%",
+                Style::default()
+                    .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
             ));
         }
