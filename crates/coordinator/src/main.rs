@@ -259,26 +259,34 @@ async fn main() -> Result<()> {
                 let sub_js = jetstream.clone();
                 tokio::spawn(async move {
                     use futures::StreamExt;
-                    if let Ok(mut messages) = consumer.messages().await {
-                        while let Some(msg_result) = messages.next().await {
-                            if let Ok(msg) = msg_result {
-                                let _ = msg.ack().await;
-                                match serde_json::from_slice::<agent_protocol::AgentMessage>(
-                                    &msg.payload,
-                                ) {
-                                    Ok(agent_msg) => {
-                                        let _ = EventSubscriber::handle_agent_message_with_jetstream(
-                                            &sub_pool,
-                                            agent_msg.clone(),
-                                            Some(&sub_js),
-                                        )
-                                        .await;
-                                        let _ = sub_tx.send(TuiUpdateEvent::AgentMessage(agent_msg));
-                                    }
-                                    Err(e) => {
-                                        warn!(error = %e, "Failed to parse AgentMessage from JetStream");
+                    loop {
+                        match consumer.messages().await {
+                            Ok(mut messages) => {
+                                while let Some(msg_result) = messages.next().await {
+                                    if let Ok(msg) = msg_result {
+                                        let _ = msg.ack().await;
+                                        match serde_json::from_slice::<agent_protocol::AgentMessage>(
+                                            &msg.payload,
+                                        ) {
+                                            Ok(agent_msg) => {
+                                                let _ = EventSubscriber::handle_agent_message_with_jetstream(
+                                                    &sub_pool,
+                                                    agent_msg.clone(),
+                                                    Some(&sub_js),
+                                                )
+                                                .await;
+                                                let _ = sub_tx.send(TuiUpdateEvent::AgentMessage(agent_msg));
+                                            }
+                                            Err(e) => {
+                                                warn!(error = %e, "Failed to parse AgentMessage from JetStream");
+                                            }
+                                        }
                                     }
                                 }
+                            }
+                            Err(e) => {
+                                warn!(error = %e, "JetStream consumer messages fetch failed; retrying in 1s");
+                                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                             }
                         }
                     }
