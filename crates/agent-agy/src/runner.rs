@@ -106,6 +106,7 @@ impl AgyAgentRunner {
         let payload = serde_json::to_vec(&hb)?;
         let subject = format!("coordinator.agents.heartbeat.{agent_id}");
         client.publish(subject, payload.into()).await?;
+        client.flush().await?;
         Ok(())
     }
 
@@ -119,6 +120,7 @@ impl AgyAgentRunner {
         client
             .publish(event_subject.to_string(), payload.into())
             .await?;
+        client.flush().await?;
         Ok(())
     }
 
