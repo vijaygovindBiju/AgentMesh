@@ -739,7 +739,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 
 ### Milestones & Status
 - [x] M1: Core State, Channel & State Machine Extensions [DONE]
-- [ ] M2: Responsive Header, Contextual Footer, Command Palette & Resize Resilience [TODO]
+- [x] M2: Responsive Header, Contextual Footer, Command Palette & Resize Resilience [DONE]
 - [ ] M3: Project Lifecycle, Recursive DAG & Action Gating [TODO]
 - [ ] M4: Deep Fleet Telemetry, Bounded Event Stream & Real Timelines [TODO]
 - [~] M_TEST: E2E Testing Track: Comprehensive TestBackend Suite [IN PROGRESS]
@@ -754,7 +754,14 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
   - [x] Extend `TuiAction` and `TuiUpdateEvent` enums
   - [x] Drop unpolled `tui_rx` in daemon mode in `crates/coordinator/src/main.rs`
   - [x] Verify `cargo check --workspace` and 86 tests in `phase20_tui_verification.rs`
-- [ ] **M2: Responsive Header, Contextual Footer, Command Palette & Resize Resilience**
+- [x] **M2: Responsive Header, Contextual Footer, Command Palette & Resize Resilience**
+  - [x] Dynamic adaptive HeaderWidget layout (<90 vs >=90 cols) with connectivity pills, agent ratio, and pending approvals
+  - [x] Pane-aware contextual FooterWidget with compact (<85 cols) top 4-5 prioritized action hints
+  - [x] CommandPaletteWidget modal dialog with text filtering, categorized actions ([Nav], [Task], [System]), and bounds
+  - [x] Command palette key handling in AppState (`:`, `Esc`, `Up`/`Down`, `Backspace`, typing, `Enter`)
+  - [x] Extreme size guard in ui.rs (<48 width or <10 height) with centered fallback message
+  - [x] help_modal.rs sizing bounds fix (`min(width-4, 75)` x `min(height-4, 24)`)
+  - [x] All 86 Phase 20 tests and 65 Phase 21 tests pass cleanly
 - [ ] **M3: Project Lifecycle, Recursive DAG & Action Gating**
 - [ ] **M4: Deep Fleet Telemetry, Bounded Event Stream & Real Timelines**
 - [ ] **M_TEST: E2E Testing Track: Comprehensive TestBackend Suite**

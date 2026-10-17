@@ -12,8 +12,12 @@ pub struct HelpModalWidget;
 
 impl HelpModalWidget {
     pub fn render(frame: &mut Frame, area: Rect, _state: &AppState) {
-        let popup_width = (area.width * 80 / 100).clamp(65, 82).min(area.width);
-        let popup_height = (area.height * 80 / 100).clamp(20, 28).min(area.height);
+        let popup_width = area.width.saturating_sub(4).min(75);
+        let popup_height = area.height.saturating_sub(4).min(24);
+
+        if popup_width < 10 || popup_height < 5 {
+            return;
+        }
 
         let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
         let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
@@ -43,15 +47,17 @@ impl HelpModalWidget {
 
         let lines = vec![
             Line::from(vec![
-                Span::styled(" [1]..[4] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                Span::raw("Direct screen jump (1:Input, 2:Review, 3:Dashboard, 4:Diagnostics)"),
+                Span::styled(" [1]..[5] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::raw("Direct screen jump (1:Dash, 2:Proj, 3:Plan, 4:Fleet, 5:Diag)"),
             ]),
             Line::from(vec![
                 Span::styled(" [Tab] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
                 Span::raw("Cycle screens  |  "),
+                Span::styled(" [:] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::raw("Command palette  |  "),
                 Span::styled(" [?] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                Span::raw("Toggle this cheatsheet  |  "),
-                Span::styled(" [Q] / [Ctrl+C] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::raw("Help cheatsheet  |  "),
+                Span::styled(" [Q] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
                 Span::raw("Quit"),
             ]),
             Line::from(""),

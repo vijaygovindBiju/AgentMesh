@@ -1,5 +1,7 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout},
+    style::{Color, Style},
+    widgets::Paragraph,
     Frame,
 };
 
@@ -7,18 +9,30 @@ use crate::tui::screens::{
     DashboardScreen, DiagnosticsScreen, PlanReviewScreen, ProjectInputScreen,
 };
 use crate::tui::state::{AppState, CurrentScreen};
-use crate::tui::widgets::{FooterWidget, HeaderWidget, HelpModalWidget};
+use crate::tui::widgets::{CommandPaletteWidget, FooterWidget, HeaderWidget, HelpModalWidget};
 
 /// Top-level layout orchestrator
 pub fn render(frame: &mut Frame, state: &AppState) {
     let size = frame.area();
 
+    // Extreme size guard: terminal below minimum operational bounds
+    if size.width < 48 || size.height < 10 {
+        let msg = format!("Terminal too small ({}x{}, min 60x18)", size.width, size.height);
+        let p = Paragraph::new(msg)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(Color::Yellow));
+        frame.render_widget(p, size);
+        return;
+    }
+
+    let header_height = if size.width < 90 { 2 } else { 3 };
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Header bar
-            Constraint::Min(10),   // Main body area
-            Constraint::Length(3), // Footer key hints and status
+            Constraint::Length(header_height), // Header bar
+            Constraint::Min(6),                // Main body area
+            Constraint::Length(3),             // Footer key hints and status
         ])
         .split(size);
 
@@ -27,9 +41,13 @@ pub fn render(frame: &mut Frame, state: &AppState) {
 
     // 2. Main Screen Body
     match state.current_screen {
-        CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => ProjectInputScreen::render(frame, chunks[1], state),
+        CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => {
+            ProjectInputScreen::render(frame, chunks[1], state)
+        }
         CurrentScreen::PlanReview => PlanReviewScreen::render(frame, chunks[1], state),
-        CurrentScreen::Dashboard | CurrentScreen::FleetInspector => DashboardScreen::render(frame, chunks[1], state),
+        CurrentScreen::Dashboard | CurrentScreen::FleetInspector => {
+            DashboardScreen::render(frame, chunks[1], state)
+        }
         CurrentScreen::Diagnostics => DiagnosticsScreen::render(frame, chunks[1], state),
     }
 
@@ -40,4 +58,63 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     if state.show_help_modal {
         HelpModalWidget::render(frame, size, state);
     }
+
+    // 5. Global Command Palette Modal
+    if state.show_command_palette {
+        CommandPaletteWidget::render(frame, size, state);
+    }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    #[test]
+    fn test_extreme_size_guard_triggers_under_bounds() {
+        // Terminal width < 48
+        let backend = TestBackend::new(40, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let state = AppState::new().with_mock_data();
+
+        terminal.draw(|f| render(f, &state)).unwrap();
+        let buf = terminal.backend().buffer();
+        let text: String = buf.content().iter().map(|c| c.symbol()).collect();
+        assert!(text.contains("Terminal too small"));
+        assert!(text.contains("min 60x18"));
+
+        // Terminal height < 10
+        let backend2 = TestBackend::new(80, 8);
+        let mut terminal2 = Terminal::new(backend2).unwrap();
+        terminal2.draw(|f| render(f, &state)).unwrap();
+        let buf2 = terminal2.backend().buffer();
+        let text2: String = buf2.content().iter().map(|c| c.symbol()).collect();
+        assert!(text2.contains("Terminal too small"));
+        assert!(text2.contains("min 60x18"));
+    }
+
+    #[test]
+    fn test_render_with_command_palette_overlay() {
+        let backend = TestBackend::new(100, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut state = AppState::new().with_mock_data();
+        state.show_command_palette = true;
+
+        terminal.draw(|f| render(f, &state)).unwrap();
+        let buf = terminal.backend().buffer();
+        let text: String = buf.content().iter().map(|c| c.symbol()).collect();
+        assert!(text.contains("Command Palette (:)"));
+    }
+
+    #[test]
+    fn test_render_at_standard_bounds_does_not_panic() {
+        for (w, h) in [(60, 18), (70, 20), (80, 24), (100, 30), (160, 50)] {
+            let backend = TestBackend::new(w, h);
+            let mut terminal = Terminal::new(backend).unwrap();
+            let state = AppState::new().with_mock_data();
+            terminal.draw(|f| render(f, &state)).expect("Render should not panic");
+        }
+    }
+}
+

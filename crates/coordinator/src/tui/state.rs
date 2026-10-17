@@ -558,6 +558,11 @@ impl AppState {
             return None;
         }
 
+        // Command palette modal dialog captures keys when open
+        if self.show_command_palette {
+            return self.handle_command_palette_key(key);
+        }
+
         match self.input_mode {
             InputMode::Normal => self.handle_normal_mode_key(key),
             InputMode::EditingDescription => self.handle_editing_key(key),
@@ -565,8 +570,142 @@ impl AppState {
         }
     }
 
+    fn handle_command_palette_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
+        match key.code {
+            KeyCode::Esc => {
+                self.show_command_palette = false;
+                self.command_palette_query.clear();
+                self.command_palette_selected_index = 0;
+                None
+            }
+            KeyCode::Up => {
+                if self.command_palette_selected_index > 0 {
+                    self.command_palette_selected_index -= 1;
+                }
+                None
+            }
+            KeyCode::Down => {
+                let count = crate::tui::widgets::command_palette::filtered_commands(&self.command_palette_query).len();
+                if count > 0 && self.command_palette_selected_index + 1 < count {
+                    self.command_palette_selected_index += 1;
+                }
+                None
+            }
+            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if self.command_palette_selected_index > 0 {
+                    self.command_palette_selected_index -= 1;
+                }
+                None
+            }
+            KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let count = crate::tui::widgets::command_palette::filtered_commands(&self.command_palette_query).len();
+                if count > 0 && self.command_palette_selected_index + 1 < count {
+                    self.command_palette_selected_index += 1;
+                }
+                None
+            }
+            KeyCode::Backspace => {
+                self.command_palette_query.pop();
+                self.command_palette_selected_index = 0;
+                None
+            }
+            KeyCode::Enter => {
+                let matches = crate::tui::widgets::command_palette::filtered_commands(&self.command_palette_query);
+                self.show_command_palette = false;
+                if let Some(cmd) = matches.get(self.command_palette_selected_index) {
+                    match cmd.name.as_str() {
+                        "nav:dashboard" => {
+                            self.current_screen = CurrentScreen::Dashboard;
+                            None
+                        }
+                        "nav:projects" => {
+                            self.current_screen = CurrentScreen::ProjectManagement;
+                            None
+                        }
+                        "nav:plan" => {
+                            self.current_screen = CurrentScreen::PlanReview;
+                            None
+                        }
+                        "nav:fleet" => {
+                            self.current_screen = CurrentScreen::FleetInspector;
+                            None
+                        }
+                        "nav:diagnostics" => {
+                            self.current_screen = CurrentScreen::Diagnostics;
+                            None
+                        }
+                        "task:approve" => {
+                            if let Some(task) = self.selected_task() {
+                                let task_id = task.task.id;
+                                Some(TuiAction::ApproveTask { task_id })
+                            } else {
+                                None
+                            }
+                        }
+                        "task:reject" => {
+                            if let Some(task) = self.selected_task() {
+                                let task_id = task.task.id;
+                                Some(TuiAction::RejectTask { task_id })
+                            } else {
+                                None
+                            }
+                        }
+                        "task:cancel" => {
+                            if let Some(task) = self.selected_task() {
+                                let task_id = task.task.id;
+                                Some(TuiAction::CancelTask { task_id })
+                            } else {
+                                None
+                            }
+                        }
+                        "task:retry" => {
+                            if let Some(task) = self.selected_task() {
+                                let task_id = task.task.id;
+                                Some(TuiAction::RetryTask { task_id })
+                            } else {
+                                None
+                            }
+                        }
+                        "task:edit" => {
+                            if let Some(desc) = self.selected_task().map(|t| t.task.description.clone()) {
+                                self.input_mode = InputMode::EditingDescription;
+                                self.edit_cursor = desc.len();
+                                self.edit_buffer = desc;
+                            }
+                            None
+                        }
+                        "system:refresh" => Some(TuiAction::RefreshData),
+                        "system:help" => {
+                            self.show_help_modal = true;
+                            None
+                        }
+                        "system:quit" => {
+                            self.should_quit = true;
+                            Some(TuiAction::Quit)
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char(c) => {
+                self.command_palette_query.push(c);
+                self.command_palette_selected_index = 0;
+                None
+            }
+            _ => None,
+        }
+    }
+
     fn handle_normal_mode_key(&mut self, key: KeyEvent) -> Option<TuiAction> {
         match key.code {
+            KeyCode::Char(':') => {
+                self.show_command_palette = true;
+                self.command_palette_query.clear();
+                self.command_palette_selected_index = 0;
+                None
+            }
             KeyCode::Char('?') => {
                 self.show_help_modal = true;
                 None
