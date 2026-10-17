@@ -856,6 +856,34 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 - `cargo test -p coordinator --test phase20_challenger2_stress`: 9/9 tests passed cleanly
 - Total tests passed: 352/352 (100% pass rate)
 
+---
+
+## Real Multi-Agent Acceptance Test (Live Execution)
+
+**Goal:** Execute a genuine, real-world multi-agent acceptance test using real coding agents (`agy` CLI runtime) coordinated via PostgreSQL and NATS JetStream against a clean repository (`mesh-test-project`). No mock agents.
+
+- [~] Phase A: Environment & Infrastructure Verification
+  - [x] Verify live PostgreSQL (port 5432) and NATS JetStream (port 4222)
+  - [x] Verify genuine executable & authenticated coding agent (`agy` CLI v1.4.0)
+  - [x] Verify clean test repository (`mesh-test-project`) with passing baseline tests (6/6 pass)
+- [~] Phase B: Human Approval Gate & Plan Specification
+  - [x] Inspect test repository and formulate non-overlapping tasks
+  - [x] Solicit and obtain explicit human approval ("yes preced")
+- [ ] Phase C: Real Multi-Agent Concurrent Execution
+  - [ ] Spawn Coordinator daemon connected to live PostgreSQL and NATS
+  - [ ] Spawn Agent 1 (`RealAgent-1-Backend`, `gemini-3.8-flash-high`)
+  - [ ] Spawn Agent 2 (`RealAgent-2-Analytics`, `claude-sonnet-4-6`)
+  - [ ] Verify agent registrations, capability profiles, and live heartbeats
+  - [ ] Submit approved tasks to coordinator and dispatch via JetStream
+  - [ ] Monitor parallel execution, worktree isolation, progress events, and completions
+- [ ] Phase D: Evidence Collection & Verification
+  - [ ] Collect task assignments and delivery IDs
+  - [ ] Collect git worktree diffs and completion commits
+  - [ ] Verify repository test suite passes with new features
+  - [ ] Verify worktree cleanup and git history integrity
+- [ ] Phase E: Final Evidence-Based Acceptance Report
+
+
 
 
 

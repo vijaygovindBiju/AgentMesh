@@ -63,7 +63,7 @@ impl AgyAgent {
             api_key: api_key.into(),
             agy_path,
             model: None,
-            effort: Some("medium".to_string()),
+            effort: None,
             workspace_dir: None,
             timeout: Duration::from_secs(600), // 10 minutes default
             dangerously_skip_permissions: true,
@@ -98,7 +98,12 @@ impl AgyAgent {
     }
 
     pub fn with_effort(mut self, effort: impl Into<String>) -> Self {
-        self.effort = Some(effort.into());
+        let eff = effort.into();
+        if eff.trim().is_empty() || eff.eq_ignore_ascii_case("none") {
+            self.effort = None;
+        } else {
+            self.effort = Some(eff);
+        }
         self
     }
 
