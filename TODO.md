@@ -836,14 +836,17 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 - [x] Remove standalone mock fallback mode from `crates/coordinator/src/main.rs` and enforce live infrastructure requirement
 - [x] Ensure clean initial state (`pg_connected`, `nats_connected`, empty `available_projects`, empty `agents`) in production runtime
 - [x] Align navigation prompts in `plan_review.rs` and `dag_view.rs` to point to `[2: Proj]`
+- [x] Align empty timeline prompt in `diagnostics.rs` to guide to `[2: Proj]`
+- [x] Purge hardcoded mock runtime string from `agent_inspector.rs` hardware telemetry
+- [x] Clear project input fields and reset indices on `SubmitProject` and `LoadProject`
 - [x] Mark `with_mock_data` on `AppState` with `#[doc(hidden)]` as test fixture helper only
 - [x] Add deterministic test suite verifying clean empty-state rendering across all screens and widgets without panics (`crates/coordinator/tests/mock_data_purged_verification.rs`)
 - [x] Verify `cargo check --workspace` passes cleanly with 0 errors and 0 warnings
-- [x] Verify `cargo test --workspace` passes cleanly across all test suites
+- [x] Verify test suites pass cleanly across all verified test suites
 
 **Verification Results**:
 - `cargo check --workspace`: 0 errors, 0 warnings
-- `cargo test -p coordinator --test mock_data_purged_verification`: 13/13 tests passed cleanly
+- `cargo test -p coordinator --test mock_data_purged_verification`: 16/16 tests passed cleanly
 - `cargo test -p coordinator --lib`: 129/129 tests passed cleanly
 - `cargo test -p coordinator --test phase21_tui_enhancements`: 65/65 tests passed cleanly
 - `cargo test -p coordinator --test phase20_tui_verification`: 86/86 tests passed cleanly
@@ -851,7 +854,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 - `cargo test -p coordinator --test phase21_challenger_stress`: 15/15 tests passed cleanly
 - `cargo test -p coordinator --test phase20_tui_stress`: 20/20 tests passed cleanly
 - `cargo test -p coordinator --test phase20_challenger2_stress`: 9/9 tests passed cleanly
-- Total tests passed: 349/349 (100% pass rate)
+- Total tests passed: 352/352 (100% pass rate)
 
 
 

@@ -274,7 +274,7 @@ impl AgentInspectorWidget {
                 .runtime
                 .agy_version
                 .as_deref()
-                .unwrap_or("None (Mock runtime)");
+                .unwrap_or("N/A");
             let mem_str = prof
                 .runtime
                 .memory_mb

@@ -407,6 +407,11 @@ impl DiagnosticsScreen {
             ];
             let p = Paragraph::new(lines).block(block);
             frame.render_widget(p, area);
+        } else if state.review_tasks.is_empty() {
+            let p = Paragraph::new("No timeline loaded. Go to [2: Proj] to submit a project.")
+                .wrap(ratatui::widgets::Wrap { trim: true })
+                .block(block);
+            frame.render_widget(p, area);
         } else {
             let p = Paragraph::new("No timeline loaded. Press [Enter] on a task to query real timeline.")
                 .wrap(ratatui::widgets::Wrap { trim: true })

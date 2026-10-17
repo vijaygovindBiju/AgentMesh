@@ -519,10 +519,16 @@ async fn handle_tui_action(
                 Ok(p) => {
                     coordinator.set_active_project(p.id);
                     state.active_project = Some(p.clone());
+                    state.review_tasks.clear();
+                    state.active_overlaps.clear();
+                    state.selected_task_index = 0;
+                    state.selected_dashboard_task_index = 0;
                     let all_projects = ProjectRepository::list(&pool).await.unwrap_or_default();
                     state.available_projects = all_projects.clone();
                     let _ = action_tx.send(TuiUpdateEvent::Projects(all_projects));
                     let _ = action_tx.send(TuiUpdateEvent::ActiveProject(p.clone()));
+                    let _ = action_tx.send(TuiUpdateEvent::Tasks(vec![]));
+                    let _ = action_tx.send(TuiUpdateEvent::Overlaps(vec![]));
                     p
                 }
                 Err(e) => {
@@ -783,6 +789,8 @@ async fn handle_tui_action(
                     let _ = action_tx.send(TuiUpdateEvent::Overlaps(overlaps.clone()));
                     state.review_tasks = rts;
                     state.active_overlaps = overlaps;
+                    state.selected_task_index = 0;
+                    state.selected_dashboard_task_index = 0;
                 }
                 state.status_message = Some(format!("Loaded project '{}'.", proj.name));
             } else {

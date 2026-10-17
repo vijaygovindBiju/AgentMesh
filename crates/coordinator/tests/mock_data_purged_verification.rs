@@ -477,3 +477,115 @@ fn test_terminal_resize_on_empty_state_does_not_panic() {
             .unwrap_or_else(|_| panic!("Render failed at resolution {}x{}", w, h));
     }
 }
+
+#[test]
+fn test_agent_inspector_telemetry_renders_na_without_mock_runtime_string() {
+    let mut terminal = create_terminal(100, 30);
+    let mut state = AppState::new();
+    let agent_id = Uuid::new_v4();
+
+    let agent = Agent {
+        id: agent_id,
+        human_owner: "Custom Runner (Ops)".to_string(),
+        api_key_hash: "hash".to_string(),
+        adapter_type: AdapterType::Agy,
+        capabilities: serde_json::json!(["bash", "curl"]),
+        nats_subject: format!("agents.{agent_id}.events"),
+        status: AgentStatus::Idle,
+        current_task_id: None,
+        last_seen: Some(chrono::Utc::now()),
+        created_at: chrono::Utc::now(),
+        capability_profile: Some(serde_json::json!({
+            "runtime": {
+                "os": "linux",
+                "arch": "x86_64",
+                "adapter_type": "Agy",
+                "agy_version": null,
+                "cpu_count": 8,
+                "memory_mb": 16384
+            },
+            "commands": ["git", "bash"],
+            "mcp_servers": [],
+            "specialized_capabilities": ["ci"]
+        })),
+        health_status: HealthStatus::Healthy,
+        consecutive_failures: 0,
+        tasks_completed_count: 0,
+        tasks_failed_count: 0,
+        last_error: None,
+        heartbeat_latency_ms: Some(12),
+        max_concurrency: 1,
+        active_tasks_count: 0,
+        is_draining: false,
+        role: "worker".to_string(),
+        permissions: serde_json::json!({}),
+        is_revoked: false,
+        api_key_created_at: chrono::Utc::now(),
+        api_key_expires_at: None,
+    };
+
+    state.agents.push(agent);
+    state.selected_agent_index = 0;
+    state.show_agent_inspector = true;
+
+    terminal
+        .draw(|f| AgentInspectorWidget::render(f, f.area(), &state))
+        .unwrap();
+
+    let output = buffer_to_string(&terminal);
+    assert!(
+        !output.contains("Mock runtime"),
+        "Inspector must not contain hardcoded 'Mock runtime' string when agy_version is null"
+    );
+    assert!(
+        output.contains("Antigravity CLI: N/A"),
+        "Inspector should display 'Antigravity CLI: N/A' for absent agy_version"
+    );
+}
+
+#[test]
+fn test_project_submission_resets_form_and_cleans_inputs() {
+    let mut state = AppState::new();
+    state.input_mode = InputMode::EnteringProject;
+    state.project_name_input = "Production Pipeline".to_string();
+    state.project_desc_input = "Deploy live distributed mesh".to_string();
+
+    let action = state.handle_key(make_key(KeyCode::Enter));
+
+    match action {
+        Some(coordinator::tui::TuiAction::SubmitProject { name, description }) => {
+            assert_eq!(name, "Production Pipeline");
+            assert_eq!(description, "Deploy live distributed mesh");
+        }
+        other => panic!("Expected SubmitProject action, got {:?}", other),
+    }
+
+    assert_eq!(state.input_mode, InputMode::Normal);
+    assert!(
+        state.project_name_input.is_empty(),
+        "project_name_input must be cleared after submission"
+    );
+    assert!(
+        state.project_desc_input.is_empty(),
+        "project_desc_input must be cleared after submission"
+    );
+    assert_eq!(state.project_focus_field, 0);
+    assert_eq!(state.project_input_cursor, 0);
+}
+
+#[test]
+fn test_diagnostics_screen_timeline_drilldown_guides_to_proj_screen_when_empty() {
+    let mut terminal = create_terminal(120, 35);
+    let state = AppState::new();
+    assert!(state.review_tasks.is_empty());
+
+    terminal
+        .draw(|f| DiagnosticsScreen::render(f, f.area(), &state))
+        .unwrap();
+
+    let output = buffer_to_string(&terminal);
+    assert!(
+        output.contains("No timeline loaded. Go to [2: Proj] to submit a project."),
+        "Diagnostics timeline must guide operator to [2: Proj] when review_tasks is empty"
+    );
+}

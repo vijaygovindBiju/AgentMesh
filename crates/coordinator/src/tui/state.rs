@@ -1398,6 +1398,10 @@ impl AppState {
                 self.input_mode = InputMode::Normal;
                 let name = self.project_name_input.trim().to_string();
                 let desc = self.project_desc_input.trim().to_string();
+                self.project_name_input.clear();
+                self.project_desc_input.clear();
+                self.project_focus_field = 0;
+                self.project_input_cursor = 0;
                 self.status_message =
                     Some(format!("Submitted project '{name}' for decomposition."));
 
