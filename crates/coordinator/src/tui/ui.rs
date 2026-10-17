@@ -9,7 +9,9 @@ use crate::tui::screens::{
     DashboardScreen, DiagnosticsScreen, PlanReviewScreen, ProjectInputScreen,
 };
 use crate::tui::state::{AppState, CurrentScreen};
-use crate::tui::widgets::{CommandPaletteWidget, FooterWidget, HeaderWidget, HelpModalWidget};
+use crate::tui::widgets::{
+    CommandPaletteWidget, ConfirmationModalWidget, FooterWidget, HeaderWidget, HelpModalWidget,
+};
 
 /// Top-level layout orchestrator
 pub fn render(frame: &mut Frame, state: &AppState) {
@@ -63,6 +65,11 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     if state.show_command_palette {
         CommandPaletteWidget::render(frame, size, state);
     }
+
+    // 6. Safety Confirmation Modal Dialog Overlay
+    if state.pending_confirmation.is_some() {
+        ConfirmationModalWidget::render(frame, size, state);
+    }
 }
 
 #[cfg(test)]
@@ -105,6 +112,31 @@ mod tests {
         let buf = terminal.backend().buffer();
         let text: String = buf.content().iter().map(|c| c.symbol()).collect();
         assert!(text.contains("Command Palette (:)"));
+    }
+
+    #[test]
+    fn test_render_with_confirmation_modal_overlay() {
+        use crate::tui::state::{ConfirmationModalState, DestructiveAction};
+        use uuid::Uuid;
+
+        let backend = TestBackend::new(100, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut state = AppState::new().with_mock_data();
+        let task_id = Uuid::new_v4();
+        state.pending_confirmation = Some(ConfirmationModalState {
+            title: "Confirm Task Cancellation".to_string(),
+            message: "Are you sure you want to cancel task PLAN-1?".to_string(),
+            action: DestructiveAction::CancelTask {
+                task_id,
+                short_id: "PLAN-1".to_string(),
+            },
+        });
+
+        terminal.draw(|f| render(f, &state)).unwrap();
+        let buf = terminal.backend().buffer();
+        let text: String = buf.content().iter().map(|c| c.symbol()).collect();
+        assert!(text.contains("Confirm Task Cancellation"));
+        assert!(text.contains("Are you sure you want to cancel task PLAN-1?"));
     }
 
     #[test]

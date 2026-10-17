@@ -100,6 +100,43 @@ pub struct ConfirmationModalState {
     pub action: DestructiveAction,
 }
 
+impl ConfirmationModalState {
+    pub fn new() -> Self {
+        Self {
+            title: String::new(),
+            message: String::new(),
+            action: DestructiveAction::CancelTask {
+                task_id: Uuid::nil(),
+                short_id: String::new(),
+            },
+        }
+    }
+
+    pub fn cancel(task_id: Uuid, short_id: impl Into<String>) -> Self {
+        let short = short_id.into();
+        Self {
+            title: "Confirm Task Cancellation".to_string(),
+            message: format!("Are you sure you want to cancel task {short}?"),
+            action: DestructiveAction::CancelTask {
+                task_id,
+                short_id: short,
+            },
+        }
+    }
+
+    pub fn reject(task_id: Uuid, short_id: impl Into<String>) -> Self {
+        let short = short_id.into();
+        Self {
+            title: "Confirm Task Rejection".to_string(),
+            message: format!("Are you sure you want to reject task {short}?"),
+            action: DestructiveAction::RejectTask {
+                task_id,
+                short_id: short,
+            },
+        }
+    }
+}
+
 /// Active focus pane on the Dashboard screen
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DashboardFocus {
@@ -176,6 +213,7 @@ pub struct AppState {
     pub selected_task_index: usize,
     pub show_details_pane: bool,
     pub show_dag_view: bool,
+    pub dag_scroll_offset: usize,
     pub edit_buffer: String,
     pub edit_cursor: usize,
 
@@ -230,7 +268,7 @@ impl AppState {
 
             pg_connected: false,
             nats_connected: false,
-
+            
             project_name_input: String::new(),
             project_desc_input: String::new(),
             project_input_cursor: 0,
@@ -244,6 +282,7 @@ impl AppState {
             selected_task_index: 0,
             show_details_pane: true,
             show_dag_view: false,
+            dag_scroll_offset: 0,
             edit_buffer: String::new(),
             edit_cursor: 0,
 
@@ -558,6 +597,39 @@ impl AppState {
             return None;
         }
 
+        // Safety confirmation modal dialog captures keys when open
+        if let Some(confirmation) = self.pending_confirmation.take() {
+            match key.code {
+                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                    match confirmation.action {
+                        DestructiveAction::CancelTask { task_id, short_id } => {
+                            if let Some(item) = self.review_tasks.iter_mut().find(|t| t.task.id == task_id) {
+                                item.task.status = TaskStatus::Cancelled;
+                            }
+                            self.status_message = Some(format!("Cancelling task {short_id}..."));
+                            return Some(TuiAction::CancelTask { task_id });
+                        }
+                        DestructiveAction::RejectTask { task_id, short_id } => {
+                            if let Some(item) = self.review_tasks.iter_mut().find(|t| t.task.id == task_id) {
+                                item.human_decision = Some(ApprovalStatus::Rejected);
+                                item.task.status = TaskStatus::Rejected;
+                            }
+                            self.status_message = Some(format!("Task {short_id} marked Rejected."));
+                            return Some(TuiAction::RejectTask { task_id });
+                        }
+                    }
+                }
+                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                    self.status_message = Some("Action cancelled.".to_string());
+                    return None;
+                }
+                _ => {
+                    self.pending_confirmation = Some(confirmation);
+                    return None;
+                }
+            }
+        }
+
         // Command palette modal dialog captures keys when open
         if self.show_command_palette {
             return self.handle_command_palette_key(key);
@@ -739,17 +811,79 @@ impl AppState {
                 None
             }
             KeyCode::Char('r') | KeyCode::Char('R') => {
+                if self.current_screen == CurrentScreen::PlanReview {
+                    if let Some(item) = self.review_tasks.get(self.selected_task_index) {
+                        if item.task.status == TaskStatus::Failed || item.task.status == TaskStatus::Cancelled {
+                            let task_id = item.task.id;
+                            let short_id = item.task.short_id.clone();
+                            self.status_message = Some(format!("Retrying task {short_id}..."));
+                            return Some(TuiAction::RetryTask { task_id });
+                        }
+                    }
+                }
                 self.status_message = Some("Refreshed data.".to_string());
                 Some(TuiAction::RefreshData)
             }
             _ => match self.current_screen {
                 CurrentScreen::PlanReview => self.handle_plan_review_key(key),
                 CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => {
-                    if key.code == KeyCode::Enter || key.code == KeyCode::Char('i') {
-                        self.input_mode = InputMode::EnteringProject;
-                        self.status_message = Some("Entering project details. [Tab] switch field, [Enter] submit, [Esc] cancel.".to_string());
+                    match key.code {
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            if self.selected_project_index > 0 {
+                                self.selected_project_index -= 1;
+                            }
+                            None
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            if !self.available_projects.is_empty()
+                                && self.selected_project_index + 1 < self.available_projects.len()
+                            {
+                                self.selected_project_index += 1;
+                            }
+                            None
+                        }
+                        KeyCode::Enter => {
+                            if !self.available_projects.is_empty() {
+                                let proj = &self.available_projects[self.selected_project_index];
+                                let project_id = proj.id;
+                                self.active_project = Some(proj.clone());
+                                self.status_message =
+                                    Some(format!("Loading project '{}'...", proj.name));
+                                Some(TuiAction::LoadProject { project_id })
+                            } else {
+                                self.input_mode = InputMode::EnteringProject;
+                                self.status_message = Some(
+                                    "Entering project details. [Tab] switch field, [Enter] submit, [Esc] cancel."
+                                        .to_string(),
+                                );
+                                None
+                            }
+                        }
+                        KeyCode::Char('l') | KeyCode::Char('L') => {
+                            if !self.available_projects.is_empty() {
+                                let proj = &self.available_projects[self.selected_project_index];
+                                let project_id = proj.id;
+                                self.active_project = Some(proj.clone());
+                                self.status_message =
+                                    Some(format!("Loading project '{}'...", proj.name));
+                                Some(TuiAction::LoadProject { project_id })
+                            } else {
+                                None
+                            }
+                        }
+                        KeyCode::Char('n')
+                        | KeyCode::Char('N')
+                        | KeyCode::Char('i')
+                        | KeyCode::Char('I') => {
+                            self.input_mode = InputMode::EnteringProject;
+                            self.status_message = Some(
+                                "Entering project details. [Tab] switch field, [Enter] submit, [Esc] cancel."
+                                    .to_string(),
+                            );
+                            None
+                        }
+                        _ => None,
                     }
-                    None
                 }
                 CurrentScreen::Dashboard | CurrentScreen::FleetInspector => self.handle_dashboard_key(key),
                 CurrentScreen::Diagnostics => self.handle_diagnostics_key(key),
@@ -1064,6 +1198,42 @@ impl AppState {
                     None
                 }
             }
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                if let Some(item) = self.review_tasks.get(self.selected_task_index) {
+                    if item.task.status == TaskStatus::Failed || item.task.status == TaskStatus::Cancelled {
+                        let task_id = item.task.id;
+                        let short_id = item.task.short_id.clone();
+                        self.status_message = Some(format!("Retrying task {short_id}..."));
+                        return Some(TuiAction::RetryTask { task_id });
+                    }
+                }
+                None
+            }
+            KeyCode::Char('[') | KeyCode::Char('p') | KeyCode::Char('P') => {
+                self.jump_to_blocker();
+                None
+            }
+            KeyCode::Char(']') | KeyCode::Char('d') | KeyCode::Char('D') => {
+                self.jump_to_dependent();
+                None
+            }
+            KeyCode::PageUp => {
+                if self.selected_task_index >= 5 {
+                    self.selected_task_index -= 5;
+                } else {
+                    self.selected_task_index = 0;
+                }
+                self.dag_scroll_offset = self.dag_scroll_offset.saturating_sub(5);
+                None
+            }
+            KeyCode::PageDown => {
+                if !self.review_tasks.is_empty() {
+                    self.selected_task_index =
+                        (self.selected_task_index + 5).min(self.review_tasks.len() - 1);
+                }
+                self.dag_scroll_offset = self.dag_scroll_offset.saturating_add(5);
+                None
+            }
             _ => None,
         }
     }
@@ -1192,6 +1362,80 @@ impl AppState {
 
     pub fn selected_task(&self) -> Option<&ReviewTaskState> {
         self.review_tasks.get(self.selected_task_index)
+    }
+
+    /// Jump selection cursor to the first prerequisite/blocker of the currently selected task.
+    pub fn jump_to_blocker(&mut self) -> bool {
+        if let Some(current) = self.review_tasks.get(self.selected_task_index) {
+            if let Some(first_blocker) = current.dependencies.first() {
+                let blocker_id = first_blocker.depends_on_id;
+                if let Some(pos) = self.review_tasks.iter().position(|t| t.task.id == blocker_id) {
+                    self.selected_task_index = pos;
+                    if let Some(target) = self.review_tasks.get(pos) {
+                        self.status_message = Some(format!(
+                            "Jumped to prerequisite task {}.",
+                            target.task.short_id
+                        ));
+                    }
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Jump selection cursor to the first downstream dependent task that waits on the currently selected task.
+    pub fn jump_to_dependent(&mut self) -> bool {
+        if let Some(current) = self.review_tasks.get(self.selected_task_index) {
+            let current_id = current.task.id;
+            for (idx, task) in self.review_tasks.iter().enumerate() {
+                if task.dependencies.iter().any(|d| d.depends_on_id == current_id) {
+                    self.selected_task_index = idx;
+                    self.status_message = Some(format!(
+                        "Jumped to dependent task {}.",
+                        task.task.short_id
+                    ));
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Prompts confirmation modal for task cancellation
+    pub fn prompt_cancel_task(&mut self, task_id: Uuid) {
+        let short_id = self
+            .review_tasks
+            .iter()
+            .find(|t| t.task.id == task_id)
+            .map(|t| t.task.short_id.clone())
+            .unwrap_or_else(|| {
+                let s = task_id.to_string();
+                s[..8.min(s.len())].to_string()
+            });
+        self.pending_confirmation = Some(ConfirmationModalState {
+            title: "Confirm Task Cancellation".to_string(),
+            message: format!("Are you sure you want to cancel task {short_id}?"),
+            action: DestructiveAction::CancelTask { task_id, short_id },
+        });
+    }
+
+    /// Prompts confirmation modal for task rejection
+    pub fn prompt_reject_task(&mut self, task_id: Uuid) {
+        let short_id = self
+            .review_tasks
+            .iter()
+            .find(|t| t.task.id == task_id)
+            .map(|t| t.task.short_id.clone())
+            .unwrap_or_else(|| {
+                let s = task_id.to_string();
+                s[..8.min(s.len())].to_string()
+            });
+        self.pending_confirmation = Some(ConfirmationModalState {
+            title: "Confirm Task Rejection".to_string(),
+            message: format!("Are you sure you want to reject task {short_id}?"),
+            action: DestructiveAction::RejectTask { task_id, short_id },
+        });
     }
 
     /// Returns the number of currently active agents (Idle or Busy) alongside total agents.
@@ -2027,5 +2271,117 @@ mod tests {
         assert_eq!(action1, TuiAction::LoadProject { project_id: proj_id });
         assert_eq!(action2, TuiAction::RetryTask { task_id });
         assert_eq!(action3, TuiAction::InspectTaskTimeline { task_id });
+    }
+
+    #[test]
+    fn test_phase21_dag_jump_blocker_and_dependent() {
+        let mut state = AppState::new().with_mock_data();
+        // In mock data:
+        // task 0: Schema Migration (no deps)
+        // task 1: User Service (depends on task 0)
+        // task 2: Order Service (depends on task 0 and task 1)
+        state.selected_task_index = 1;
+        assert!(state.jump_to_blocker());
+        assert_eq!(state.selected_task_index, 0);
+
+        // At root, jump to blocker is safe no-op
+        assert!(!state.jump_to_blocker());
+        assert_eq!(state.selected_task_index, 0);
+
+        // Jump to dependent
+        assert!(state.jump_to_dependent());
+        assert_eq!(state.selected_task_index, 1);
+    }
+
+    #[test]
+    fn test_phase21_project_mgmt_key_navigation_and_load() {
+        let mut state = AppState::new();
+        state.current_screen = CurrentScreen::ProjectManagement;
+        let p1 = Project {
+            id: Uuid::new_v4(),
+            name: "Project Alpha".to_string(),
+            description: "Desc Alpha".to_string(),
+            status: crate::domain::ProjectStatus::Active,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+        let p2 = Project {
+            id: Uuid::new_v4(),
+            name: "Project Beta".to_string(),
+            description: "Desc Beta".to_string(),
+            status: crate::domain::ProjectStatus::Planning,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+        state.available_projects = vec![p1.clone(), p2.clone()];
+        assert_eq!(state.selected_project_index, 0);
+
+        // Navigate down with 'j'
+        state.handle_key(make_key(KeyCode::Char('j')));
+        assert_eq!(state.selected_project_index, 1);
+
+        // Navigate up with 'k'
+        state.handle_key(make_key(KeyCode::Char('k')));
+        assert_eq!(state.selected_project_index, 0);
+
+        // Press Enter to load project
+        let action = state.handle_key(make_key(KeyCode::Enter));
+        assert_eq!(action, Some(TuiAction::LoadProject { project_id: p1.id }));
+        assert_eq!(state.active_project.as_ref().map(|p| p.id), Some(p1.id));
+    }
+
+    #[test]
+    fn test_phase21_plan_review_retry_shortcut() {
+        let mut state = AppState::new().with_mock_data();
+        state.current_screen = CurrentScreen::PlanReview;
+        let task_id = state.review_tasks[0].task.id;
+
+        // When task is in HumanReview, 'r' does not retry, it refreshes data
+        let action = state.handle_key(make_key(KeyCode::Char('r')));
+        assert_eq!(action, Some(TuiAction::RefreshData));
+
+        // When task is Failed, 'r' emits RetryTask
+        state.review_tasks[0].task.status = TaskStatus::Failed;
+        let retry_action = state.handle_key(make_key(KeyCode::Char('r')));
+        assert_eq!(retry_action, Some(TuiAction::RetryTask { task_id }));
+
+        // When task is Cancelled, 'r' also emits RetryTask
+        state.review_tasks[0].task.status = TaskStatus::Cancelled;
+        let retry_action2 = state.handle_key(make_key(KeyCode::Char('r')));
+        assert_eq!(retry_action2, Some(TuiAction::RetryTask { task_id }));
+    }
+
+    #[test]
+    fn test_phase21_confirmation_dialog_cancel_and_confirm_in_handle_key() {
+        let mut state = AppState::new().with_mock_data();
+        let task_id = state.review_tasks[0].task.id;
+
+        // Prompt cancel confirmation
+        state.prompt_cancel_task(task_id);
+        assert!(state.pending_confirmation.is_some());
+
+        // Cancel with 'n'
+        let action_cancel = state.handle_key(make_key(KeyCode::Char('n')));
+        assert_eq!(action_cancel, None);
+        assert!(state.pending_confirmation.is_none());
+
+        // Prompt reject confirmation
+        state.prompt_reject_task(task_id);
+        assert!(state.pending_confirmation.is_some());
+
+        // Confirm with 'y'
+        let action_confirm = state.handle_key(make_key(KeyCode::Char('y')));
+        assert_eq!(action_confirm, Some(TuiAction::RejectTask { task_id }));
+        assert!(state.pending_confirmation.is_none());
+    }
+
+    #[test]
+    fn test_phase21_topological_tiers_computation() {
+        let state = AppState::new().with_mock_data();
+        let tiers = crate::tui::widgets::DagViewWidget::compute_topological_tiers(&state);
+
+        // Root tier must contain task 0 (PLAN-1)
+        assert!(!tiers.is_empty());
+        assert!(tiers[0].contains(&state.review_tasks[0].task.id));
     }
 }

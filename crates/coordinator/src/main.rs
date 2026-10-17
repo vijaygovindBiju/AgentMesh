@@ -17,7 +17,7 @@ use coordinator::db::repositories::{
     AgentRepository, OverlapWarningRepository, ProjectRepository, TaskRepository,
 };
 use coordinator::domain::{
-    AdapterType, AgentStatus, ApprovalStatus, NewAgent, NewProject, TaskStatus,
+    AdapterType, AgentStatus, ApprovalStatus, NewAgent, NewProject, Project, ProjectStatus, TaskStatus,
 };
 use coordinator::messaging::{
     connect, ensure_streams, EventSubscriber, HeartbeatMonitor, RegistrationHandler,
@@ -509,6 +509,38 @@ async fn main() -> Result<()> {
                 TuiAction::RefreshData => {
                     app_state.status_message = Some("Refreshed (mock).".to_string());
                 }
+                TuiAction::LoadProject { project_id } => {
+                    if let Some(proj) = app_state.available_projects.iter().find(|p| p.id == project_id) {
+                        app_state.active_project = Some(proj.clone());
+                        app_state.status_message = Some(format!("Loaded project '{}' (mock).", proj.name));
+                    }
+                }
+                TuiAction::RetryTask { task_id } => {
+                    if let Some(rt) = app_state
+                        .review_tasks
+                        .iter_mut()
+                        .find(|rt| rt.task.id == task_id)
+                    {
+                        rt.task.status = TaskStatus::Approved;
+                        rt.human_decision = Some(ApprovalStatus::Approved);
+                        app_state.status_message =
+                            Some(format!("Task {} reset to Approved (mock).", rt.task.short_id));
+                    }
+                }
+                TuiAction::SubmitProject { name, description } => {
+                    let new_proj = Project {
+                        id: Uuid::new_v4(),
+                        name: name.clone(),
+                        description,
+                        status: ProjectStatus::Planning,
+                        created_at: chrono::Utc::now(),
+                        updated_at: chrono::Utc::now(),
+                    };
+                    app_state.active_project = Some(new_proj.clone());
+                    app_state.available_projects.push(new_proj);
+                    app_state.status_message =
+                        Some(format!("Submitted project '{name}' (mock)."));
+                }
                 _ => {}
             })?;
         }
@@ -617,22 +649,25 @@ async fn handle_tui_action(
 
             let pool = pool.clone();
             let action_tx = action_tx.clone();
+
+            let new_project = NewProject {
+                name: name.clone(),
+                description: description.clone(),
+            };
+            let project = match ProjectRepository::create(&pool, &new_project).await {
+                Ok(p) => {
+                    coordinator.set_active_project(p.id);
+                    state.active_project = Some(p.clone());
+                    let _ = action_tx.send(TuiUpdateEvent::ActiveProject(p.clone()));
+                    p
+                }
+                Err(e) => {
+                    state.status_message = Some(format!("Failed to create project: {e}"));
+                    return;
+                }
+            };
+
             tokio::spawn(async move {
-                let project = match ProjectRepository::create(
-                    &pool,
-                    &NewProject {
-                        name: name.clone(),
-                        description: description.clone(),
-                    },
-                )
-                .await
-                {
-                    Ok(p) => p,
-                    Err(e) => {
-                        let _ = action_tx.send(TuiUpdateEvent::StatusMessage(format!("Failed to create project: {e}")));
-                        return;
-                    }
-                };
 
                 // Discover repository Git identity if running inside a Git repository
                 let current_repo = std::env::current_dir().unwrap_or_default();
@@ -867,11 +902,18 @@ async fn handle_tui_action(
         TuiAction::LoadProject { project_id } => {
             state.status_message = Some(format!("Loading project {project_id}..."));
             if let Ok(Some(proj)) = ProjectRepository::find_by_id(pool, project_id).await {
-                state.active_project = Some(proj);
+                coordinator.set_active_project(proj.id);
+                state.active_project = Some(proj.clone());
+                let _ = action_tx.send(TuiUpdateEvent::ActiveProject(proj.clone()));
                 if let Ok((rts, overlaps)) = load_project_review_state(pool, project_id).await {
+                    let _ = action_tx.send(TuiUpdateEvent::Tasks(rts.clone()));
+                    let _ = action_tx.send(TuiUpdateEvent::Overlaps(overlaps.clone()));
                     state.review_tasks = rts;
                     state.active_overlaps = overlaps;
                 }
+                state.status_message = Some(format!("Loaded project '{}'.", proj.name));
+            } else {
+                state.status_message = Some(format!("Project {project_id} not found."));
             }
         }
 
@@ -888,6 +930,15 @@ async fn handle_tui_action(
                         rt.human_decision = Some(ApprovalStatus::Approved);
                     }
                     state.status_message = Some(format!("Task {task_id} reset to Approved."));
+                    let _ = action_tx.send(TuiUpdateEvent::StatusMessage(format!(
+                        "Task {task_id} retried and reset to Approved."
+                    )));
+                    if let Some(proj) = &state.active_project {
+                        if let Ok((rts, _)) = load_project_review_state(pool, proj.id).await {
+                            let _ = action_tx.send(TuiUpdateEvent::Tasks(rts.clone()));
+                            state.review_tasks = rts;
+                        }
+                    }
                 }
                 Err(e) => {
                     state.status_message = Some(format!("Retry error: {e}"));

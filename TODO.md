@@ -740,7 +740,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 ### Milestones & Status
 - [x] M1: Core State, Channel & State Machine Extensions [DONE]
 - [x] M2: Responsive Header, Contextual Footer, Command Palette & Resize Resilience [DONE]
-- [ ] M3: Project Lifecycle, Recursive DAG & Action Gating [TODO]
+- [x] M3: Project Lifecycle, Recursive DAG & Action Gating [DONE]
 - [ ] M4: Deep Fleet Telemetry, Bounded Event Stream & Real Timelines [TODO]
 - [~] M_TEST: E2E Testing Track: Comprehensive TestBackend Suite [IN PROGRESS]
 - [ ] M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening [TODO]
@@ -762,7 +762,16 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
   - [x] Extreme size guard in ui.rs (<48 width or <10 height) with centered fallback message
   - [x] help_modal.rs sizing bounds fix (`min(width-4, 75)` x `min(height-4, 24)`)
   - [x] All 86 Phase 20 tests and 65 Phase 21 tests pass cleanly
-- [ ] **M3: Project Lifecycle, Recursive DAG & Action Gating**
+- [x] **M3: Project Lifecycle, Recursive DAG & Action Gating**
+  - [x] Dual-purpose Project Management & Input screen in `project_input.rs` (projects table with columns `[ID, Name, Status, Created]`, cursor navigation, active project spec & git metadata, new project input form with backward compatibility)
+  - [x] Recursive DAG tree traversal `render_tree_node(task_id, depth, visited)` using box-drawing characters (`├── `, `└── `, `│   `) supporting depth >= 2 in `dag_view.rs`
+  - [x] Group tasks into topological execution tiers (Tier 0: Root tasks, Tier 1: Waiting on Tier 0, Tier 2+: Waiting on Tier 1) in `dag_view.rs`
+  - [x] Blocker (`[`/`p`) and dependent (`]`/`d`) jumping and manual scrolling (`PgUp`/`PgDn`) in `dag_view.rs` and `state.rs`
+  - [x] Confirmation modal widget (`ConfirmationModalWidget`) in `confirmation_modal.rs` and export in `widgets/mod.rs`
+  - [x] Render confirmation modal overlay in `ui.rs` when `pending_confirmation.is_some()`
+  - [x] Action gating in `state.rs`: confirmation dialog confirmation (`y`/`Enter`) and cancellation (`n`/`Esc`), retry task key shortcut (`r`) for Failed/Cancelled tasks
+  - [x] Wire `LoadProject`, `RetryTask`, and `SubmitProject` active project state updates in `main.rs`
+  - [x] All 86 Phase 20 tests and 65 Phase 21 tests pass cleanly
 - [ ] **M4: Deep Fleet Telemetry, Bounded Event Stream & Real Timelines**
 - [ ] **M_TEST: E2E Testing Track: Comprehensive TestBackend Suite**
 - [ ] **M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening**

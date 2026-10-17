@@ -21,7 +21,7 @@ impl DagViewWidget {
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(Color::Cyan))
             .title(Span::styled(
-                " Task Dependency Graph (DAG) & Execution Pipeline [G: Task Cards] ",
+                " Task Dependency Graph (DAG) & Execution Pipeline [G: Task Cards, [/]: Jump Blocker/Dep] ",
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
@@ -44,7 +44,9 @@ impl DagViewWidget {
         let visible_height = inner_area.height as usize;
         let scroll_offset = if total_lines > visible_height {
             let max_offset = total_lines.saturating_sub(visible_height);
-            if let Some(target_line) = lines
+            if state.dag_scroll_offset > 0 {
+                state.dag_scroll_offset.min(max_offset)
+            } else if let Some(target_line) = lines
                 .iter()
                 .position(|l| l.spans.iter().any(|s| s.content.contains('▶')))
             {
@@ -140,6 +142,211 @@ impl DagViewWidget {
         }
     }
 
+    /// Compute topological tiers for the tasks:
+    /// - Tier 0: Root tasks (0 blockers)
+    /// - Tier 1: Waiting on Tier 0
+    /// - Tier 2+: Waiting on previous tiers
+    pub fn compute_topological_tiers(state: &AppState) -> Vec<Vec<Uuid>> {
+        let mut tiers: Vec<Vec<Uuid>> = Vec::new();
+        let mut assigned = HashSet::new();
+
+        let id_set: HashSet<Uuid> = state.review_tasks.iter().map(|t| t.task.id).collect();
+
+        // Tier 0: roots (no internal dependencies within the task set)
+        let tier0: Vec<Uuid> = state
+            .review_tasks
+            .iter()
+            .filter(|t| {
+                t.dependencies
+                    .iter()
+                    .all(|dep| !id_set.contains(&dep.depends_on_id))
+            })
+            .map(|t| t.task.id)
+            .collect();
+
+        for id in &tier0 {
+            assigned.insert(*id);
+        }
+        if !tier0.is_empty() {
+            tiers.push(tier0);
+        }
+
+        // Iteratively assign subsequent tiers
+        while assigned.len() < state.review_tasks.len() {
+            let mut next_tier = Vec::new();
+            for item in &state.review_tasks {
+                let id = item.task.id;
+                if !assigned.contains(&id) {
+                    let all_deps_assigned = item
+                        .dependencies
+                        .iter()
+                        .filter(|dep| id_set.contains(&dep.depends_on_id))
+                        .all(|dep| assigned.contains(&dep.depends_on_id));
+
+                    if all_deps_assigned {
+                        next_tier.push(id);
+                    }
+                }
+            }
+
+            if next_tier.is_empty() {
+                // Cycle or remaining unresolvable dependencies
+                let mut remaining = Vec::new();
+                for item in &state.review_tasks {
+                    let id = item.task.id;
+                    if !assigned.contains(&id) {
+                        remaining.push(id);
+                        assigned.insert(id);
+                    }
+                }
+                if !remaining.is_empty() {
+                    tiers.push(remaining);
+                }
+                break;
+            }
+
+            for id in &next_tier {
+                assigned.insert(*id);
+            }
+            tiers.push(next_tier);
+        }
+
+        tiers
+    }
+
+    /// Recursively render a tree node and all its downstream dependents
+    fn render_tree_node(
+        task_id: Uuid,
+        depth: usize,
+        visited: &mut HashSet<Uuid>,
+        lines: &mut Vec<Line<'static>>,
+        prefix: &str,
+        is_last: bool,
+        kind: Option<DependencyKind>,
+        state: &AppState,
+        id_to_idx: &HashMap<Uuid, usize>,
+        dependents_map: &HashMap<Uuid, Vec<(Uuid, DependencyKind)>>,
+    ) {
+        let Some(&idx) = id_to_idx.get(&task_id) else {
+            return;
+        };
+        let item = &state.review_tasks[idx];
+        let (status_str, status_style) = Self::task_status_style(item);
+        let is_selected = idx == state.selected_task_index;
+
+        if depth == 0 {
+            // Root node formatting
+            let cursor = if is_selected { "▶ " } else { "  " };
+            lines.push(Line::from(vec![
+                Span::styled(cursor, Style::default().fg(Color::Cyan)),
+                Span::styled(
+                    format!("[{}: {}] ", item.task.short_id, status_str),
+                    status_style,
+                ),
+                Span::styled(
+                    item.task.title.clone(),
+                    if is_selected {
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    },
+                ),
+                Span::styled(
+                    if item.dependencies.is_empty() {
+                        " (Root: Immediate Execution)".to_string()
+                    } else {
+                        String::new()
+                    },
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+        } else {
+            // Child node formatting with branch characters
+            let branch = if is_last { "└── " } else { "├── " };
+            let edge_text = match kind {
+                Some(DependencyKind::Blocks) => "blocks──▶ ",
+                Some(DependencyKind::RelatesTo) => "relates──▶ ",
+                None => "──▶ ",
+            };
+
+            let cursor = if is_selected { "▶" } else { " " };
+
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("{prefix}{branch}"),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(edge_text, Style::default().fg(Color::Yellow)),
+                Span::styled(
+                    format!("{cursor}[{}: {}] ", item.task.short_id, status_str),
+                    status_style,
+                ),
+                Span::styled(
+                    item.task.title.clone(),
+                    if is_selected {
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    },
+                ),
+            ]));
+        }
+
+        // Cycle guard along this path
+        if visited.contains(&task_id) {
+            let child_prefix = format!("{prefix}{}", if is_last { "    " } else { "│   " });
+            lines.push(Line::from(vec![
+                Span::styled(child_prefix, Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    "└── ⚠ [Cycle/Repeated Reference Detected]",
+                    Style::default().fg(Color::Red),
+                ),
+            ]));
+            return;
+        }
+
+        visited.insert(task_id);
+
+        if let Some(children) = dependents_map.get(&task_id) {
+            let count = children.len();
+            let next_prefix = if depth == 0 {
+                "  ".to_string()
+            } else {
+                format!("{prefix}{}", if is_last { "    " } else { "│   " })
+            };
+
+            for (c_idx, (child_id, child_kind)) in children.iter().enumerate() {
+                let child_is_last = c_idx + 1 == count;
+                Self::render_tree_node(
+                    *child_id,
+                    depth + 1,
+                    visited,
+                    lines,
+                    &next_prefix,
+                    child_is_last,
+                    Some(*child_kind),
+                    state,
+                    id_to_idx,
+                    dependents_map,
+                );
+            }
+        } else if depth == 0 {
+            lines.push(Line::from(vec![
+                Span::styled("   └── ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    "(No downstream dependents)",
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+        }
+
+        visited.remove(&task_id);
+    }
+
     fn build_dag_lines(state: &AppState) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
 
@@ -153,7 +360,6 @@ impl DagViewWidget {
 
         // Map: task_id -> list of (dependent_task_id, kind)
         let mut dependents_map: HashMap<Uuid, Vec<(Uuid, DependencyKind)>> = HashMap::new();
-        // Set of tasks that have incoming dependencies
         let mut non_roots: HashSet<Uuid> = HashSet::new();
 
         for item in &state.review_tasks {
@@ -268,103 +474,106 @@ impl DagViewWidget {
 
         lines.push(Line::from(""));
 
-        // 3. Hierarchical Execution Tree
+        // 3. Topological Execution Tiers
         lines.push(Line::from(vec![Span::styled(
-            "─── Topological Execution Tree (Root ➔ Leaf) ──────────────────────────",
+            "─── Topological Execution Tiers ───────────────────────────────────────────",
             Style::default().fg(Color::DarkGray),
         )]));
 
-        for root in &root_tasks {
-            let root_idx = id_to_idx[&root.task.id];
-            let is_selected = root_idx == state.selected_task_index;
-            let (status_str, status_style) = Self::task_status_style(root);
+        let tiers = Self::compute_topological_tiers(state);
+        for (tier_idx, tier) in tiers.iter().enumerate() {
+            let tier_label = match tier_idx {
+                0 => "Tier 0 (Root Tasks: 0 blockers)".to_string(),
+                1 => "Tier 1 (Waiting on Tier 0)".to_string(),
+                n => format!("Tier {n} (Waiting on Tier {})", n - 1),
+            };
 
-            let cursor = if is_selected { "▶ " } else { "  " };
+            lines.push(Line::from(vec![Span::styled(
+                format!("── {tier_label} ──────────────────────────────────────"),
+                Style::default().fg(Color::DarkGray),
+            )]));
 
-            lines.push(Line::from(vec![
-                Span::styled(cursor, Style::default().fg(Color::Cyan)),
-                Span::styled(
-                    format!("[{}: {}] ", root.task.short_id, status_str),
-                    status_style,
-                ),
-                Span::styled(
-                    root.task.title.clone(),
-                    if is_selected {
-                        Style::default()
-                            .fg(Color::White)
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(Color::White)
-                    },
-                ),
-                Span::styled(
-                    if root.dependencies.is_empty() {
-                        " (Root: Immediate Execution)".to_string()
-                    } else {
-                        String::new()
-                    },
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
+            for task_id in tier {
+                if let Some(&idx) = id_to_idx.get(task_id) {
+                    let task_item = &state.review_tasks[idx];
+                    let (status_str, status_style) = Self::task_status_style(task_item);
+                    let is_selected = idx == state.selected_task_index;
+                    let cursor = if is_selected { "▶ " } else { "  " };
 
-            // Print downstream dependents
-            if let Some(children) = dependents_map.get(&root.task.id) {
-                let count = children.len();
-                for (c_idx, (child_id, kind)) in children.iter().enumerate() {
-                    let branch = if c_idx + 1 == count {
-                        "   └──"
+                    let dep_desc = if task_item.dependencies.is_empty() {
+                        " (Root / Unblocked)".to_string()
                     } else {
-                        "   ├──"
+                        let names: Vec<String> = task_item
+                            .dependencies
+                            .iter()
+                            .filter_map(|d| {
+                                id_to_idx
+                                    .get(&d.depends_on_id)
+                                    .map(|&i| state.review_tasks[i].task.short_id.clone())
+                            })
+                            .collect();
+                        format!(" (Waits on: {})", names.join(", "))
                     };
 
-                    if let Some(&target_idx) = id_to_idx.get(child_id) {
-                        let target = &state.review_tasks[target_idx];
-                        let (child_status, child_style) = Self::task_status_style(target);
-                        let child_selected = target_idx == state.selected_task_index;
-                        let child_cursor = if child_selected { "▶" } else { " " };
-
-                        let edge_text = match kind {
-                            DependencyKind::Blocks => "blocks──▶",
-                            DependencyKind::RelatesTo => "relates──▶",
-                        };
-
-                        lines.push(Line::from(vec![
-                            Span::styled(branch, Style::default().fg(Color::DarkGray)),
-                            Span::styled(edge_text, Style::default().fg(Color::Yellow)),
-                            Span::styled(
-                                format!("{child_cursor}[{}: {}] ", target.task.short_id, child_status),
-                                child_style,
-                            ),
-                            Span::styled(
-                                target.task.title.clone(),
-                                if child_selected {
-                                    Style::default()
-                                        .fg(Color::White)
-                                        .add_modifier(Modifier::BOLD)
-                                } else {
-                                    Style::default().fg(Color::White)
-                                },
-                            ),
-                        ]));
-                    }
+                    lines.push(Line::from(vec![
+                        Span::styled(cursor, Style::default().fg(Color::Yellow)),
+                        Span::styled(
+                            format!("[{}: {}] ", task_item.task.short_id, status_str),
+                            status_style,
+                        ),
+                        Span::styled(
+                            task_item.task.title.clone(),
+                            if is_selected {
+                                Style::default()
+                                    .fg(Color::White)
+                                    .add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::White)
+                            },
+                        ),
+                        Span::styled(dep_desc, Style::default().fg(Color::DarkGray)),
+                    ]));
                 }
-            } else {
-                lines.push(Line::from(vec![
-                    Span::styled("   └── ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(
-                        "(No downstream dependents)",
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]));
             }
+        }
+
+        lines.push(Line::from(""));
+
+        // 4. Hierarchical Execution Tree (Recursive Traversal: A -> B -> C -> D)
+        lines.push(Line::from(vec![Span::styled(
+            "─── Hierarchical Execution Tree (Recursive Traversal) ───────────────────",
+            Style::default().fg(Color::DarkGray),
+        )]));
+
+        let mut visited_path = HashSet::new();
+        for root in &root_tasks {
+            Self::render_tree_node(
+                root.task.id,
+                0,
+                &mut visited_path,
+                &mut lines,
+                "",
+                true,
+                None,
+                state,
+                &id_to_idx,
+                &dependents_map,
+            );
             lines.push(Line::from(""));
         }
 
-        // 4. Status Legend
+        // 5. Status Legend & Navigation Shortcuts
         lines.push(Line::from(vec![Span::styled(
-            "─── Status Color Legend ───────────────────────────────────────────────────",
+            "─── Navigation & Status Legend ────────────────────────────────────────────",
             Style::default().fg(Color::DarkGray),
         )]));
+        lines.push(Line::from(vec![
+            Span::styled("Keys: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[[/p] Jump Blocker  ", Style::default().fg(Color::Cyan)),
+            Span::styled("[]/d] Jump Dependent  ", Style::default().fg(Color::Cyan)),
+            Span::styled("[PgUp/PgDn] Scroll  ", Style::default().fg(Color::Cyan)),
+            Span::styled("[G] Cards View", Style::default().fg(Color::Cyan)),
+        ]));
         lines.push(Line::from(vec![
             Span::styled("  [Approved] ", Style::default().fg(Color::Green)),
             Span::styled("  [HumanReview] ", Style::default().fg(Color::Yellow)),
