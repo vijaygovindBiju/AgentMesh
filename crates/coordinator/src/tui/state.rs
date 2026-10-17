@@ -322,7 +322,8 @@ impl AppState {
         }
     }
 
-    /// Helper to seed mock data for UI testing and demonstration
+    /// Test fixture helper to seed mock data for UI unit/integration testing.
+    #[doc(hidden)]
     pub fn with_mock_data(mut self) -> Self {
         let proj_id = Uuid::new_v4();
         let agent1_id = Uuid::new_v4();

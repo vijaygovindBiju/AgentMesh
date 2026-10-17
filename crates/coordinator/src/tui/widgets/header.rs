@@ -184,7 +184,7 @@ impl HeaderWidget {
                     Span::raw(" "),
                     pending_pill,
                 ])]
-            } else if area.height >= 3 {
+            } else if area.height >= 4 {
                 vec![
                     Line::from(vec![
                         Span::styled(" Project: ", Style::default().fg(Color::DarkGray)),

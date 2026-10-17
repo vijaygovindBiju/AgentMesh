@@ -31,7 +31,7 @@ impl DagViewWidget {
         frame.render_widget(block, area);
 
         if state.review_tasks.is_empty() {
-            let empty = Paragraph::new("No tasks proposed yet. Go to [1: Input] to submit a project.")
+            let empty = Paragraph::new("No tasks proposed yet. Go to [2: Proj] to submit a project.")
                 .style(Style::default().fg(Color::DarkGray));
             frame.render_widget(empty, inner_area);
             return;

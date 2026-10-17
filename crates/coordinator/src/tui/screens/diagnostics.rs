@@ -408,7 +408,9 @@ impl DiagnosticsScreen {
             let p = Paragraph::new(lines).block(block);
             frame.render_widget(p, area);
         } else {
-            let p = Paragraph::new("No timeline loaded. Press [Enter] on a task to query real timeline.").block(block);
+            let p = Paragraph::new("No timeline loaded. Press [Enter] on a task to query real timeline.")
+                .wrap(ratatui::widgets::Wrap { trim: true })
+                .block(block);
             frame.render_widget(p, area);
         }
     }

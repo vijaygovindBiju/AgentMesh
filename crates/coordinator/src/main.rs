@@ -16,9 +16,7 @@ use coordinator::db::pool::{create_pool, run_migrations};
 use coordinator::db::repositories::{
     AgentRepository, OverlapWarningRepository, ProjectRepository, TaskRepository,
 };
-use coordinator::domain::{
-    AdapterType, AgentStatus, ApprovalStatus, NewAgent, NewProject, Project, ProjectStatus, TaskStatus,
-};
+use coordinator::domain::{ApprovalStatus, NewProject, TaskStatus};
 use coordinator::messaging::{
     connect, ensure_streams, EventSubscriber, HeartbeatMonitor, RegistrationHandler,
 };
@@ -266,56 +264,18 @@ async fn main() -> Result<()> {
                 });
             }
 
-            // Seed default mock agents if fleet is empty
-            let existing_agents = AgentRepository::list(&pool).await.unwrap_or_default();
-            if existing_agents.is_empty() {
-                info!("Seeding initial mock agents into the fleet");
-                let a1_id = Uuid::new_v4();
-                let _ = AgentRepository::create_with_id(
-                    &pool,
-                    a1_id,
-                    &NewAgent {
-                        human_owner: "Alice (Backend Lead)".to_string(),
-                        api_key_hash: "seed_alice".to_string(),
-                        adapter_type: AdapterType::Mock,
-                        capabilities: vec!["backend".to_string(), "rust".to_string()],
-                        nats_subject: format!("agents.{a1_id}.events"),
-                        ..Default::default()
-                    },
-                )
-                .await;
-                let _ = AgentRepository::update_status(&pool, a1_id, AgentStatus::Idle).await;
-
-                let a2_id = Uuid::new_v4();
-                let _ = AgentRepository::create_with_id(
-                    &pool,
-                    a2_id,
-                    &NewAgent {
-                        human_owner: "Bob (Infra Lead)".to_string(),
-                        api_key_hash: "seed_bob".to_string(),
-                        adapter_type: AdapterType::Mock,
-                        capabilities: vec![
-                            "infra".to_string(),
-                            "sql".to_string(),
-                            "nats".to_string(),
-                        ],
-                        nats_subject: format!("agents.{a2_id}.events"),
-                        ..Default::default()
-                    },
-                )
-                .await;
-                let _ = AgentRepository::update_status(&pool, a2_id, AgentStatus::Idle).await;
-            }
-
             // Initialize coordinator core
             let mut coordinator = CoordinatorCore::new(pool.clone(), Some(jetstream.clone()));
 
             // Build TUI AppState with live data
             let mut app_state = AppState::new();
+            app_state.pg_connected = true;
+            app_state.nats_connected = true;
             app_state.agents = AgentRepository::list(&pool).await.unwrap_or_default();
 
-            // Check if there is a target project specified by CLI or an existing active project to resume
+            // Load all existing projects from database
             let projects = ProjectRepository::list(&pool).await.unwrap_or_default();
+            app_state.available_projects = projects.clone();
             let selected_project = if let Some(ref target) = args.project_id {
                 let found = if let Ok(target_uuid) = Uuid::parse_str(target) {
                     projects.iter().find(|p| p.id == target_uuid).cloned()
@@ -435,121 +395,15 @@ async fn main() -> Result<()> {
             })?;
         }
 
-        _ => {
-            warn!(
-                "PostgreSQL or NATS JetStream not reachable. Falling back to Standalone Mock Mode."
-            );
-
-            if is_headless {
-                info!("Non-interactive terminal detected. Start PostgreSQL & NATS with `docker compose up -d`.");
-                return Ok(());
-            }
-
-            let mut state = AppState::new().with_mock_data();
-            state.status_message = Some(
-                "AgentMesh Demo Mode (PostgreSQL / NATS offline). Full interactive UI active. Tab to switch.".to_string(),
-            );
-            let mut app = TerminalApp::new()?;
-            app.run(&mut state, |action, app_state| match action {
-                TuiAction::ApproveTask { task_id } => {
-                    if let Some(rt) = app_state
-                        .review_tasks
-                        .iter_mut()
-                        .find(|rt| rt.task.id == task_id)
-                    {
-                        rt.task.status = TaskStatus::Approved;
-                        app_state.status_message =
-                            Some(format!("Task {} approved (mock).", rt.task.short_id));
-                    }
-                }
-                TuiAction::RejectTask { task_id } => {
-                    if let Some(rt) = app_state
-                        .review_tasks
-                        .iter_mut()
-                        .find(|rt| rt.task.id == task_id)
-                    {
-                        rt.task.status = TaskStatus::Rejected;
-                        app_state.status_message =
-                            Some(format!("Task {} rejected (mock).", rt.task.short_id));
-                    }
-                }
-                TuiAction::EditTaskDescription {
-                    task_id,
-                    new_description,
-                } => {
-                    if let Some(rt) = app_state
-                        .review_tasks
-                        .iter_mut()
-                        .find(|rt| rt.task.id == task_id)
-                    {
-                        rt.task.description = new_description;
-                        rt.task.status = TaskStatus::Approved;
-                        app_state.status_message = Some(format!(
-                            "Task {} description updated & approved (mock).",
-                            rt.task.short_id
-                        ));
-                    }
-                }
-                TuiAction::AcknowledgeOverlap { warning_id } => {
-                    app_state.active_overlaps.retain(|w| w.id != warning_id);
-                    for rt in &mut app_state.review_tasks {
-                        for w in &mut rt.overlap_warnings {
-                            if w.id == warning_id {
-                                w.acknowledged = true;
-                            }
-                        }
-                    }
-                    app_state.status_message =
-                        Some("Resource overlap acknowledged (mock).".to_string());
-                }
-                TuiAction::CancelTask { task_id } => {
-                    if let Some(rt) = app_state
-                        .review_tasks
-                        .iter_mut()
-                        .find(|rt| rt.task.id == task_id)
-                    {
-                        rt.task.status = TaskStatus::Cancelled;
-                        app_state.status_message =
-                            Some(format!("Task {} cancelled (mock).", rt.task.short_id));
-                    }
-                }
-                TuiAction::RefreshData => {
-                    app_state.status_message = Some("Refreshed (mock).".to_string());
-                }
-                TuiAction::LoadProject { project_id } => {
-                    if let Some(proj) = app_state.available_projects.iter().find(|p| p.id == project_id) {
-                        app_state.active_project = Some(proj.clone());
-                        app_state.status_message = Some(format!("Loaded project '{}' (mock).", proj.name));
-                    }
-                }
-                TuiAction::RetryTask { task_id } => {
-                    if let Some(rt) = app_state
-                        .review_tasks
-                        .iter_mut()
-                        .find(|rt| rt.task.id == task_id)
-                    {
-                        rt.task.status = TaskStatus::Approved;
-                        rt.human_decision = Some(ApprovalStatus::Approved);
-                        app_state.status_message =
-                            Some(format!("Task {} reset to Approved (mock).", rt.task.short_id));
-                    }
-                }
-                TuiAction::SubmitProject { name, description } => {
-                    let new_proj = Project {
-                        id: Uuid::new_v4(),
-                        name: name.clone(),
-                        description,
-                        status: ProjectStatus::Planning,
-                        created_at: chrono::Utc::now(),
-                        updated_at: chrono::Utc::now(),
-                    };
-                    app_state.active_project = Some(new_proj.clone());
-                    app_state.available_projects.push(new_proj);
-                    app_state.status_message =
-                        Some(format!("Submitted project '{name}' (mock)."));
-                }
-                _ => {}
-            })?;
+        (Err(e_pool), _) => {
+            error!(error = %e_pool, "Failed to connect to PostgreSQL database at {db_url}");
+            eprintln!("Error: Cannot connect to PostgreSQL database at {db_url}: {e_pool}\nPlease start infrastructure with: docker compose up -d");
+            std::process::exit(1);
+        }
+        (_, Err(e_nats)) => {
+            error!(error = %e_nats, "Failed to connect to NATS JetStream at {nats_url}");
+            eprintln!("Error: Cannot connect to NATS JetStream at {nats_url}: {e_nats}\nPlease start infrastructure with: docker compose up -d");
+            std::process::exit(1);
         }
     }
 
@@ -665,6 +519,9 @@ async fn handle_tui_action(
                 Ok(p) => {
                     coordinator.set_active_project(p.id);
                     state.active_project = Some(p.clone());
+                    let all_projects = ProjectRepository::list(&pool).await.unwrap_or_default();
+                    state.available_projects = all_projects.clone();
+                    let _ = action_tx.send(TuiUpdateEvent::Projects(all_projects));
                     let _ = action_tx.send(TuiUpdateEvent::ActiveProject(p.clone()));
                     p
                 }
@@ -702,8 +559,16 @@ async fn handle_tui_action(
                     .collect();
 
                 // Run AI Planning
-                let provider = create_provider_from_env()
-                    .unwrap_or_else(|_| std::sync::Arc::new(coordinator::ai::MockLlmProvider::new()));
+                let provider = match create_provider_from_env() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        error!(error = %e, "Failed to initialize AI planning provider");
+                        let _ = action_tx.send(TuiUpdateEvent::StatusMessage(format!(
+                            "AI Planning failed: {e}"
+                        )));
+                        return;
+                    }
+                };
 
                 let repo_context = coordinator::ai::RepositoryScanner::scan(&current_repo)
                     .await
@@ -893,6 +758,7 @@ async fn handle_tui_action(
 
         TuiAction::RefreshData => {
             state.agents = AgentRepository::list(pool).await.unwrap_or_default();
+            state.available_projects = ProjectRepository::list(pool).await.unwrap_or_default();
             if let Some(proj) = &state.active_project {
                 if let Ok((rts, overlaps)) = load_project_review_state(pool, proj.id).await {
                     state.review_tasks = rts;
