@@ -140,9 +140,26 @@ async fn main() -> Result<()> {
                 }
             });
 
+            // Resolve CLI target project if specified
+            let cli_target_project_id = if let Some(ref target) = args.project_id {
+                if let Ok(target_uuid) = Uuid::parse_str(target) {
+                    Some(target_uuid)
+                } else {
+                    ProjectRepository::list(&pool).await.ok().and_then(|projs| {
+                        projs
+                            .into_iter()
+                            .find(|p| p.name.eq_ignore_ascii_case(target))
+                            .map(|p| p.id)
+                    })
+                }
+            } else {
+                None
+            };
+
             // Periodic stale task sweeper worker (every 5 seconds)
             let sweeper_pool = pool.clone();
             let sweeper_js = jetstream.clone();
+            let sweeper_proj = cli_target_project_id;
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(5));
                 loop {
@@ -162,7 +179,7 @@ async fn main() -> Result<()> {
                                 );
                                 let _ = coordinator::coordinator::AssignmentService::assign_ready_tasks(
                                     &sweeper_pool,
-                                    None,
+                                    sweeper_proj,
                                     Some(&sweeper_js),
                                 )
                                 .await;
@@ -178,6 +195,7 @@ async fn main() -> Result<()> {
             // Periodic task assignment and outbox reconciliation worker (every 2 seconds)
             let assign_worker_pool = pool.clone();
             let assign_worker_js = jetstream.clone();
+            let assign_worker_proj = cli_target_project_id;
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(2));
                 loop {
@@ -192,7 +210,7 @@ async fn main() -> Result<()> {
                     // Assign any approved ready tasks
                     let _ = coordinator::coordinator::AssignmentService::assign_ready_tasks(
                         &assign_worker_pool,
-                        None,
+                        assign_worker_proj,
                         Some(&assign_worker_js),
                     )
                     .await;
