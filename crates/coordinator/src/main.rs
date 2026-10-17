@@ -262,19 +262,22 @@ async fn main() -> Result<()> {
                     if let Ok(mut messages) = consumer.messages().await {
                         while let Some(msg_result) = messages.next().await {
                             if let Ok(msg) = msg_result {
-                                if let Ok(agent_msg) =
-                                    serde_json::from_slice::<agent_protocol::AgentMessage>(
-                                        &msg.payload,
-                                    )
-                                {
-                                    let _ = msg.ack().await;
-                                    let _ = EventSubscriber::handle_agent_message_with_jetstream(
-                                        &sub_pool,
-                                        agent_msg.clone(),
-                                        Some(&sub_js),
-                                    )
-                                    .await;
-                                    let _ = sub_tx.send(TuiUpdateEvent::AgentMessage(agent_msg));
+                                let _ = msg.ack().await;
+                                match serde_json::from_slice::<agent_protocol::AgentMessage>(
+                                    &msg.payload,
+                                ) {
+                                    Ok(agent_msg) => {
+                                        let _ = EventSubscriber::handle_agent_message_with_jetstream(
+                                            &sub_pool,
+                                            agent_msg.clone(),
+                                            Some(&sub_js),
+                                        )
+                                        .await;
+                                        let _ = sub_tx.send(TuiUpdateEvent::AgentMessage(agent_msg));
+                                    }
+                                    Err(e) => {
+                                        warn!(error = %e, "Failed to parse AgentMessage from JetStream");
+                                    }
                                 }
                             }
                         }
