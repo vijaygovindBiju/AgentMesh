@@ -25,10 +25,10 @@ impl DetailsPaneWidget {
         };
 
         let title_text = match (is_focused, area.width) {
-            (true, w) if w >= 46 => " [▶ FOCUSED] Task Details & Inspector [Enter to toggle] ",
+            (true, w) if w >= 59 => " [▶ FOCUSED] Task Details & Inspector [Enter to toggle] ",
             (true, w) if w >= 38 => " [▶ FOCUSED] Task Details [Enter] ",
             (true, _) => " [▶ FOCUSED] Inspector ",
-            (false, w) if w >= 46 => " Task Details & Inspector [Enter to toggle] ",
+            (false, w) if w >= 48 => " Task Details & Inspector [Enter to toggle] ",
             (false, w) if w >= 38 => " Task Details [Enter] ",
             (false, _) => " Inspector ",
         };
@@ -400,7 +400,7 @@ mod tests {
         let mut state = AppState::new();
         state.review_tasks.push(sample_review_task("T-1", "Test Task"));
 
-        // Width >= 46: Full title
+        // Unfocused - Width >= 48: Full title
         let backend = TestBackend::new(60, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
@@ -409,16 +409,17 @@ mod tests {
         let rendered = buffer_to_string(&terminal);
         assert!(rendered.contains("Task Details & Inspector [Enter to toggle]"));
 
-        // Width >= 30 and < 46: Medium title
-        let backend = TestBackend::new(40, 20);
+        // Unfocused - Width 47 (< 48 and >= 38): Medium title
+        let backend = TestBackend::new(47, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
             .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
             .unwrap();
         let rendered = buffer_to_string(&terminal);
         assert!(rendered.contains("Task Details [Enter]"));
+        assert!(!rendered.contains("Inspector [Enter to toggle]"));
 
-        // Width < 30: Compact title
+        // Unfocused - Width < 38: Compact title
         let backend = TestBackend::new(25, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
@@ -426,6 +427,36 @@ mod tests {
             .unwrap();
         let rendered = buffer_to_string(&terminal);
         assert!(rendered.contains("Inspector"));
+
+        // Focused - Widths 51 and 56 (terminal widths 90 and 100): select medium title
+        state.plan_review_focus = PlanReviewFocus::TaskInspector;
+
+        let backend_90 = TestBackend::new(51, 20);
+        let mut terminal_90 = Terminal::new(backend_90).unwrap();
+        terminal_90
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered_90 = buffer_to_string(&terminal_90);
+        assert!(rendered_90.contains("[▶ FOCUSED] Task Details [Enter]"));
+        assert!(!rendered_90.contains("Task Details & Inspector"));
+
+        let backend_100 = TestBackend::new(56, 20);
+        let mut terminal_100 = Terminal::new(backend_100).unwrap();
+        terminal_100
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered_100 = buffer_to_string(&terminal_100);
+        assert!(rendered_100.contains("[▶ FOCUSED] Task Details [Enter]"));
+        assert!(!rendered_100.contains("Task Details & Inspector"));
+
+        // Focused - Width >= 59: Full title
+        let backend_full = TestBackend::new(60, 20);
+        let mut terminal_full = Terminal::new(backend_full).unwrap();
+        terminal_full
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered_full = buffer_to_string(&terminal_full);
+        assert!(rendered_full.contains("[▶ FOCUSED] Task Details & Inspector [Enter to toggle]"));
     }
 
     #[test]
