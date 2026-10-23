@@ -1,9 +1,9 @@
-# TEST_READY: Phase 21 Operator TUI Enhancements & Production Console Verification Suite
+# TEST_READY: Phase 22 Plan Review Ergonomics, Responsive Layout & Usability Verification Suite
 
 ## Executive Summary
-This document certifies the completion and publication of the deterministic Ratatui `TestBackend` test suite for Phase 21 Operator TUI Enhancements & Production Console (`crates/coordinator/tests/phase21_tui_enhancements.rs`), alongside the testing infrastructure blueprint (`TEST_INFRA.md`).
+This document certifies the completion and publication of the deterministic Ratatui `TestBackend` test suite for Phase 22 Plan Review Ergonomics, Responsive Layout & Usability (`crates/coordinator/tests/phase22_plan_review_ergonomics.rs`), in accordance with `TEST_INFRA.md` and user requirements R1 through R5.
 
-The test suite provides **65 comprehensive, deterministic test scenarios** structured across the 4-tier verification methodology. All tests execute completely headless in RAM using Ratatui's `TestBackend` without requiring physical TTYs, display servers, PostgreSQL databases, or NATS message brokers.
+The test suite provides **25 comprehensive, deterministic test scenarios** structured across the 4-tier testing hierarchy. All tests execute in-memory using Ratatui's `TestBackend` without requiring live TTY terminals, display servers, PostgreSQL databases, or NATS brokers.
 
 ---
 
@@ -11,108 +11,84 @@ The test suite provides **65 comprehensive, deterministic test scenarios** struc
 
 ### Tier 1: Feature Coverage (Primary Happy Paths)
 
-| ID | Category | Test Case Name | Invariant / Requirement Verified | Status |
+| ID | Requirement | Test Case Name | Invariant / Requirement Verified | Status |
 |---|---|---|---|:---:|
-| 1.1.1 | 5-Screen Navigation | `test_tier1_screen_nav_5_screens_initial_and_titles` | Initial screen is Dashboard; titles match specification | PASS |
-| 1.1.2 | 5-Screen Navigation | `test_tier1_screen_nav_5_screens_tab_cycling` | Tab key cycles seamlessly across all 5 screens in order | PASS |
-| 1.1.3 | 5-Screen Navigation | `test_tier1_screen_nav_numeric_hotkeys_1_to_5` | Keys `1` through `5` jump directly to corresponding screen | PASS |
-| 1.1.4 | 5-Screen Navigation | `test_tier1_screen_nav_all_5_screen_headers_render` | All 5 screens render distinct, non-overlapping header blocks | PASS |
-| 1.1.5 | 5-Screen Navigation | `test_tier1_screen_nav_preserves_backward_compatible_aliases` | Compatibility with Phase 20 screens and key handling | PASS |
-| 1.2.1 | Global Status Header | `test_tier1_header_renders_connectivity_pills_healthy` | PostgreSQL & NATS connectivity pills render `[PG: ● OK]`, `[NATS: ● OK]` | PASS |
-| 1.2.2 | Global Status Header | `test_tier1_header_renders_connectivity_pills_offline` | Offline state renders `[PG: ○ OFF]` and `[NATS: ○ OFF]` | PASS |
-| 1.2.3 | Global Status Header | `test_tier1_header_renders_pending_approvals_alert` | Pending approval count renders with alert styling `[Pending: 5]` | PASS |
-| 1.2.4 | Global Status Header | `test_tier1_header_adaptive_compact_terminal_render` | Responsive layout adapts to compact terminals (<90 cols) | PASS |
-| 1.2.5 | Global Status Header | `test_tier1_header_zero_panics_on_minimal_dimensions` | No panics or out-of-bounds slicing on minimal 60x2 header area | PASS |
-| 1.3.1 | Command Palette Modal | `test_tier1_command_palette_open_and_close` | Opened via `:`, closed via `Esc` | PASS |
-| 1.3.2 | Command Palette Modal | `test_tier1_command_palette_query_filtering` | Real-time text query filtering dynamically filters command list | PASS |
-| 1.3.3 | Command Palette Modal | `test_tier1_command_palette_backspace_filtering` | Backspace editing updates query buffer and refilters candidates | PASS |
-| 1.3.4 | Command Palette Modal | `test_tier1_command_palette_up_down_selection` | `Up` and `Down` arrow keys navigate filtered candidates safely | PASS |
-| 1.3.5 | Command Palette Modal | `test_tier1_command_palette_action_dispatch_on_enter` | Pressing `Enter` dispatches selected action and closes modal | PASS |
-| 1.4.1 | Safety Confirmation | `test_tier1_confirmation_dialog_render_content` | Destructive action prompts render warning title, message, and options | PASS |
-| 1.4.2 | Safety Confirmation | `test_tier1_confirmation_dialog_confirm_with_y` | Pressing `y` confirms destructive action and dispatches intent | PASS |
-| 1.4.3 | Safety Confirmation | `test_tier1_confirmation_dialog_confirm_with_enter` | Pressing `Enter` confirms destructive action and dispatches intent | PASS |
-| 1.4.4 | Safety Confirmation | `test_tier1_confirmation_dialog_cancel_with_n` | Pressing `n` aborts destructive action and closes modal safely | PASS |
-| 1.4.5 | Safety Confirmation | `test_tier1_confirmation_dialog_cancel_with_esc` | Pressing `Esc` aborts destructive action and closes modal safely | PASS |
-| 1.5.1 | Project Management | `test_tier1_project_mgmt_rendering_table_and_metadata` | Projects list table and active project spec metadata render | PASS |
-| 1.5.2 | Project Management | `test_tier1_project_mgmt_navigation_j_k` | `j` and `k` navigate projects table with selection highlight | PASS |
-| 1.5.3 | Project Management | `test_tier1_project_mgmt_enter_emits_load_project` | Pressing `Enter` on project emits `LoadProject` and sets active | PASS |
-| 1.5.4 | Project Management | `test_tier1_project_mgmt_empty_projects_fallback` | Graceful fallback when zero projects exist | PASS |
-| 1.5.5 | Project Management | `test_tier1_project_mgmt_bounds_clamping_at_edges` | Cursor clamped at top and bottom of projects list | PASS |
-| 1.6.1 | Recursive DAG Tree | `test_tier1_dag_multi_level_recursive_traversal` | Multi-level traversal ($A \rightarrow B \rightarrow C \rightarrow D$) without 1-hop truncation | PASS |
-| 1.6.2 | Recursive DAG Tree | `test_tier1_dag_renders_all_depth_levels_in_buffer` | All execution tiers (Tier 0 to Tier 3) rendered in buffer | PASS |
-| 1.6.3 | Recursive DAG Tree | `test_tier1_dag_status_badges_rendered` | Status badges `[C]`, `[A]`, `[R]`, `[P]` rendered per task | PASS |
-| 1.6.4 | Recursive DAG Tree | `test_tier1_dag_jump_to_blocker_shortcut` | `[` shortcut jumps cursor directly to upstream blocking task | PASS |
-| 1.6.5 | Recursive DAG Tree | `test_tier1_dag_jump_to_dependent_shortcut` | `]` shortcut jumps cursor directly to downstream dependent task | PASS |
-| 1.6.6 | Recursive DAG Tree | `test_tier1_dag_jump_on_root_or_leaf_is_safe_noop` | Jump shortcuts are safe no-ops at boundary roots and leaves | PASS |
-| 1.7.1 | Fleet Telemetry | `test_tier1_fleet_telemetry_renders_health_badges` | Health badges `[Healthy]`, `[Degraded]`, `[Unhealthy]` render | PASS |
-| 1.7.2 | Fleet Telemetry | `test_tier1_fleet_telemetry_renders_heartbeat_latencies` | Heartbeat latency displays in milliseconds with threshold colors | PASS |
-| 1.7.3 | Fleet Telemetry | `test_tier1_fleet_telemetry_renders_error_banner_on_degraded_agent` | Error banner surfaces latency warning on degraded agents | PASS |
-| 1.7.4 | Fleet Telemetry | `test_tier1_fleet_telemetry_renders_error_banner_on_unhealthy_agent` | Error banner surfaces failure reason on unhealthy agents | PASS |
-| 1.7.5 | Fleet Telemetry | `test_tier1_fleet_telemetry_renders_active_task_assignment` | Current task assignment resolved and rendered on agent card | PASS |
-| 1.7.6 | Fleet Telemetry | `test_tier1_fleet_telemetry_renders_runtime_adapters` | Runtime adapter profiles (`Agy` vs `Mock`) displayed cleanly | PASS |
-| 1.8.1 | Diagnostics Stream | `test_tier1_diagnostics_bounded_capacity_invariant_under_1000_events` | 1,000 rapid event inserts preserves invariant: length $\le 300$ | PASS |
-| 1.8.2 | Diagnostics Stream | `test_tier1_diagnostics_rapid_burst_10000_events_performance` | 10,000 rapid burst events process in $O(1)$ amortized memory | PASS |
-| 1.8.3 | Diagnostics Stream | `test_tier1_diagnostics_severity_filtering` | Severity filter correctly isolates `ERROR` and `WARN` events | PASS |
-| 1.8.4 | Diagnostics Stream | `test_tier1_diagnostics_entity_filtering` | Entity filter isolates `agent` or `task` events | PASS |
-| 1.8.5 | Diagnostics Stream | `test_tier1_diagnostics_selection_clamping_on_filter_shrink` | Selection index safely clamped when filter reduces results | PASS |
-| 1.8.6 | Diagnostics Stream | `test_tier1_diagnostics_event_table_buffer_render` | Event stream table renders event types, entities, and payloads | PASS |
-| 1.9.1 | Terminal Resize | `test_tier1_resize_minimal_60x18` | Render verified on compact minimal 60x18 layout | PASS |
-| 1.9.2 | Terminal Resize | `test_tier1_resize_compact_70x20` | Render verified on compact standard 70x20 layout | PASS |
-| 1.9.3 | Terminal Resize | `test_tier1_resize_standard_80x24` | Render verified on standard terminal 80x24 layout | PASS |
-| 1.9.4 | Terminal Resize | `test_tier1_resize_expanded_100x30` | Render verified on expanded desktop 100x30 layout | PASS |
-| 1.9.5 | Terminal Resize | `test_tier1_resize_ultrawide_160x50` | Render verified on ultra-wide console 160x50 layout | PASS |
+| 1.1 | R1 | `test_tier1_responsive_plan_layout_compact_80x24` | 2-column split (46%/54%) at 80x24, header tabs visible, unclipped borders, compact footer actions visible | PASS |
+| 1.2 | R1 | `test_tier1_responsive_plan_layout_standard_120x30` | 2-column split (44%/56%) at 120x30, column titles rendered, tasks and metadata aligned cleanly | PASS |
+| 1.3 | R1 | `test_tier1_responsive_plan_layout_wide_180x50` | Wide layout (>=140 cols) fixed 64-col task list, min 76-col inspector eliminating wasted whitespace | PASS |
+| 1.4 | R2 | `test_tier1_inspector_sections_rendering` | Dynamic rendering of all 5 inspector sections: Metadata, Description, Dependencies, Affected Resources, Overlaps | PASS |
+| 1.5 | R3 | `test_tier1_card_metadata_and_progress_presentation` | Task cards with status badges (`HUMAN REVIEW`, `APPROVED`, `EXECUTING`), agent assignments, and progress bars | PASS |
+| 1.6 | R4 | `test_tier1_keyboard_navigation_cursor_movement` | Keyboard navigation with arrow keys (`Up`/`Down`), `Enter` details toggle, and `Space` selection toggle | PASS |
+| 1.7 | R4 | `test_tier1_footer_action_hints_non_clipped` | Contextual footer action hints render without truncation across compact (80), standard (120), and wide (180) terminals | PASS |
 
----
+### Tier 2: Boundary & Corner Conditions
 
-### Tier 2: Boundary & Corner Cases
-
-| ID | Category | Test Case Name | Boundary Condition Verified | Status |
+| ID | Requirement | Test Case Name | Boundary Condition Verified | Status |
 |---|---|---|---|:---:|
-| 2.1 | Empty State | `test_tier2_empty_state_zero_tasks_zero_agents` | Initial app state with 0 tasks and 0 agents renders cleanly | PASS |
-| 2.2 | Command Palette | `test_tier2_command_palette_no_matching_results` | Search query yielding 0 matches renders empty state without panic | PASS |
-| 2.3 | Recursive DAG | `test_tier2_dag_single_node_tree` | Single task with zero dependencies renders as Tier 0 root | PASS |
-| 2.4 | Recursive DAG | `test_tier2_dag_cyclic_dependency_safety_guard` | Circular dependencies terminate safely without infinite recursion | PASS |
-| 2.5 | Ring Buffer | `test_tier2_bounded_buffer_eviction_fifo_order` | Oldest events evicted first in FIFO order when capacity reached | PASS |
-| 2.6 | Long Strings | `test_tier2_extreme_long_strings_rendering` | 300+ character project names and 1000+ char descriptions render safely | PASS |
-| 2.7 | Query Symbols | `test_tier2_unicode_and_symbols_in_query` | Unicode, emojis, brackets, and symbols handled properly in input | PASS |
-| 2.8 | State Machine | `test_tier2_task_status_retry_transitions` | `Cancelled -> Approved` and `Failed -> Approved` valid; invalid transitions rejected | PASS |
-
----
+| 2.1 | R1, R5 | `test_tier2_empty_plan_renders_quick_start_guide` | Empty plan renders 4-step quick start guide across 80x24, 120x30, and 180x50 without panics or clipping | PASS |
+| 2.2 | R2 | `test_tier2_task_long_description_word_wrapping` | Multi-line task descriptions (>10 lines) wrap cleanly with `Wrap { trim: true }` without breaking words | PASS |
+| 2.3 | R2 | `test_tier2_task_many_dependencies_display` | Tasks with >3 prerequisites allocate dynamic height and scrollable display without clipping borders | PASS |
+| 2.4 | R3 | `test_tier2_long_title_truncation_or_wrapping` | Long task titles (60+ characters) truncated with ellipsis (`...`) preserving task short ID prefix | PASS |
+| 2.5 | R3, R4 | `test_tier2_selection_bounds_ctrl_a_and_esc` | `Ctrl+A` selects all tasks, `Esc` clears selection, `Space` toggles tasks, and cursor clamps at boundary | PASS |
+| 2.6 | R1, R4 | `test_tier2_navigation_clamping_at_boundaries` | Extreme compact terminal resilience (60x18) and cursor boundary clamping at top (index 0) and bottom | PASS |
 
 ### Tier 3: Cross-Feature Combinations
 
-| ID | Category | Test Case Name | Combination Verified | Status |
+| ID | Requirement | Test Case Name | Combination Verified | Status |
 |---|---|---|---|:---:|
-| 3.1 | Modal Layering | `test_tier3_command_palette_modal_rendered_over_dag_view` | Command palette modal renders cleanly over visual DAG tree | PASS |
-| 3.2 | Modal Layering | `test_tier3_confirmation_modal_rendered_over_fleet_inspector` | Confirmation dialog renders over Fleet Inspector screen | PASS |
-| 3.3 | Project & Header | `test_tier3_project_selection_updates_status_header` | Switching active project updates project name in global status header | PASS |
-| 3.4 | Gating & Overlaps | `test_tier3_overlap_acknowledgment_unblocks_plan_approval` | Overlap warning acknowledgment unblocks human approval gate | PASS |
-| 3.5 | Filter & Stream | `test_tier3_rapid_event_burst_with_active_filter` | Rapid 1,000-event burst evaluated accurately through active severity filter | PASS |
+| 3.1 | R3, R5 | `test_tier3_focused_and_multi_selected_card_styling` | Distinct indicator `▶ [✓]` when card is both focused and selected vs `▶   ` or `  ✓ ` | PASS |
+| 3.2 | R4 | `test_tier3_mouse_scroll_column_disambiguation` | Left column mouse wheel scrolls task list; right column mouse wheel scrolls inspector offset | PASS |
+| 3.3 | R2, R4 | `test_tier3_inspector_scroll_offset_reset_on_task_navigation` | Cursor navigation resets `inspector_scroll_offset = 0` so inspector opens at top of newly selected task | PASS |
+| 3.4 | R4, R5 | `test_tier3_pane_focus_switching` | `Tab` or `Left`/`Right` switches focus between `TaskList` and `TaskInspector`; active pane displays `[▶ FOCUSED]` | PASS |
+| 3.5 | R4 | `test_tier3_selective_shift_a_bulk_approval_with_multi_selection` | `Shift+A` with non-empty selection prompts for and approves only the selected subset of tasks | PASS |
+| 3.6 | R4 | `test_tier3_empty_shift_a_bulk_approval_prompts_all_pending` | `Shift+A` with empty selection prompts for and approves all pending tasks in the plan | PASS |
+| 3.7 | R5 | `test_tier3_overlap_warning_acknowledgement_and_approval_flow` | Overlap warning banner renders on affected card; acknowledged via `a`/`A`, unblocking approval | PASS |
+| 3.8 | R4, R5 | `test_tier3_inline_description_edit_flow` | Inline description editing via `e`/`E`, text buffer typing, confirm with `Enter`, cancel with `Esc` | PASS |
+| 3.9 | R4, R5 | `test_tier3_single_task_approval_vs_rejection_actions` | Single-key `y` approval and `n` rejection action emission and human review decision recording | PASS |
+
+### Tier 4: Real-World Operator Workflows
+
+| ID | Requirement | Test Case Name | Operational Workflow Verified | Status |
+|---|---|---|---|:---:|
+| 4.1 | R1-R5 | `test_tier4_complete_operator_review_workflow` | End-to-end review session: compact terminal $\rightarrow$ approve $\rightarrow$ ack overlap $\rightarrow$ edit description $\rightarrow$ confirm rejection $\rightarrow$ confirm cancellation $\rightarrow$ verify 120x30 render | PASS |
+| 4.2 | R1, R4 | `test_tier4_dynamic_resizing_during_review` | Rapid dynamic terminal resizing (80x24 $\rightarrow$ 120x30 $\rightarrow$ 180x50 $\rightarrow$ 80x24) preserving selection, cursor, and inspector offset | PASS |
+| 4.3 | R4, R5 | `test_tier4_dag_traversal_and_jump_review` | Blocker jump (`[`), dependent jump (`]`), DAG toggle (`g`), and recursive tree / topological execution tiers display | PASS |
 
 ---
 
-### Tier 4: Real-World Workflows
+## Requirement Coverage Summary
 
-| ID | Category | Test Case Name | Operational Workflow Verified | Status |
-|---|---|---|---|:---:|
-| 4.1 | Operator Review | `test_tier4_e2e_operator_review_and_safety_approval_flow` | Load project $\rightarrow$ inspect recursive DAG $\rightarrow$ attempt cancel $\rightarrow$ confirm via safety dialog | PASS |
-| 4.2 | Incident Triage | `test_tier4_e2e_fleet_incident_triage_flow` | Detect degraded agent $\rightarrow$ inspect telemetry & error banner $\rightarrow$ filter event stream by agent ID | PASS |
-| 4.3 | Quick Navigation | `test_tier4_e2e_command_palette_navigation_flow` | Open palette via `:` $\rightarrow$ type query $\rightarrow$ press Enter $\rightarrow$ switch screen instantly | PASS |
-| 4.4 | Task Remediation | `test_tier4_e2e_retry_task_lifecycle_flow` | Failed task $\rightarrow$ validate retry transition $\rightarrow$ reset state to Approved for reassignment | PASS |
+| Requirement | Scope Description | Verified Test Cases | Status |
+|---|---|---|:---:|
+| **R1** | Responsive Layout & Terminal Adaptability | 1.1, 1.2, 1.3, 2.1, 2.6, 4.1, 4.2 | **100% COVERED** |
+| **R2** | Content-Adaptive Task Inspector | 1.4, 2.2, 2.3, 3.3, 4.1 | **100% COVERED** |
+| **R3** | Task List Rendering & State Presentation | 1.5, 2.4, 2.5, 3.1, 4.1 | **100% COVERED** |
+| **R4** | Keyboard Navigation & Footer Action Hints | 1.6, 1.7, 2.5, 2.6, 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 3.9, 4.1, 4.2, 4.3 | **100% COVERED** |
+| **R5** | Visual Consistency & Functional Integrity | 2.1, 3.1, 3.4, 3.7, 3.8, 3.9, 4.1, 4.3 | **100% COVERED** |
 
 ---
 
 ## Suite Summary
-- **Total Tests Authored**: 65
-- **Tier 1 (Feature Coverage)**: 48 tests
-- **Tier 2 (Boundary & Corner)**: 8 tests
-- **Tier 3 (Cross-Feature Combinations)**: 5 tests
-- **Tier 4 (Real-World Workflows)**: 4 tests
-- **Execution Performance**: 65 tests pass in ~0.06 seconds
-- **Baseline Integrity**: All 86 Phase 20 verification tests in `phase20_tui_verification.rs` continue to pass cleanly.
+- **Total Tests Authored**: 25
+- **Tier 1 (Feature Coverage)**: 7 tests
+- **Tier 2 (Boundary & Corner Conditions)**: 6 tests
+- **Tier 3 (Cross-Feature Combinations)**: 9 tests
+- **Tier 4 (Real-World Operator Workflows)**: 3 tests
+- **Execution Pass Rate**: 25 / 25 passed (100%)
+- **Execution Performance**: 25 tests pass in ~0.07 seconds
+- **Compilation Check**: `cargo check --tests -p coordinator` passes with 0 errors and 0 warnings.
 
 ---
 
-## Escalation Note: In-Progress Implementation Compiler Errors in `coordinator` Lib
-During test verification, worker `worker_p21_m1_rep` began modifying `crates/coordinator/src/tui/state.rs` as part of Milestone M1. Because `state.rs` added variants `CurrentScreen::ProjectManagement` and `CurrentScreen::FleetInspector` without completing the corresponding match arms in `ui.rs`, `header.rs`, and `footer.rs`, `coordinator` crate currently encounters 6 non-exhaustive match compilation errors (`E0004`).
-As per test writer strict boundaries, no implementation files in `src/` were touched. Once worker M1 or M2 completes the match arms for those new screen variants, `cargo check --workspace` and the full suite will compile cleanly across the entire workspace.
+## Test Execution Commands
+
+```bash
+# Run Phase 22 Plan Review Ergonomics test suite
+cargo test -p coordinator --test phase22_plan_review_ergonomics
+
+# Run with verbose output
+cargo test -p coordinator --test phase22_plan_review_ergonomics -- --nocapture
+
+# Compile-check tests
+cargo check --tests -p coordinator
+```
