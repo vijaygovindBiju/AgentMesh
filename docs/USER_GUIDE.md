@@ -227,7 +227,7 @@ input.
 
 | Key | Result |
 | --- | --- |
-| `1`–`6` | Jump to a screen |
+| `1`–`7` | Jump to a screen |
 | `7` | Open Doctor and run safe checks |
 | `Tab` / `BackTab` / `[` / `]` | Cycle screens |
 | `?` / `Esc` | Open or close help |

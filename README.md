@@ -150,10 +150,12 @@ The TUI is keyboard-only. The main screens are Dashboard, Project Management/Inp
 | `R` on Doctor | Re-run safe diagnostic checks |
 
 The detailed workflow, safety notes, environment reference, and troubleshooting are in the **[User Guide](docs/USER_GUIDE.md)**.
+For the normal two-user setup, see the **[Two-User Workflow](WORKFLOW.md)**.
 
 ## Documentation
 
 - [User Guide](docs/USER_GUIDE.md)
+- [Two-User Workflow](WORKFLOW.md)
 - [Architecture](docs/architecture/architecture.md)
 - [Domain model](docs/architecture/domain-model.md)
 - [Agent protocol](docs/protocols/agent-protocol.md)

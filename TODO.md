@@ -96,6 +96,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Phase 21 — Operator TUI Enhancement & Production Console (DONE)
 - [x] Phase 22 — Operator TUI Usability & Ergonomics Enhancement (DONE)
 - [x] AgentMesh Doctor — safe CLI and asynchronous TUI readiness diagnostics
+- [x] Add normal two-user workflow documentation
 
 ---
 
