@@ -1,7 +1,7 @@
-use std::collections::VecDeque;
 use crossterm::event::{
     KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
+use std::collections::VecDeque;
 use uuid::Uuid;
 
 use crate::domain::{
@@ -77,6 +77,67 @@ pub enum CurrentScreen {
     Diagnostics,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Theme {
+    #[default]
+    Classic,
+    Ocean,
+    Forest,
+    Sunset,
+}
+
+impl Theme {
+    pub const ALL: [Theme; 4] = [Theme::Classic, Theme::Ocean, Theme::Forest, Theme::Sunset];
+    pub fn name(self) -> &'static str {
+        match self {
+            Theme::Classic => "Classic",
+            Theme::Ocean => "Ocean",
+            Theme::Forest => "Forest",
+            Theme::Sunset => "Sunset",
+        }
+    }
+    pub fn next(self) -> Self {
+        Self::ALL[(Self::ALL.iter().position(|v| *v == self).unwrap_or(0) + 1) % Self::ALL.len()]
+    }
+    pub fn previous(self) -> Self {
+        Self::ALL[(Self::ALL.iter().position(|v| *v == self).unwrap_or(0) + Self::ALL.len() - 1)
+            % Self::ALL.len()]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FontStyle {
+    #[default]
+    Regular,
+    Bold,
+    Italic,
+    BoldItalic,
+}
+
+impl FontStyle {
+    pub const ALL: [FontStyle; 4] = [
+        FontStyle::Regular,
+        FontStyle::Bold,
+        FontStyle::Italic,
+        FontStyle::BoldItalic,
+    ];
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Regular => "Regular",
+            Self::Bold => "Bold",
+            Self::Italic => "Italic",
+            Self::BoldItalic => "Bold Italic",
+        }
+    }
+    pub fn next(self) -> Self {
+        Self::ALL[(Self::ALL.iter().position(|v| *v == self).unwrap_or(0) + 1) % Self::ALL.len()]
+    }
+    pub fn previous(self) -> Self {
+        Self::ALL[(Self::ALL.iter().position(|v| *v == self).unwrap_or(0) + Self::ALL.len() - 1)
+            % Self::ALL.len()]
+    }
+}
+
 pub type Screen = CurrentScreen;
 
 impl CurrentScreen {
@@ -147,7 +208,9 @@ impl ConfirmationModalState {
     pub fn approve_all(pending_count: usize) -> Self {
         Self {
             title: "Confirm Bulk Task Approval".to_string(),
-            message: format!("Approve all {pending_count} pending tasks and dispatch to available agents?"),
+            message: format!(
+                "Approve all {pending_count} pending tasks and dispatch to available agents?"
+            ),
             action: DestructiveAction::ApproveAllTasks,
         }
     }
@@ -206,6 +269,10 @@ impl ReviewTaskState {
 /// Central in-memory state of the TUI application
 pub struct AppState {
     pub current_screen: CurrentScreen,
+    pub theme: Theme,
+    pub font_style: FontStyle,
+    pub settings_selected_index: usize,
+    pub show_settings: bool,
     pub input_mode: InputMode,
 
     // Connectivity state
@@ -281,6 +348,10 @@ impl AppState {
     pub fn new() -> Self {
         Self {
             current_screen: CurrentScreen::Dashboard,
+            theme: Theme::default(),
+            font_style: FontStyle::default(),
+            settings_selected_index: 0,
+            show_settings: false,
             input_mode: InputMode::Normal,
 
             pg_connected: false,
@@ -362,7 +433,8 @@ impl AppState {
             vec!["backend".to_string(), "rust".to_string()],
             crate::domain::AgentStatus::Idle,
         );
-        agent1.capability_profile = Some(serde_json::to_value(agent_protocol::AgentCapabilities {
+        agent1.capability_profile = Some(
+            serde_json::to_value(agent_protocol::AgentCapabilities {
             runtime: agent_protocol::RuntimeCapability {
                 os: "linux".to_string(),
                 arch: "x86_64".to_string(),
@@ -371,15 +443,31 @@ impl AppState {
                 cpu_count: 8,
                 memory_mb: Some(16384),
             },
-            languages: vec![
-                agent_protocol::LanguageCapability::new("rust", Some("1.80.0".to_string()), vec!["tokio".to_string(), "axum".to_string(), "sqlx".to_string()]),
-            ],
+                languages: vec![agent_protocol::LanguageCapability::new(
+                    "rust",
+                    Some("1.80.0".to_string()),
+                    vec!["tokio".to_string(), "axum".to_string(), "sqlx".to_string()],
+                )],
             tools: vec![
-                agent_protocol::ToolCapability::new("cargo", Some("1.80.0".to_string()), Some("/usr/bin/cargo".to_string())),
-                agent_protocol::ToolCapability::new("git", Some("2.43.0".to_string()), Some("/usr/bin/git".to_string())),
+                    agent_protocol::ToolCapability::new(
+                        "cargo",
+                        Some("1.80.0".to_string()),
+                        Some("/usr/bin/cargo".to_string()),
+                    ),
+                    agent_protocol::ToolCapability::new(
+                        "git",
+                        Some("2.43.0".to_string()),
+                        Some("/usr/bin/git".to_string()),
+                    ),
             ],
-            tags: vec!["backend".to_string(), "systems".to_string(), "cloud".to_string()],
-        }).unwrap());
+                tags: vec![
+                    "backend".to_string(),
+                    "systems".to_string(),
+                    "cloud".to_string(),
+                ],
+            })
+            .unwrap(),
+        );
 
         let mut agent2 = Agent::mock(
             agent2_id,
@@ -392,7 +480,8 @@ impl AppState {
             ],
             crate::domain::AgentStatus::Busy,
         );
-        agent2.capability_profile = Some(serde_json::to_value(agent_protocol::AgentCapabilities {
+        agent2.capability_profile = Some(
+            serde_json::to_value(agent_protocol::AgentCapabilities {
             runtime: agent_protocol::RuntimeCapability {
                 os: "linux".to_string(),
                 arch: "x86_64".to_string(),
@@ -401,15 +490,31 @@ impl AppState {
                 cpu_count: 4,
                 memory_mb: Some(8192),
             },
-            languages: vec![
-                agent_protocol::LanguageCapability::new("python", Some("3.11.4".to_string()), vec!["nats-py".to_string(), "pytest".to_string()]),
-            ],
+                languages: vec![agent_protocol::LanguageCapability::new(
+                    "python",
+                    Some("3.11.4".to_string()),
+                    vec!["nats-py".to_string(), "pytest".to_string()],
+                )],
             tools: vec![
-                agent_protocol::ToolCapability::new("docker", Some("24.0.5".to_string()), Some("/usr/bin/docker".to_string())),
-                agent_protocol::ToolCapability::new("nats", Some("0.1.0".to_string()), Some("/usr/local/bin/nats".to_string())),
+                    agent_protocol::ToolCapability::new(
+                        "docker",
+                        Some("24.0.5".to_string()),
+                        Some("/usr/bin/docker".to_string()),
+                    ),
+                    agent_protocol::ToolCapability::new(
+                        "nats",
+                        Some("0.1.0".to_string()),
+                        Some("/usr/local/bin/nats".to_string()),
+                    ),
+                ],
+                tags: vec![
+                    "infra".to_string(),
+                    "nats".to_string(),
+                    "docker".to_string(),
             ],
-            tags: vec!["infra".to_string(), "nats".to_string(), "docker".to_string()],
-        }).unwrap());
+            })
+            .unwrap(),
+        );
 
         self.agents = vec![agent1, agent2];
 
@@ -740,10 +845,7 @@ impl AppState {
 
         if self.show_event_payload_modal {
             match key.code {
-                KeyCode::Esc
-                | KeyCode::Enter
-                | KeyCode::Char('q')
-                | KeyCode::Char('Q') => {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char('Q') => {
                     self.show_event_payload_modal = false;
                 }
                 _ => {}
@@ -753,10 +855,7 @@ impl AppState {
 
         if self.show_timeline_modal {
             match key.code {
-                KeyCode::Esc
-                | KeyCode::Enter
-                | KeyCode::Char('q')
-                | KeyCode::Char('Q') => {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char('Q') => {
                     self.show_timeline_modal = false;
                 }
                 _ => {}
@@ -770,14 +869,18 @@ impl AppState {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
                     match confirmation.action {
                         DestructiveAction::CancelTask { task_id, short_id } => {
-                            if let Some(item) = self.review_tasks.iter_mut().find(|t| t.task.id == task_id) {
+                            if let Some(item) =
+                                self.review_tasks.iter_mut().find(|t| t.task.id == task_id)
+                            {
                                 item.task.status = TaskStatus::Cancelled;
                             }
                             self.status_message = Some(format!("Cancelling task {short_id}..."));
                             return Some(TuiAction::CancelTask { task_id });
                         }
                         DestructiveAction::RejectTask { task_id, short_id } => {
-                            if let Some(item) = self.review_tasks.iter_mut().find(|t| t.task.id == task_id) {
+                            if let Some(item) =
+                                self.review_tasks.iter_mut().find(|t| t.task.id == task_id)
+                            {
                                 item.human_decision = Some(ApprovalStatus::Rejected);
                                 item.task.status = TaskStatus::Rejected;
                             }
@@ -787,7 +890,9 @@ impl AppState {
                         DestructiveAction::ApproveAllTasks => {
                             let mut count = 0;
                             for item in &mut self.review_tasks {
-                                if item.task.status == TaskStatus::HumanReview || item.task.status == TaskStatus::Proposed {
+                                if item.task.status == TaskStatus::HumanReview
+                                    || item.task.status == TaskStatus::Proposed
+                                {
                                     item.human_decision = Some(ApprovalStatus::Approved);
                                     item.task.status = TaskStatus::Approved;
                                     count += 1;
@@ -814,6 +919,38 @@ impl AppState {
             return self.handle_command_palette_key(key);
         }
 
+        if self.show_settings {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('s') | KeyCode::Char('S') => {
+                    self.show_settings = false
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.settings_selected_index = self.settings_selected_index.saturating_sub(1)
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.settings_selected_index = (self.settings_selected_index + 1).min(1)
+                }
+                KeyCode::Left | KeyCode::Right | KeyCode::Enter => {
+                    let forward = !matches!(key.code, KeyCode::Left);
+                    if self.settings_selected_index == 0 {
+                        self.theme = if forward {
+                            self.theme.next()
+                        } else {
+                            self.theme.previous()
+                        };
+                    } else {
+                        self.font_style = if forward {
+                            self.font_style.next()
+                        } else {
+                            self.font_style.previous()
+                        };
+                    }
+                }
+                _ => {}
+            }
+            return None;
+        }
+
         match self.input_mode {
             InputMode::Normal => self.handle_normal_mode_key(key),
             InputMode::EditingDescription => self.handle_editing_key(key),
@@ -836,7 +973,10 @@ impl AppState {
                 None
             }
             KeyCode::Down => {
-                let count = crate::tui::widgets::command_palette::filtered_commands(&self.command_palette_query).len();
+                let count = crate::tui::widgets::command_palette::filtered_commands(
+                    &self.command_palette_query,
+                )
+                .len();
                 if count > 0 && self.command_palette_selected_index + 1 < count {
                     self.command_palette_selected_index += 1;
                 }
@@ -849,7 +989,10 @@ impl AppState {
                 None
             }
             KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let count = crate::tui::widgets::command_palette::filtered_commands(&self.command_palette_query).len();
+                let count = crate::tui::widgets::command_palette::filtered_commands(
+                    &self.command_palette_query,
+                )
+                .len();
                 if count > 0 && self.command_palette_selected_index + 1 < count {
                     self.command_palette_selected_index += 1;
                 }
@@ -861,7 +1004,9 @@ impl AppState {
                 None
             }
             KeyCode::Enter => {
-                let matches = crate::tui::widgets::command_palette::filtered_commands(&self.command_palette_query);
+                let matches = crate::tui::widgets::command_palette::filtered_commands(
+                    &self.command_palette_query,
+                );
                 self.show_command_palette = false;
                 if let Some(cmd) = matches.get(self.command_palette_selected_index) {
                     match cmd.name.as_str() {
@@ -936,7 +1081,9 @@ impl AppState {
                             }
                         }
                         "task:edit" => {
-                            if let Some(desc) = self.selected_task().map(|t| t.task.description.clone()) {
+                            if let Some(desc) =
+                                self.selected_task().map(|t| t.task.description.clone())
+                            {
                                 self.input_mode = InputMode::EditingDescription;
                                 self.edit_cursor = desc.len();
                                 self.edit_buffer = desc;
@@ -946,6 +1093,10 @@ impl AppState {
                         "system:refresh" => Some(TuiAction::RefreshData),
                         "system:help" => {
                             self.show_help_modal = true;
+                            None
+                        }
+                        "system:settings" => {
+                            self.show_settings = true;
                             None
                         }
                         "system:quit" => {
@@ -977,6 +1128,10 @@ impl AppState {
             }
             KeyCode::Char('?') => {
                 self.show_help_modal = true;
+                None
+            }
+            KeyCode::Char('s') | KeyCode::Char('S') => {
+                self.show_settings = true;
                 None
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => {
@@ -1030,7 +1185,9 @@ impl AppState {
             KeyCode::Char('r') | KeyCode::Char('R') => {
                 if self.current_screen == CurrentScreen::PlanReview {
                     if let Some(item) = self.review_tasks.get(self.selected_task_index) {
-                        if item.task.status == TaskStatus::Failed || item.task.status == TaskStatus::Cancelled {
+                        if item.task.status == TaskStatus::Failed
+                            || item.task.status == TaskStatus::Cancelled
+                        {
                             let task_id = item.task.id;
                             let short_id = item.task.short_id.clone();
                             self.status_message = Some(format!("Retrying task {short_id}..."));
@@ -1043,8 +1200,7 @@ impl AppState {
             }
             _ => match self.current_screen {
                 CurrentScreen::PlanReview => self.handle_plan_review_key(key),
-                CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => {
-                    match key.code {
+                CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => match key.code {
                         KeyCode::Up | KeyCode::Char('k') => {
                             if self.selected_project_index > 0 {
                                 self.selected_project_index -= 1;
@@ -1099,15 +1255,12 @@ impl AppState {
                             );
                             None
                         }
-                        KeyCode::Char('d') | KeyCode::Char('D') => {
-                            Some(TuiAction::SubmitProject {
+                    KeyCode::Char('d') | KeyCode::Char('D') => Some(TuiAction::SubmitProject {
                                 name: DEMO_PROJECT_NAME.to_string(),
                                 description: DEMO_PROJECT_DESCRIPTION.to_string(),
-                            })
-                        }
+                    }),
                         _ => None,
-                    }
-                }
+                },
                 CurrentScreen::Dashboard => self.handle_dashboard_key(key),
                 CurrentScreen::FleetInspector => self.handle_fleet_inspector_key(key),
                 CurrentScreen::Diagnostics => self.handle_diagnostics_key(key),
@@ -1198,8 +1351,7 @@ impl AppState {
                         None
                     }
                     KeyCode::Enter => {
-                        if let Some(rt) =
-                            self.review_tasks.get(self.selected_dashboard_task_index)
+                        if let Some(rt) = self.review_tasks.get(self.selected_dashboard_task_index)
                         {
                             self.status_message = Some(format!(
                                 "Task [{}] {}: {:?} (Progress: {})",
@@ -1470,7 +1622,8 @@ impl AppState {
                     self.edit_cursor = self.edit_buffer.len();
                     self.input_mode = InputMode::EditingDescription;
                     self.status_message = Some(
-                        "Editing description inline. [Enter] save & approve, [Esc] cancel.".to_string(),
+                        "Editing description inline. [Enter] save & approve, [Esc] cancel."
+                            .to_string(),
                     );
                 }
                 None
@@ -1492,7 +1645,9 @@ impl AppState {
             }
             KeyCode::Char('r') | KeyCode::Char('R') => {
                 if let Some(item) = self.review_tasks.get(self.selected_task_index) {
-                    if item.task.status == TaskStatus::Failed || item.task.status == TaskStatus::Cancelled {
+                    if item.task.status == TaskStatus::Failed
+                        || item.task.status == TaskStatus::Cancelled
+                    {
                         let task_id = item.task.id;
                         let short_id = item.task.short_id.clone();
                         self.status_message = Some(format!("Retrying task {short_id}..."));
@@ -1560,7 +1715,9 @@ impl AppState {
             }
             KeyCode::Backspace => {
                 if self.edit_cursor > 0 && !self.edit_buffer.is_empty() {
-                    if let Some((prev_idx, _)) = self.edit_buffer[..self.edit_cursor].char_indices().last() {
+                    if let Some((prev_idx, _)) =
+                        self.edit_buffer[..self.edit_cursor].char_indices().last()
+                    {
                         self.edit_buffer.remove(prev_idx);
                         self.edit_cursor = prev_idx;
                     }
@@ -1569,7 +1726,9 @@ impl AppState {
             }
             KeyCode::Left => {
                 if self.edit_cursor > 0 {
-                    if let Some((prev_idx, _)) = self.edit_buffer[..self.edit_cursor].char_indices().last() {
+                    if let Some((prev_idx, _)) =
+                        self.edit_buffer[..self.edit_cursor].char_indices().last()
+                    {
                         self.edit_cursor = prev_idx;
                     }
                 }
@@ -1650,7 +1809,9 @@ impl AppState {
     pub fn cycle_screen(&mut self) {
         self.current_screen = match self.current_screen {
             CurrentScreen::Dashboard => CurrentScreen::ProjectManagement,
-            CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => CurrentScreen::PlanReview,
+            CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => {
+                CurrentScreen::PlanReview
+            }
             CurrentScreen::PlanReview => CurrentScreen::FleetInspector,
             CurrentScreen::FleetInspector => CurrentScreen::Diagnostics,
             CurrentScreen::Diagnostics => CurrentScreen::Dashboard,
@@ -1660,7 +1821,9 @@ impl AppState {
     pub fn cycle_screen_back(&mut self) {
         self.current_screen = match self.current_screen {
             CurrentScreen::Dashboard => CurrentScreen::Diagnostics,
-            CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => CurrentScreen::Dashboard,
+            CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => {
+                CurrentScreen::Dashboard
+            }
             CurrentScreen::PlanReview => CurrentScreen::ProjectManagement,
             CurrentScreen::FleetInspector => CurrentScreen::PlanReview,
             CurrentScreen::Diagnostics => CurrentScreen::FleetInspector,
@@ -1672,7 +1835,9 @@ impl AppState {
         let count = self
             .review_tasks
             .iter()
-            .filter(|t| t.task.status == TaskStatus::HumanReview || t.task.status == TaskStatus::Proposed)
+            .filter(|t| {
+                t.task.status == TaskStatus::HumanReview || t.task.status == TaskStatus::Proposed
+            })
             .count();
         if count == 0 {
             self.status_message = Some("No pending tasks to approve.".to_string());
@@ -1690,7 +1855,11 @@ impl AppState {
         if let Some(current) = self.review_tasks.get(self.selected_task_index) {
             if let Some(first_blocker) = current.dependencies.first() {
                 let blocker_id = first_blocker.depends_on_id;
-                if let Some(pos) = self.review_tasks.iter().position(|t| t.task.id == blocker_id) {
+                if let Some(pos) = self
+                    .review_tasks
+                    .iter()
+                    .position(|t| t.task.id == blocker_id)
+                {
                     self.selected_task_index = pos;
                     if let Some(target) = self.review_tasks.get(pos) {
                         self.status_message = Some(format!(
@@ -1710,12 +1879,14 @@ impl AppState {
         if let Some(current) = self.review_tasks.get(self.selected_task_index) {
             let current_id = current.task.id;
             for (idx, task) in self.review_tasks.iter().enumerate() {
-                if task.dependencies.iter().any(|d| d.depends_on_id == current_id) {
+                if task
+                    .dependencies
+                    .iter()
+                    .any(|d| d.depends_on_id == current_id)
+                {
                     self.selected_task_index = idx;
-                    self.status_message = Some(format!(
-                        "Jumped to dependent task {}.",
-                        task.task.short_id
-                    ));
+                    self.status_message =
+                        Some(format!("Jumped to dependent task {}.", task.task.short_id));
                     return true;
                 }
             }
@@ -1780,8 +1951,10 @@ impl AppState {
         self.review_tasks
             .iter()
             .filter(|rt| {
-                matches!(rt.task.status, TaskStatus::HumanReview | TaskStatus::Proposed)
-                    && rt.human_decision.is_none()
+                matches!(
+                    rt.task.status,
+                    TaskStatus::HumanReview | TaskStatus::Proposed
+                ) && rt.human_decision.is_none()
             })
             .count()
     }
@@ -1835,9 +2008,16 @@ impl AppState {
             .iter()
             .filter(|ev| {
                 if !sev_filter.eq_ignore_ascii_case("ALL") {
-                    let event_sev = if ev.event_type.contains("fail") || ev.event_type.contains("error") || ev.event_type.contains("alert") {
+                    let event_sev = if ev.event_type.contains("fail")
+                        || ev.event_type.contains("error")
+                        || ev.event_type.contains("alert")
+                    {
                         "ERROR"
-                    } else if ev.event_type.contains("warn") || ev.event_type.contains("overlap") || ev.event_type.contains("blocked") || ev.event_type.contains("degraded") {
+                    } else if ev.event_type.contains("warn")
+                        || ev.event_type.contains("overlap")
+                        || ev.event_type.contains("blocked")
+                        || ev.event_type.contains("degraded")
+                    {
                         "WARN"
                     } else {
                         "INFO"
@@ -1849,10 +2029,24 @@ impl AppState {
 
                 if !ent_filter.eq_ignore_ascii_case("ALL") {
                     let matches_entity = match ent_filter.to_uppercase().as_str() {
-                        "TASK" => ev.event_type.to_lowercase().starts_with("task") || ev.task_id.is_some(),
-                        "AGENT" => ev.event_type.to_lowercase().starts_with("agent") || ev.agent_id.is_some(),
-                        "COORDINATOR" => (!ev.event_type.to_lowercase().starts_with("task") && !ev.event_type.to_lowercase().starts_with("agent") && ev.task_id.is_none() && ev.agent_id.is_none()) || ev.event_type.to_lowercase().starts_with("coord"),
-                        other => ev.event_type.to_lowercase().starts_with(&other.to_lowercase()),
+                        "TASK" => {
+                            ev.event_type.to_lowercase().starts_with("task") || ev.task_id.is_some()
+                        }
+                        "AGENT" => {
+                            ev.event_type.to_lowercase().starts_with("agent")
+                                || ev.agent_id.is_some()
+                        }
+                        "COORDINATOR" => {
+                            (!ev.event_type.to_lowercase().starts_with("task")
+                                && !ev.event_type.to_lowercase().starts_with("agent")
+                                && ev.task_id.is_none()
+                                && ev.agent_id.is_none())
+                                || ev.event_type.to_lowercase().starts_with("coord")
+                        }
+                        other => ev
+                            .event_type
+                            .to_lowercase()
+                            .starts_with(&other.to_lowercase()),
                     };
                     if !matches_entity {
                         return false;
@@ -2564,7 +2758,10 @@ mod tests {
         assert!(!state.pg_connected);
         assert!(!state.nats_connected);
 
-        state.apply_update(TuiUpdateEvent::Connectivity { pg: true, nats: true });
+        state.apply_update(TuiUpdateEvent::Connectivity {
+            pg: true,
+            nats: true,
+        });
         assert!(state.pg_connected);
         assert!(state.nats_connected);
 
@@ -2610,11 +2807,20 @@ mod tests {
         state.clamp_all_indices();
 
         assert_eq!(state.selected_task_index, state.review_tasks.len() - 1);
-        assert_eq!(state.selected_dashboard_task_index, state.review_tasks.len() - 1);
+        assert_eq!(
+            state.selected_dashboard_task_index,
+            state.review_tasks.len() - 1
+        );
         assert_eq!(state.selected_agent_index, state.agents.len() - 1);
-        assert_eq!(state.selected_overlap_index, state.active_overlaps.len() - 1);
+        assert_eq!(
+            state.selected_overlap_index,
+            state.active_overlaps.len() - 1
+        );
         assert_eq!(state.selected_event_index, state.recent_events.len() - 1);
-        assert_eq!(state.selected_project_index, state.available_projects.len() - 1);
+        assert_eq!(
+            state.selected_project_index,
+            state.available_projects.len() - 1
+        );
     }
 
     #[test]
@@ -2664,11 +2870,18 @@ mod tests {
             }
         );
 
-        let action1 = TuiAction::LoadProject { project_id: proj_id };
+        let action1 = TuiAction::LoadProject {
+            project_id: proj_id,
+        };
         let action2 = TuiAction::RetryTask { task_id };
         let action3 = TuiAction::InspectTaskTimeline { task_id };
 
-        assert_eq!(action1, TuiAction::LoadProject { project_id: proj_id });
+        assert_eq!(
+            action1,
+            TuiAction::LoadProject {
+                project_id: proj_id
+            }
+        );
         assert_eq!(action2, TuiAction::RetryTask { task_id });
         assert_eq!(action3, TuiAction::InspectTaskTimeline { task_id });
     }

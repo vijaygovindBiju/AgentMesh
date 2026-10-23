@@ -6,6 +6,7 @@ pub mod details_pane;
 pub mod footer;
 pub mod header;
 pub mod help_modal;
+pub mod settings;
 pub mod task_card;
 
 pub use agent_inspector::AgentInspectorWidget;
@@ -16,4 +17,5 @@ pub use details_pane::DetailsPaneWidget;
 pub use footer::FooterWidget;
 pub use header::HeaderWidget;
 pub use help_modal::HelpModalWidget;
+pub use settings::SettingsWidget;
 pub use task_card::TaskCardWidget;

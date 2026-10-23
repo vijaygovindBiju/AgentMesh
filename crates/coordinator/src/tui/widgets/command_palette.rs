@@ -45,6 +45,11 @@ pub fn all_commands() -> Vec<CommandItem> {
             category: "Nav".to_string(),
         },
         CommandItem {
+            name: "system:settings".to_string(),
+            description: "Open theme and font settings".to_string(),
+            category: "System".to_string(),
+        },
+        CommandItem {
             name: "demo:run".to_string(),
             description: "Create and plan the built-in AgentMesh demo project".to_string(),
             category: "Demo".to_string(),
@@ -138,7 +143,9 @@ impl CommandPaletteWidget {
             .border_style(Style::default().fg(Color::Cyan))
             .title(Span::styled(
                 " Command Palette (:) ",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ));
         let inner = block.inner(modal_area);
         frame.render_widget(block, modal_area);
@@ -158,8 +165,16 @@ impl CommandPaletteWidget {
 
         // Input prompt
         let input_line = Line::from(vec![
-            Span::styled(" > ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::styled(&state.command_palette_query, Style::default().fg(Color::White)),
+            Span::styled(
+                " > ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                &state.command_palette_query,
+                Style::default().fg(Color::White),
+            ),
             Span::styled("█", Style::default().fg(Color::DarkGray)),
         ]);
         frame.render_widget(Paragraph::new(input_line), chunks[0]);
@@ -188,28 +203,52 @@ impl CommandPaletteWidget {
                 let is_sel = actual_idx == selected_idx;
                 let prefix = if is_sel { "▶ " } else { "  " };
                 let cat_badge = match cmd.category.as_str() {
-                    "Nav" => Span::styled("[Nav]", Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
-                    "Task" => Span::styled("[Task]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                    "System" => Span::styled("[System]", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
-                    _ => Span::styled(format!("[{}]", cmd.category), Style::default().fg(Color::DarkGray)),
+                    "Nav" => Span::styled(
+                        "[Nav]",
+                        Style::default()
+                            .fg(Color::Blue)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    "Task" => Span::styled(
+                        "[Task]",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    "System" => Span::styled(
+                        "[System]",
+                        Style::default()
+                            .fg(Color::Magenta)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    _ => Span::styled(
+                        format!("[{}]", cmd.category),
+                        Style::default().fg(Color::DarkGray),
+                    ),
                 };
                 let style = if is_sel {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::White)
                 };
                 Row::new(vec![
                     Span::styled(format!("{prefix}{}", cmd.description), style),
                     cat_badge,
-                    Span::styled(format!(":{}", cmd.name), Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        format!(":{}", cmd.name),
+                        Style::default().fg(Color::DarkGray),
+                    ),
                 ])
             })
             .collect();
 
         if rows.is_empty() {
-            let empty_p = Paragraph::new(Line::from(vec![
-                Span::styled("  No matching commands found.", Style::default().fg(Color::DarkGray)),
-            ]));
+            let empty_p = Paragraph::new(Line::from(vec![Span::styled(
+                "  No matching commands found.",
+                Style::default().fg(Color::DarkGray),
+            )]));
             frame.render_widget(empty_p, chunks[2]);
         } else {
             let table = Table::new(
@@ -228,10 +267,10 @@ impl CommandPaletteWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::state::{CurrentScreen, TuiAction};
+    use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-    use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
-    use crate::tui::state::{CurrentScreen, TuiAction};
 
     fn make_key(code: KeyCode) -> KeyEvent {
         KeyEvent {
@@ -248,23 +287,49 @@ mod tests {
         assert!(cmds.len() >= 13);
 
         // [Nav] commands
-        assert!(cmds.iter().any(|c| c.name == "nav:dashboard" && c.category == "Nav"));
-        assert!(cmds.iter().any(|c| c.name == "nav:projects" && c.category == "Nav"));
-        assert!(cmds.iter().any(|c| c.name == "nav:plan" && c.category == "Nav"));
-        assert!(cmds.iter().any(|c| c.name == "nav:fleet" && c.category == "Nav"));
-        assert!(cmds.iter().any(|c| c.name == "nav:diagnostics" && c.category == "Nav"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "nav:dashboard" && c.category == "Nav"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "nav:projects" && c.category == "Nav"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "nav:plan" && c.category == "Nav"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "nav:fleet" && c.category == "Nav"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "nav:diagnostics" && c.category == "Nav"));
 
         // [Task] commands
-        assert!(cmds.iter().any(|c| c.name == "task:approve" && c.category == "Task"));
-        assert!(cmds.iter().any(|c| c.name == "task:reject" && c.category == "Task"));
-        assert!(cmds.iter().any(|c| c.name == "task:cancel" && c.category == "Task"));
-        assert!(cmds.iter().any(|c| c.name == "task:retry" && c.category == "Task"));
-        assert!(cmds.iter().any(|c| c.name == "task:edit" && c.category == "Task"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "task:approve" && c.category == "Task"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "task:reject" && c.category == "Task"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "task:cancel" && c.category == "Task"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "task:retry" && c.category == "Task"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "task:edit" && c.category == "Task"));
 
         // [System] commands
-        assert!(cmds.iter().any(|c| c.name == "system:refresh" && c.category == "System"));
-        assert!(cmds.iter().any(|c| c.name == "system:help" && c.category == "System"));
-        assert!(cmds.iter().any(|c| c.name == "system:quit" && c.category == "System"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "system:refresh" && c.category == "System"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "system:help" && c.category == "System"));
+        assert!(cmds
+            .iter()
+            .any(|c| c.name == "system:quit" && c.category == "System"));
     }
 
     #[test]
@@ -281,7 +346,9 @@ mod tests {
 
         let task = filtered_commands("Task");
         assert_eq!(task.len(), 6);
-        assert!(task.iter().any(|command| command.name == "task:approve_all"));
+        assert!(task
+            .iter()
+            .any(|command| command.name == "task:approve_all"));
 
         let none = filtered_commands("xyz_nonexistent_token");
         assert!(none.is_empty());
@@ -323,11 +390,7 @@ mod tests {
             .unwrap();
 
         let buffer = terminal.backend().buffer();
-        let rendered_text: String = buffer
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
+        let rendered_text: String = buffer.content().iter().map(|cell| cell.symbol()).collect();
 
         assert!(rendered_text.contains("Command Palette (:)"));
         assert!(rendered_text.contains("fleet"));
@@ -350,11 +413,7 @@ mod tests {
             .unwrap();
 
         let buffer = terminal.backend().buffer();
-        let rendered_text: String = buffer
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
+        let rendered_text: String = buffer.content().iter().map(|cell| cell.symbol()).collect();
 
         assert!(rendered_text.contains("No matching commands found."));
     }
@@ -408,4 +467,3 @@ mod tests {
         assert!(state.should_quit);
     }
 }
-

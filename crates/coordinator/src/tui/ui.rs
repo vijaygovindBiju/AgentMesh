@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     widgets::Paragraph,
     Frame,
 };
@@ -11,6 +11,7 @@ use crate::tui::screens::{
 use crate::tui::state::{AppState, CurrentScreen};
 use crate::tui::widgets::{
     CommandPaletteWidget, ConfirmationModalWidget, FooterWidget, HeaderWidget, HelpModalWidget,
+    SettingsWidget,
 };
 
 /// Top-level layout orchestrator
@@ -19,7 +20,10 @@ pub fn render(frame: &mut Frame, state: &AppState) {
 
     // Extreme size guard: terminal below minimum operational bounds
     if size.width < 48 || size.height < 10 {
-        let msg = format!("Terminal too small ({}x{}, min 60x18)", size.width, size.height);
+        let msg = format!(
+            "Terminal too small ({}x{}, min 60x18)",
+            size.width, size.height
+        );
         let p = Paragraph::new(msg)
             .alignment(Alignment::Center)
             .style(Style::default().fg(Color::Yellow));
@@ -68,6 +72,46 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     // 6. Safety Confirmation Modal Dialog Overlay
     if state.pending_confirmation.is_some() {
         ConfirmationModalWidget::render(frame, size, state);
+    }
+
+    if state.show_settings {
+        SettingsWidget::render(frame, size, state);
+    }
+
+    // Recolor semantic UI colors globally so every screen and modal follows
+    // the selected theme without each component maintaining a separate palette.
+    let buffer_area = frame.area();
+    for y in buffer_area.y..buffer_area.bottom() {
+        for x in buffer_area.x..buffer_area.right() {
+            let Some(cell) = frame.buffer_mut().cell_mut((x, y)) else {
+                continue;
+            };
+            let style = cell.style();
+            let fg = match (state.theme, style.fg) {
+                (_, Some(Color::Cyan)) => Some(match state.theme {
+                    crate::tui::state::Theme::Classic => Color::Cyan,
+                    crate::tui::state::Theme::Ocean => Color::LightBlue,
+                    crate::tui::state::Theme::Forest => Color::LightGreen,
+                    crate::tui::state::Theme::Sunset => Color::LightMagenta,
+                }),
+                (_, Some(Color::Magenta)) => Some(match state.theme {
+                    crate::tui::state::Theme::Classic => Color::Magenta,
+                    crate::tui::state::Theme::Ocean => Color::LightCyan,
+                    crate::tui::state::Theme::Forest => Color::Green,
+                    crate::tui::state::Theme::Sunset => Color::LightYellow,
+                }),
+                _ => style.fg,
+            };
+            let mut updated = style;
+            updated.fg = fg;
+            updated.add_modifier |= match state.font_style {
+                crate::tui::state::FontStyle::Regular => Modifier::empty(),
+                crate::tui::state::FontStyle::Bold => Modifier::BOLD,
+                crate::tui::state::FontStyle::Italic => Modifier::ITALIC,
+                crate::tui::state::FontStyle::BoldItalic => Modifier::BOLD | Modifier::ITALIC,
+            };
+            cell.set_style(updated);
+        }
     }
 }
 
@@ -144,8 +188,9 @@ mod tests {
             let backend = TestBackend::new(w, h);
             let mut terminal = Terminal::new(backend).unwrap();
             let state = AppState::new().with_mock_data();
-            terminal.draw(|f| render(f, &state)).expect("Render should not panic");
+            terminal
+                .draw(|f| render(f, &state))
+                .expect("Render should not panic");
         }
     }
 }
-

@@ -23,8 +23,8 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 pub use state::{
-    AppState, ConfirmationModalState, CurrentScreen, DestructiveAction, InputMode,
-    ReviewTaskState, Screen, TuiAction, TuiUpdateEvent, MAX_RECENT_EVENTS,
+    AppState, ConfirmationModalState, CurrentScreen, DestructiveAction, FontStyle, InputMode,
+    ReviewTaskState, Screen, Theme, TuiAction, TuiUpdateEvent, MAX_RECENT_EVENTS,
 };
 pub use ui::render;
 
@@ -99,7 +99,11 @@ impl TerminalApp {
 impl Drop for TerminalApp {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
-        let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen, event::DisableMouseCapture);
+        let _ = execute!(
+            self.terminal.backend_mut(),
+            LeaveAlternateScreen,
+            event::DisableMouseCapture
+        );
         let _ = self.terminal.show_cursor();
     }
 }
