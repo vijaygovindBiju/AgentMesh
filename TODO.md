@@ -77,6 +77,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Fix coordinator PostgreSQL startup instructions and health-check race
 - [x] Remove mouse interaction from the terminal UI
 - [x] Clear all persisted project, task, event, and message data from local infrastructure
+- [x] Update README files and add complete user guide
 - [x] v0.1 — Core Coordination System (DONE)
 - [x] Phase 8 — Real agy Integration (DONE)
 - [x] Phase 9 — Real Repository / Git Coordination (DONE)
@@ -1032,4 +1033,3 @@ The Operator TUI provides an intuitive, high-ergonomics keyboard interface with 
   - [x] Verified zero border clipping across all standard and compact breakpoints
 - [x] M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening (All TUI tests passing, clippy clean, Reviewers, Challengers, Forensic Auditor, git commits) [DONE]
   - [x] Final verification complete: 376 passing tests (152 lib tests + 224 integration tests across `phase4_tui`, `phase20_tui_verification`, `phase21_tui_enhancements`, `phase22_tui_usability`, `phase22_plan_review_ergonomics`, `phase22_preview_challenger_stress`, and `phase22_challenger_verification`) with 0 errors, 0 failures, and 0 warnings.
-
