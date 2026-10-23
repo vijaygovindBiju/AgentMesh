@@ -94,6 +94,10 @@ impl HelpModalWidget {
                 Span::styled(" [I] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
                 Span::raw("Create new project"),
             ]),
+            Line::from(vec![
+                Span::styled(" [D] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::raw("Run the built-in demo project using the configured planner"),
+            ]),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "─── Screen 3: Plan Review & DAG Graph ──────────────────────────────────",

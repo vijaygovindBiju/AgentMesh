@@ -128,7 +128,24 @@ impl FooterWidget {
 
                     if is_compact {
                         // Prioritize top 4-5 actions on compact screens (<85 cols)
-                        if state.current_screen == CurrentScreen::PlanReview && has_selected_task {
+                        if matches!(
+                            state.current_screen,
+                            CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement
+                        ) {
+                            vec![
+                                Span::styled(
+                                    " [D] ",
+                                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                                ),
+                                Span::raw("Run Demo "),
+                                Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
+                                Span::raw("Cmd "),
+                                Span::styled(" [Tab] ", Style::default().fg(Color::Cyan)),
+                                Span::raw("Nav "),
+                                Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
+                                Span::raw("Help"),
+                            ]
+                        } else if state.current_screen == CurrentScreen::PlanReview && has_selected_task {
                             vec![
                                 Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
                                 Span::raw("Help "),
@@ -216,6 +233,11 @@ impl FooterWidget {
                                 hints
                             }
                             CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => vec![
+                                Span::styled(
+                                    " [D] ",
+                                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                                ),
+                                Span::raw("Run Demo  "),
                                 Span::styled(
                                     " [Enter/i] ",
                                     Style::default()

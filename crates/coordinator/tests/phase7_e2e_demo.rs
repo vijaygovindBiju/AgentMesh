@@ -61,7 +61,9 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
 
     let nats_url =
         std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
-    let (_client, jetstream) = match connect(&nats_url, None).await {
+    let nats_token =
+        std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
+    let (_client, jetstream) = match connect(&nats_url, Some(&nats_token)).await {
         Ok(res) => res,
         Err(_) => {
             eprintln!("Skipping test: NATS not reachable");
@@ -124,7 +126,7 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
         .get_or_create_consumer(
             &format!("agent-a-consumer-{}", &agent_a_id.to_string()[..8]),
             async_nats::jetstream::consumer::pull::Config {
-                filter_subject: format!("tasks.{agent_a_id}.assigned"),
+                filter_subject: format!("coordinator.tasks.assign.{agent_a_id}"),
                 ..Default::default()
             },
         )
@@ -229,6 +231,17 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
     let task2 = tasks.iter().find(|t| t.short_id == "PLAN-2").unwrap();
     let task3 = tasks.iter().find(|t| t.short_id == "PLAN-3").unwrap();
 
+    // Persist the demo's intended agent choices so assignment is deterministic.
+    TaskRepository::assign_agent(&pool, task1.id, Some(agent_a_id))
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task2.id, Some(agent_b_id))
+        .await
+        .unwrap();
+    TaskRepository::assign_agent(&pool, task3.id, Some(agent_a_id))
+        .await
+        .unwrap();
+
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 3: Resource Overlap Detection & Persistence
     // ─────────────────────────────────────────────────────────────────────────
@@ -306,13 +319,19 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
 
     // Human Operator rejects Task 2 via key 'n'
     let reject_action_2 = app_state.handle_key(make_key(KeyCode::Char('n')));
+    assert_eq!(reject_action_2, None);
+    assert!(app_state.pending_confirmation.is_some());
+    let confirm_reject_action_2 = app_state.handle_key(make_key(KeyCode::Char('y')));
     assert_eq!(
-        reject_action_2,
+        confirm_reject_action_2,
         Some(TuiAction::RejectTask { task_id: task2.id })
     );
     CommandHandler::execute_reject_task(&pool, task2.id, "Alice")
         .await
         .unwrap();
+
+    // Move past the confirmed rejection before approving Task 3.
+    assert_eq!(app_state.handle_key(make_key(KeyCode::Down)), None);
 
     // Human Operator approves Task 3 via key 'y'
     let approve_action_3 = app_state.handle_key(make_key(KeyCode::Char('y')));
@@ -329,6 +348,15 @@ async fn test_phase7_end_to_end_full_lifecycle_demo() {
     // ─────────────────────────────────────────────────────────────────────────
     let mut coordinator = CoordinatorCore::new(pool.clone(), Some(jetstream.clone()));
     coordinator.set_active_project(project.id);
+    coordinator
+        .transition_state(CoordinatorState::ProjectInput)
+        .unwrap();
+    coordinator
+        .transition_state(CoordinatorState::Planning)
+        .unwrap();
+    coordinator
+        .transition_state(CoordinatorState::HumanReview)
+        .unwrap();
     coordinator
         .transition_state(CoordinatorState::Assigning)
         .unwrap();

@@ -10,6 +10,9 @@ use crate::domain::{
 
 /// Maximum capacity of the bounded in-memory recent events ring buffer.
 pub const MAX_RECENT_EVENTS: usize = 300;
+pub const DEMO_PROJECT_NAME: &str = "AgentMesh Demo";
+pub const DEMO_PROJECT_DESCRIPTION: &str =
+    "Demonstrate AgentMesh project planning, human review, and dependency-aware task execution.";
 
 /// Actions emitted by the TUI to be handled by the outer application or coordinator.
 /// The TUI NEVER performs side effects (DB writes, NATS publishes, LLM requests) directly.
@@ -882,6 +885,10 @@ impl AppState {
                             self.current_screen = CurrentScreen::Diagnostics;
                             None
                         }
+                        "demo:run" => Some(TuiAction::SubmitProject {
+                            name: DEMO_PROJECT_NAME.to_string(),
+                            description: DEMO_PROJECT_DESCRIPTION.to_string(),
+                        }),
                         "task:approve" => {
                             if let Some(task) = self.selected_task() {
                                 let task_id = task.task.id;
@@ -1091,6 +1098,12 @@ impl AppState {
                                     .to_string(),
                             );
                             None
+                        }
+                        KeyCode::Char('d') | KeyCode::Char('D') => {
+                            Some(TuiAction::SubmitProject {
+                                name: DEMO_PROJECT_NAME.to_string(),
+                                description: DEMO_PROJECT_DESCRIPTION.to_string(),
+                            })
                         }
                         _ => None,
                     }
@@ -2432,6 +2445,20 @@ mod tests {
             Some(TuiAction::SubmitProject {
                 name: "Mesh Proj".to_string(),
                 description: "Test Desc".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_run_demo_shortcut_submits_builtin_demo_project() {
+        let mut state = AppState::new();
+        state.current_screen = CurrentScreen::ProjectManagement;
+
+        assert_eq!(
+            state.handle_key(make_key(KeyCode::Char('d'))),
+            Some(TuiAction::SubmitProject {
+                name: DEMO_PROJECT_NAME.to_string(),
+                description: DEMO_PROJECT_DESCRIPTION.to_string(),
             })
         );
     }

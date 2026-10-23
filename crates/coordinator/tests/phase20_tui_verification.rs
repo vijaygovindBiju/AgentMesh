@@ -1333,6 +1333,7 @@ fn test_tier3_help_modal_toggle_and_rendering() {
     assert_buffer_contains(&terminal, "Operator Keyboard Shortcuts & Help Reference");
     assert_buffer_contains(&terminal, "Direct screen jump");
     assert_buffer_contains(&terminal, "Cycle screens");
+    assert_buffer_contains(&terminal, "Run the built-in demo project");
 
     // Press [?] or [Esc] to dismiss modal
     state.handle_key(press_key(KeyCode::Esc));

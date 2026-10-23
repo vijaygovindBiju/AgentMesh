@@ -1,7 +1,7 @@
 use chrono::Utc;
 use coordinator::domain::{ApprovalStatus, Task, TaskStatus};
 use coordinator::observability::CoordinatorEvent;
-use coordinator::tui::screens::{DashboardScreen, PlanReviewScreen};
+use coordinator::tui::screens::{DashboardScreen, PlanReviewScreen, ProjectInputScreen};
 use coordinator::tui::state::{
     AppState, CurrentScreen, DashboardFocus, DestructiveAction, DiagnosticsFocus, TuiAction,
 };
@@ -509,4 +509,18 @@ fn test_plan_review_empty_state_renders_onboarding_guide() {
     assert_buffer_contains(&terminal, "Quick Start Guide:");
     assert_buffer_contains(&terminal, "1. Press [2]");
     assert_buffer_contains(&terminal, "2. Press [I]");
+}
+
+#[test]
+fn test_project_screen_exposes_run_demo_action() {
+    let mut terminal = create_terminal(140, 40);
+    let mut state = AppState::new();
+    state.current_screen = CurrentScreen::ProjectManagement;
+
+    terminal
+        .draw(|f| ProjectInputScreen::render(f, f.area(), &state))
+        .unwrap();
+
+    assert_buffer_contains(&terminal, "Run Demo");
+    assert_buffer_contains(&terminal, "[D]");
 }

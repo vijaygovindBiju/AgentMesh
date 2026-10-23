@@ -339,10 +339,8 @@ impl CoordinatorCore {
                     if task.project_id == proj_id {
                         let project_tasks =
                             TaskRepository::list_by_project(&self.pool, proj_id).await?;
-                        let all_completed = project_tasks
-                            .iter()
-                            .all(|t| t.status == TaskStatus::Completed);
-                        if all_completed
+                        let all_finished = project_tasks.iter().all(|t| t.status.is_terminal());
+                        if all_finished
                             && !project_tasks.is_empty()
                             && self.state == CoordinatorState::Executing
                         {

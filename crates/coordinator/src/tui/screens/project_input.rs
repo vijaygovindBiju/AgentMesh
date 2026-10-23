@@ -283,29 +283,43 @@ impl ProjectInputScreen {
             .split(inner_area);
 
         // Instructions
-        let intro_text = Line::from(vec![
-            Span::styled(
-                "Enter project details below. Press ",
-                Style::default().fg(Color::White),
-            ),
-            Span::styled(
-                "[i]",
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" or ", Style::default().fg(Color::White)),
-            Span::styled(
-                "[Enter]",
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                " to start typing. Tab switches fields.",
-                Style::default().fg(Color::White),
-            ),
-        ]);
+        let intro_text = vec![
+            Line::from(vec![
+                Span::styled(
+                    "Enter project details below. Press ",
+                    Style::default().fg(Color::White),
+                ),
+                Span::styled(
+                    "[i]",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" or ", Style::default().fg(Color::White)),
+                Span::styled(
+                    "[Enter]",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    " to start typing. Tab switches fields.",
+                    Style::default().fg(Color::White),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled(
+                    "[D] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "Run Demo using the configured planner.",
+                    Style::default().fg(Color::White),
+                ),
+            ]),
+        ];
         let intro_p = Paragraph::new(intro_text);
         frame.render_widget(intro_p, chunks[0]);
 

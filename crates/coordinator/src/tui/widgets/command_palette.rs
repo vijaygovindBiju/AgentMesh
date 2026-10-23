@@ -44,6 +44,11 @@ pub fn all_commands() -> Vec<CommandItem> {
             description: "Go to Diagnostics".to_string(),
             category: "Nav".to_string(),
         },
+        CommandItem {
+            name: "demo:run".to_string(),
+            description: "Create and plan the built-in AgentMesh demo project".to_string(),
+            category: "Demo".to_string(),
+        },
         // Task commands
         CommandItem {
             name: "task:approve".to_string(),
@@ -280,6 +285,26 @@ mod tests {
 
         let none = filtered_commands("xyz_nonexistent_token");
         assert!(none.is_empty());
+
+        let demo = filtered_commands("demo");
+        assert_eq!(demo.len(), 1);
+        assert_eq!(demo[0].name, "demo:run");
+    }
+
+    #[test]
+    fn test_command_palette_run_demo_submits_demo_project() {
+        let mut state = AppState::new();
+        state.show_command_palette = true;
+        state.command_palette_query = "demo".to_string();
+
+        assert_eq!(
+            state.handle_key(make_key(KeyCode::Enter)),
+            Some(crate::tui::state::TuiAction::SubmitProject {
+                name: crate::tui::state::DEMO_PROJECT_NAME.to_string(),
+                description: crate::tui::state::DEMO_PROJECT_DESCRIPTION.to_string(),
+            })
+        );
+        assert!(!state.show_command_palette);
     }
 
     #[test]

@@ -959,13 +959,22 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 
 - [x] Fix two stale TUI test expectations found in the full test run (2026-10-23).
 - [!] Rerun full workspace test suite on request (2026-10-23): `cargo test --workspace` stops in `phase18_real_world_validation` with the same three failures noted in the previous coordinator-wide run; workspace tests after that suite were not reached.
-- [!] Launch Docker dependencies and inspect the TUI/demo flow on request (2026-10-23): TUI starts and connects, but there is no "Run Demo" button/action. `phase7_e2e_demo` skips against the authenticated Compose NATS because it connects without a token; with isolated temporary Docker PostgreSQL/NATS, it reaches execution but fails because assignment selects a different agent than its hard-coded expectation. Temporary containers removed; normal Compose dependencies remain running.
+- [x] Add a Run Demo TUI action and repair the Docker-backed demo path (requested 2026-10-23).
 
 Verification run (2026-10-23):
 - Updated the command palette test to include the `task:approve_all` command, and enabled DAG view in the dependency jump test to reflect its `[`/`]` navigation context.
 - `cargo test -p coordinator --lib`: 129/129 passed.
 - TUI integration suites (`phase4_tui`, Phase 20/21/22 TUI and stress suites, and `mock_data_purged_verification`): 245/245 passed.
 - `cargo test -p coordinator`: TUI library and main tests passed, but the overall command stopped in `phase18_real_world_validation` with 3 failures unrelated to TUI changes (`test_phase18_5_dependency_chain_and_auto_assignment`, `test_phase18_10_distributed_two_agent_execution`, and `test_phase18_3_worktree_real_agy_execution_and_finalization`).
+
+Run Demo fix verification (2026-10-23):
+- Added `[D] Run Demo` to the project screen/footer and `demo:run` to the command palette; both submit the built-in AgentMesh demo to the configured planner.
+- Fixed project completion to transition to `Done` when all tasks are terminal, including rejected tasks.
+- Repaired Phase 7 demo integration setup for authenticated NATS, current assignment subjects, explicit agent targets, confirmation modals, and valid coordinator state transitions.
+- Interactive TUI smoke check with Docker: `[D]` created `AgentMesh Demo`; PostgreSQL showed 2 generated tasks.
+- `cargo test -p coordinator --lib`: 131/131 passed.
+- TUI integration suites: 246/246 passed.
+- `NATS_AUTH_TOKEN=agentmesh_dev_token cargo test -p coordinator --test phase7_e2e_demo -- --nocapture`: 1/1 passed against Docker PostgreSQL/NATS.
 
 **Goal:** Elevate the Coordinator Terminal User Interface (TUI) into an intuitive, responsive, and delightful operator console with native mouse navigation (tab clicking, wheel scrolling), vibrant visual hierarchy and focus badges, bulk task approval workflow, rich toast notification banners, informative empty states, and expanded cheatsheets.
 
