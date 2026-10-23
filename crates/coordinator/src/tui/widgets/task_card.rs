@@ -12,19 +12,23 @@ use crate::tui::state::ReviewTaskState;
 pub struct TaskCardWidget;
 
 impl TaskCardWidget {
-    pub fn render(frame: &mut Frame, area: Rect, item: &ReviewTaskState, is_selected: bool) {
-        let border_style = if is_selected {
+    pub fn render(frame: &mut Frame, area: Rect, item: &ReviewTaskState, is_focused: bool, is_selected: bool) {
+        let border_style = if is_focused {
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD)
+        } else if is_selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::DarkGray)
         };
 
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_type(if is_selected {
+            .border_type(if is_focused {
                 BorderType::Thick
+            } else if is_selected {
+                BorderType::Double
             } else {
                 BorderType::Plain
             })
@@ -37,7 +41,7 @@ impl TaskCardWidget {
         let mut lines = Vec::new();
 
         // 1. Header: [PLAN-1] Title
-        let prefix = if is_selected { "▶ " } else { "  " };
+        let prefix = if is_selected { "✓ " } else if is_focused { "▶ " } else { "  " };
         let short_id_style = Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD);

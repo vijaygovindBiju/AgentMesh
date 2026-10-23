@@ -1,7 +1,7 @@
 use crossterm::event::{
     KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use uuid::Uuid;
 
 use crate::domain::{
@@ -295,6 +295,7 @@ pub struct AppState {
     // Plan review state
     pub review_tasks: Vec<ReviewTaskState>,
     pub selected_task_index: usize,
+    pub selected_task_indices: HashSet<usize>,
     pub show_details_pane: bool,
     pub show_dag_view: bool,
     pub dag_scroll_offset: usize,
@@ -368,6 +369,7 @@ impl AppState {
 
             review_tasks: Vec::new(),
             selected_task_index: 0,
+            selected_task_indices: HashSet::new(),
             show_details_pane: true,
             show_dag_view: false,
             dag_scroll_offset: 0,
@@ -816,6 +818,13 @@ impl AppState {
                         let clicked_index = scroll_offset + ((mouse.row - list_top) / 5) as usize;
                         if clicked_index < self.review_tasks.len() {
                             self.selected_task_index = clicked_index;
+                            if mouse.modifiers.contains(KeyModifiers::CONTROL) {
+                                if !self.selected_task_indices.insert(clicked_index) {
+                                    self.selected_task_indices.remove(&clicked_index);
+                                }
+                            } else {
+                                self.selected_task_indices.clear();
+                            }
                         }
                     }
                 }
@@ -1587,11 +1596,15 @@ impl AppState {
             return None;
         }
 
-        // Shift+A or Ctrl+A triggers bulk task approval (even when empty, which displays toast notification)
-        if key.code == KeyCode::Char('A')
-            || (key.code == KeyCode::Char('a') && key.modifiers.contains(KeyModifiers::CONTROL))
-        {
+        // Shift+A approves all; Ctrl+A selects all without performing an action.
+        if key.code == KeyCode::Char('A') && !key.modifiers.contains(KeyModifiers::CONTROL) {
             self.prompt_approve_all_tasks();
+            return None;
+        }
+
+        if key.code == KeyCode::Char('a') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.selected_task_indices = (0..self.review_tasks.len()).collect();
+            self.status_message = Some(format!("Selected all {} tasks.", self.review_tasks.len()));
             return None;
         }
 
@@ -1600,6 +1613,18 @@ impl AppState {
         }
 
         match key.code {
+            KeyCode::Char(' ') => {
+                if !self.selected_task_indices.insert(self.selected_task_index) {
+                    self.selected_task_indices.remove(&self.selected_task_index);
+                }
+                self.status_message = Some(format!("Selected {} task(s).", self.selected_task_indices.len()));
+                None
+            }
+            KeyCode::Esc if !self.selected_task_indices.is_empty() => {
+                self.selected_task_indices.clear();
+                self.status_message = Some("Task selection cleared.".to_string());
+                None
+            }
             KeyCode::Up | KeyCode::Char('k') => {
                 if self.selected_task_index > 0 {
                     self.selected_task_index -= 1;
@@ -2435,6 +2460,8 @@ impl AppState {
             TuiUpdateEvent::CoordinatorEvent(evt) => self.apply_coordinator_event(&evt),
             TuiUpdateEvent::Tasks(tasks) => {
                 self.review_tasks = tasks;
+                self.selected_task_indices
+                    .retain(|index| *index < self.review_tasks.len());
                 if self.selected_task_index >= self.review_tasks.len() {
                     self.selected_task_index = self.review_tasks.len().saturating_sub(1);
                 }
@@ -2583,6 +2610,22 @@ mod tests {
         // Clamped at 0
         state.handle_key(make_key(KeyCode::Up));
         assert_eq!(state.selected_task_index, 0);
+    }
+
+    #[test]
+    fn test_ctrl_a_selects_all_tasks_and_space_toggles_without_approval() {
+        let mut state = AppState::new().with_mock_data();
+        let ctrl_a = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL);
+        state.handle_key(ctrl_a);
+        assert_eq!(state.selected_task_indices.len(), state.review_tasks.len());
+        assert!(state.pending_confirmation.is_none());
+
+        state.handle_key(make_key(KeyCode::Char(' ')));
+        assert!(!state.selected_task_indices.contains(&state.selected_task_index));
+        assert!(state.pending_confirmation.is_none());
+
+        state.handle_key(make_key(KeyCode::Char('A')));
+        assert!(state.pending_confirmation.is_some());
     }
 
     #[test]

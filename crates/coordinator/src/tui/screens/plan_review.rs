@@ -132,6 +132,7 @@ impl PlanReviewScreen {
                 card_rect,
                 task_item,
                 idx == state.selected_task_index,
+                state.selected_task_indices.contains(&idx),
             );
             y += card_height;
         }

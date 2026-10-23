@@ -158,18 +158,12 @@ impl FooterWidget {
                             ]
                         } else if state.current_screen == CurrentScreen::PlanReview && has_selected_task {
                             vec![
+                                Span::styled(" [Ctrl+A] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                                Span::raw("Select All  "),
+                                Span::styled(" [Space] ", Style::default().fg(Color::Cyan)),
+                                Span::raw("Toggle  "),
                                 Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
-                                Span::raw("Select  "),
-                                Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
-                                Span::raw("Help "),
-                                Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
-                                Span::raw("Cmd "),
-                                Span::styled(" [Tab] ", Style::default().fg(Color::Cyan)),
-                                Span::raw("Nav "),
-                                Span::styled(" [Y/N] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                                Span::raw("Review "),
-                                Span::styled(" [Esc] ", Style::default().fg(Color::DarkGray)),
-                                Span::raw("Back"),
+                                Span::raw("Move"),
                             ]
                         } else if has_overlaps {
                             vec![
@@ -234,6 +228,10 @@ impl FooterWidget {
                                 hints.extend([
                                     Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
                                     Span::raw("Nav "),
+                                    Span::styled(" [Ctrl+A] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                                    Span::raw("Select All "),
+                                    Span::styled(" [Space] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Toggle "),
                                     Span::styled(" [Enter] ", Style::default().fg(Color::Cyan)),
                                     Span::raw("Details "),
                                 ]);

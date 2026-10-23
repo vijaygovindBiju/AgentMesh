@@ -966,6 +966,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 - [x] Add a project copy action that pre-fills the project creation form without changing the source (requested 2026-10-23).
 - [x] Make task cards selectable by mouse in Plan Review and clarify selection keys (requested 2026-10-23).
 - [x] Fix clipped Settings tab and footer text on wide TUI layouts (reported with screenshot, 2026-10-23).
+- [x] Add task multi-selection and Ctrl+A select-all without triggering bulk approval (requested 2026-10-23).
 
 Verification run (2026-10-23):
 - Updated the command palette test to include the `task:approve_all` command, and enabled DAG view in the dependency jump test to reflect its `[`/`]` navigation context.
