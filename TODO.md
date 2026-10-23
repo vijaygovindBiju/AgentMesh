@@ -962,6 +962,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 - [x] Add a Run Demo TUI action and repair the Docker-backed demo path (requested 2026-10-23).
 - [x] Add TUI theme and font-style controls in Settings, with global rendering updates (requested 2026-10-23).
 - [x] Make Settings a top-level TUI tab and remove persisted mock records from the local development database (requested 2026-10-23).
+- [x] Fix project screen alignment and wrapping on compact terminal widths (requested 2026-10-23).
 
 Verification run (2026-10-23):
 - Updated the command palette test to include the `task:approve_all` command, and enabled DAG view in the dependency jump test to reflect its `[`/`]` navigation context.

@@ -13,7 +13,7 @@ pub struct ProjectInputScreen;
 
 impl ProjectInputScreen {
     pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
-        if area.width < 90 {
+        if area.width < 120 {
             // Compact stacked layout
             let vert_chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -37,6 +37,8 @@ impl ProjectInputScreen {
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
             .split(area);
+        let compact = area.height < 14;
+        let list_area = if compact { area } else { chunks[0] };
 
         // 1. Projects List Table
         let list_block = Block::default()
@@ -63,7 +65,7 @@ impl ProjectInputScreen {
                 )),
             ];
             let p = Paragraph::new(empty_text).block(list_block);
-            frame.render_widget(p, chunks[0]);
+            frame.render_widget(p, list_area);
         } else {
             let rows: Vec<Row> = state
                 .available_projects
@@ -96,9 +98,7 @@ impl ProjectInputScreen {
 
                     let status_str = format!("{:?}", p.status);
                     let status_style = match p.status {
-                        crate::domain::ProjectStatus::Active => {
-                            Style::default().fg(Color::Green)
-                        }
+                        crate::domain::ProjectStatus::Active => Style::default().fg(Color::Green),
                         crate::domain::ProjectStatus::Completed => Style::default().fg(Color::Blue),
                         crate::domain::ProjectStatus::Planning => {
                             Style::default().fg(Color::Yellow)
@@ -149,15 +149,19 @@ impl ProjectInputScreen {
             let table = Table::new(
                 rows,
                 [
-                    Constraint::Length(12),
-                    Constraint::Min(16),
-                    Constraint::Length(12),
+                    Constraint::Length(10),
+                    Constraint::Min(12),
+                    Constraint::Length(10),
                     Constraint::Length(12),
                 ],
             )
             .header(header_row)
             .block(list_block);
-            frame.render_widget(table, chunks[0]);
+            frame.render_widget(table, list_area);
+        }
+
+        if compact {
+            return;
         }
 
         // 2. Active Project Spec & Git Metadata Details
@@ -242,7 +246,9 @@ impl ProjectInputScreen {
                     ),
                 ]),
             ];
-            let p_widget = Paragraph::new(lines).block(details_block);
+            let p_widget = Paragraph::new(lines)
+                .wrap(Wrap { trim: true })
+                .block(details_block);
             frame.render_widget(p_widget, chunks[1]);
         } else {
             let empty = Paragraph::new(vec![
@@ -272,14 +278,25 @@ impl ProjectInputScreen {
         let inner_area = block.inner(area);
         frame.render_widget(block, area);
 
+        let constraints = if inner_area.height < 12 {
+            [
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Min(0),
+            ]
+        } else {
+            [
+                Constraint::Length(4),
+                Constraint::Length(3),
+                Constraint::Length(6),
+                Constraint::Min(4),
+            ]
+        };
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3), // Instructions
-                Constraint::Length(3), // Project Name field
-                Constraint::Length(6), // Project Description field
-                Constraint::Min(4),    // Information / Hints
-            ])
+            .constraints(constraints)
             .split(inner_area);
 
         // Instructions
@@ -320,7 +337,7 @@ impl ProjectInputScreen {
                 ),
             ]),
         ];
-        let intro_p = Paragraph::new(intro_text);
+        let intro_p = Paragraph::new(intro_text).wrap(Wrap { trim: true });
         frame.render_widget(intro_p, chunks[0]);
 
         // Field 1: Name
@@ -415,7 +432,7 @@ impl ProjectInputScreen {
                 Style::default().fg(Color::DarkGray),
             )),
         ];
-        let note_p = Paragraph::new(note_lines).block(
+        let note_p = Paragraph::new(note_lines).wrap(Wrap { trim: true }).block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::DarkGray))
