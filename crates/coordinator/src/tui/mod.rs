@@ -34,11 +34,11 @@ pub struct TerminalApp {
 }
 
 impl TerminalApp {
-    /// Initializes terminal raw mode, alternate screen, and mouse capture.
+    /// Initializes terminal raw mode and the alternate screen.
     pub fn new() -> Result<Self> {
         enable_raw_mode()?;
         let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, event::EnableMouseCapture)?;
+        execute!(stdout, EnterAlternateScreen)?;
         let backend = CrosstermBackend::new(stdout);
         let terminal = Terminal::new(backend)?;
         Ok(Self { terminal })
@@ -72,11 +72,6 @@ impl TerminalApp {
                             action_handler(action, state);
                         }
                     }
-                    Event::Mouse(mouse) => {
-                        if let Some(action) = state.handle_mouse(mouse) {
-                            action_handler(action, state);
-                        }
-                    }
                     _ => {}
                 }
             }
@@ -99,11 +94,7 @@ impl TerminalApp {
 impl Drop for TerminalApp {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
-        let _ = execute!(
-            self.terminal.backend_mut(),
-            LeaveAlternateScreen,
-            event::DisableMouseCapture
-        );
+        let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen);
         let _ = self.terminal.show_cursor();
     }
 }

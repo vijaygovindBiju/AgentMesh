@@ -48,7 +48,7 @@ AgentMesh is an autonomous agent coordination platform built in Rust. It utilize
 2. **Content-Adaptive Task Inspector (R2)**:
    - Dynamic section height calculations (metadata, description, dependencies, resources, overlaps) based on actual item counts. Empty sections collapse from 5/6 to 3 lines (`Length(3)`).
    - Paragraph word wrapping with `Wrap { trim: true }` across description, metadata, dependencies, resources, and warnings.
-   - Dedicated `AppState::inspector_scroll_offset` enabling vertical scrolling via mouse wheel and keyboard (`Shift+Up/Down`, `Shift+J/K`, or active inspector pane focus).
+   - Dedicated `AppState::inspector_scroll_offset` enabling vertical scrolling via keyboard (`Shift+Up/Down`, `Shift+J/K`, or active inspector pane focus).
    - Auto-reset `inspector_scroll_offset = 0` on task selection change.
 3. **High-Contrast Task List & Card Presentation (R3)**:
    - Distinct combined visual indicator for focused + multi-selected cards (`▶ [✓] ` prefix with dual-highlight border and badge).
@@ -74,7 +74,7 @@ Every requirement and survey finding mapped to an assigned milestone:
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
 | 1 | Survey & Technical Mapping | 3 parallel explorers mapped R1, R2, R3, R4, R5, and test gaps | M0 | Survey |
-| 2 | Core State & Navigation Extensions | `PlanReviewFocus`, `inspector_scroll_offset`, mouse column routing, selective `Shift+A`, 6-screen tab cycle fix | M1 | R4, R5 |
+| 2 | Core State & Navigation Extensions | `PlanReviewFocus`, `inspector_scroll_offset`, keyboard pane routing, selective `Shift+A`, 6-screen tab cycle fix | M1 | R4, R5 |
 | 3 | Responsive Plan Layout & Header/Footer Harmonization | Adaptive columns (compact/standard/wide), unified 90-col breakpoint, compact footer hints, dynamic status chunk | M2 | R1, R4 |
 | 4 | Content-Adaptive Task Inspector | Dynamic height allocation, `Wrap { trim: true }`, vertical scrolling, scroll reset on task change | M3 | R2 |
 | 5 | Task List Rendering & Card Ergonomics | Combined focus+selection badge, 2-line metadata wrapping, title ellipsis, dynamic card height, sliding-window scroll | M4 | R3, R5 |
@@ -88,7 +88,7 @@ Every requirement and survey finding mapped to an assigned milestone:
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
 | M0 | Survey & Technical Mapping | Complete technical survey across all 5 requirements and test suites | none | DONE |
-| M1 | Core State & Navigation Extensions | `state.rs`: `PlanReviewFocus`, `inspector_scroll_offset`, selective `Shift+A`, mouse column routing, 6-screen test fix | M0 | DONE |
+| M1 | Core State & Navigation Extensions | `state.rs`: `PlanReviewFocus`, `inspector_scroll_offset`, selective `Shift+A`, keyboard pane routing, 6-screen test fix | M0 | DONE |
 | M2 | Responsive Plan Layout & Header/Footer Harmonization | `plan_review.rs`, `header.rs`, `footer.rs`: column constraints, 90-col breakpoint, compact hints, toast width | M1 | DONE |
 | M3 | Content-Adaptive Task Inspector | `details_pane.rs`: dynamic section heights, `Wrap { trim: true }`, vertical scrolling with offset | M1 | DONE |
 | M4 | Task List Rendering & Card Ergonomics | `task_card.rs`, `plan_review.rs`: combined focus+select indicator, 2-line metadata, title ellipsis, sliding-window scroll | M1 | DONE |
@@ -116,7 +116,7 @@ Every requirement and survey finding mapped to an assigned milestone:
 
 ## Code Layout
 
-- `crates/coordinator/src/tui/state.rs`: `AppState`, `PlanReviewFocus`, mouse handling, keyboard actions, selective bulk approval
+- `crates/coordinator/src/tui/state.rs`: `AppState`, `PlanReviewFocus`, keyboard actions, selective bulk approval
 - `crates/coordinator/src/tui/screens/plan_review.rs`: Responsive two-column layout, adaptive block titles, sliding-window card scrolling
 - `crates/coordinator/src/tui/widgets/task_card.rs`: Combined focus+selection badge, 2-line metadata formatting, title ellipsis, dynamic height
 - `crates/coordinator/src/tui/widgets/details_pane.rs`: Content-adaptive height allocation, `Wrap { trim: true }`, vertical scrolling

@@ -75,6 +75,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 
 - [x] Remove deprecated simulated runtime paths — simulated agent/provider, defaults, dependent tests, docs, and local backing volumes removed
 - [x] Fix coordinator PostgreSQL startup instructions and health-check race
+- [x] Remove mouse interaction from the terminal UI
 - [x] v0.1 — Core Coordination System (DONE)
 - [x] Phase 8 — Real agy Integration (DONE)
 - [x] Phase 9 — Real Repository / Git Coordination (DONE)
@@ -985,13 +986,7 @@ Run Demo fix verification (2026-10-23):
 - TUI integration suites: 246/246 passed.
 - `NATS_AUTH_TOKEN=agentmesh_dev_token cargo test -p coordinator --test phase7_e2e_demo -- --nocapture`: 1/1 passed against Docker PostgreSQL/NATS.
 
-**Goal:** Elevate the Coordinator Terminal User Interface (TUI) into an intuitive, responsive, and delightful operator console with native mouse navigation (tab clicking, wheel scrolling), vibrant visual hierarchy and focus badges, bulk task approval workflow, rich toast notification banners, informative empty states, and expanded cheatsheets.
-
-- [x] Task 22.1: Native Mouse Interaction & Scroll Wheel Support
-  - [x] Enable `EnableMouseCapture` and `DisableMouseCapture` in `TerminalApp`
-  - [x] Handle mouse wheel scrolling across Plan Review, DAG view, Dashboard tables, and Diagnostics event logs
-  - [x] Handle mouse click on header tabs (`1:Dash`, `2:Proj`, `3:Plan`, `4:Fleet`, `5:Diag`) to directly switch screens
-  - [x] Handle mouse click on list items and buttons
+**Goal:** Elevate the Coordinator Terminal User Interface (TUI) into an intuitive, responsive, and delightful keyboard-driven operator console with vibrant visual hierarchy and focus badges, bulk task approval workflow, rich toast notification banners, informative empty states, and expanded cheatsheets.
 - [x] Task 22.2: Vibrant Visual Hierarchy & Pane Focus Highlighting
   - [x] Distinct border styling and `[▶ FOCUSED]` badge for active panes vs muted borders for inactive panes
   - [x] Unicode block progress bars (`[█████] 100%`, `[███░░] 60%`) in tasks tables
@@ -1005,12 +1000,12 @@ Run Demo fix verification (2026-10-23):
 - [x] Task 22.5: Informative Empty States with Guided Action Steps
   - [x] Step-by-step onboarding cards when no project, plan, or agents are loaded
 - [x] Task 22.6: Test Suite Validation & Zero-Regression Check
-  - [x] Comprehensive Ratatui test suite covering mouse events, bulk approval, tab clicks, and focus rendering (`phase22_tui_usability.rs` - 13/13 passed)
+  - [x] Comprehensive Ratatui test suite covering keyboard actions, bulk approval, tab navigation, and focus rendering (`phase22_tui_usability.rs` - 13/13 passed)
   - [x] `cargo check --workspace` passes with 0 errors and 0 warnings
   - [x] 100% pass rate across existing Phase 20 (`phase20_tui_verification.rs` - 86/86 passed) and Phase 21 (`phase21_tui_enhancements.rs` - 65/65 passed), and `agy_data_purged_verification.rs` (16/16 passed)
 
 ### Acceptance Criteria:
-The Operator TUI provides an intuitive, high-ergonomics interface with full mouse support (scrolling across all scrollable lists, graphs, and logs; left-click on header tabs), one-key bulk task approvals (`Shift+A`) guarded by safety confirmation modals, Unicode block progress bars, color-coded status badges with icons, severity-styled toast banners, informative onboarding guidance for empty states, and fast tab cycling shortcuts (`[` and `]`, `BackTab`). All 180 TUI unit and integration tests across Phase 20, 21, and 22 pass cleanly with zero regressions.
+The Operator TUI provides an intuitive, high-ergonomics keyboard interface with one-key bulk task approvals (`Shift+A`) guarded by safety confirmation modals, Unicode block progress bars, color-coded status badges with icons, severity-styled toast banners, informative onboarding guidance for empty states, and fast tab cycling shortcuts (`[` and `]`, `BackTab`). All 180 TUI unit and integration tests across Phase 20, 21, and 22 pass cleanly with zero regressions.
 
 ---
 
@@ -1020,7 +1015,7 @@ The Operator TUI provides an intuitive, high-ergonomics interface with full mous
 
 ### Milestones & Status
 - [x] M0: Survey & Technical Mapping (3 parallel explorers mapped R1-R5 & test gaps) [DONE]
-- [x] M1: Core State & Navigation Extensions (`PlanReviewFocus`, `inspector_scroll_offset`, mouse column routing, selective `Shift+A`, 6-screen tab cycle fix) [DONE]
+- [x] M1: Core State & Navigation Extensions (`PlanReviewFocus`, `inspector_scroll_offset`, keyboard pane routing, selective `Shift+A`, 6-screen tab cycle fix) [DONE]
 - [x] M2: Responsive Plan Layout & Header/Footer Harmonization (Adaptive columns, unified 90-col breakpoint, compact footer hints, dynamic status chunk) [DONE]
 - [x] M3: Content-Adaptive Task Inspector (Dynamic height allocation, `Wrap { trim: true }`, vertical scrolling, scroll reset on task change) [DONE]
 - [x] M4: Task List Rendering & Card Ergonomics (Combined focus+selection badge, 2-line metadata wrapping, title ellipsis, dynamic card height, sliding-window scroll) [DONE]
@@ -1036,8 +1031,6 @@ The Operator TUI provides an intuitive, high-ergonomics interface with full mous
   - [x] Verified zero border clipping across all standard and compact breakpoints
 - [x] M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening (All TUI tests passing, clippy clean, Reviewers, Challengers, Forensic Auditor, git commits) [DONE]
   - [x] Final verification complete: 376 passing tests (152 lib tests + 224 integration tests across `phase4_tui`, `phase20_tui_verification`, `phase21_tui_enhancements`, `phase22_tui_usability`, `phase22_plan_review_ergonomics`, `phase22_preview_challenger_stress`, and `phase22_challenger_verification`) with 0 errors, 0 failures, and 0 warnings.
-
-
 
 
 

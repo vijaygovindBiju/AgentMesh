@@ -37,7 +37,6 @@ The test suite provides **25 comprehensive, deterministic test scenarios** struc
 | ID | Requirement | Test Case Name | Combination Verified | Status |
 |---|---|---|---|:---:|
 | 3.1 | R3, R5 | `test_tier3_focused_and_multi_selected_card_styling` | Distinct indicator `▶ [✓]` when card is both focused and selected vs `▶   ` or `  ✓ ` | PASS |
-| 3.2 | R4 | `test_tier3_mouse_scroll_column_disambiguation` | Left column mouse wheel scrolls task list; right column mouse wheel scrolls inspector offset | PASS |
 | 3.3 | R2, R4 | `test_tier3_inspector_scroll_offset_reset_on_task_navigation` | Cursor navigation resets `inspector_scroll_offset = 0` so inspector opens at top of newly selected task | PASS |
 | 3.4 | R4, R5 | `test_tier3_pane_focus_switching` | `Tab` or `Left`/`Right` switches focus between `TaskList` and `TaskInspector`; active pane displays `[▶ FOCUSED]` | PASS |
 | 3.5 | R4 | `test_tier3_selective_shift_a_bulk_approval_with_multi_selection` | `Shift+A` with non-empty selection prompts for and approves only the selected subset of tasks | PASS |

@@ -17,7 +17,7 @@ use coordinator::tui::state::{
 };
 use coordinator::tui::ui;
 use coordinator::tui::widgets::{DagViewWidget, DetailsPaneWidget, FooterWidget, TaskCardWidget};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use serde_json::json;
@@ -113,15 +113,6 @@ fn press_shift(code: KeyCode) -> KeyEvent {
 
 fn press_ctrl(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::CONTROL)
-}
-
-fn mouse_scroll(column: u16, row: u16, kind: MouseEventKind) -> MouseEvent {
-    MouseEvent {
-        kind,
-        column,
-        row,
-        modifiers: KeyModifiers::NONE,
-    }
 }
 
 // ============================================================================
@@ -815,54 +806,6 @@ fn test_tier3_inspector_scroll_offset_reset_on_task_navigation() {
     assert_eq!(state.selected_task_index, 0);
     assert_eq!(state.inspector_scroll_offset, 0);
 }
-
-#[test]
-fn test_tier3_mouse_scroll_column_disambiguation() {
-    let mut state = AppState::new();
-    state.current_screen = CurrentScreen::PlanReview;
-    state.show_details_pane = true;
-
-    let proj_id = Uuid::new_v4();
-    for i in 1..=4 {
-        state.review_tasks.push(sample_review_task(
-            Uuid::new_v4(),
-            proj_id,
-            &format!("DISAMBIG-{i}"),
-            &format!("Disambiguation Task #{i}"),
-            TaskStatus::HumanReview,
-        ));
-    }
-
-    assert_eq!(state.selected_task_index, 0);
-    assert_eq!(state.inspector_scroll_offset, 0);
-
-    // 1. Mouse wheel over left column (col 15 < list_width)
-    // Scrolls task cards
-    state.handle_mouse(mouse_scroll(15, 10, MouseEventKind::ScrollDown));
-    assert_eq!(state.selected_task_index, 1);
-    assert_eq!(state.inspector_scroll_offset, 0);
-
-    // 2. Mouse wheel over right column (col 75 >= list_width)
-    // Scrolls inspector pane
-    state.handle_mouse(mouse_scroll(75, 10, MouseEventKind::ScrollDown));
-    assert_eq!(state.selected_task_index, 1); // card selection unchanged
-    assert_eq!(state.inspector_scroll_offset, 1);
-
-    state.handle_mouse(mouse_scroll(75, 10, MouseEventKind::ScrollDown));
-    assert_eq!(state.selected_task_index, 1);
-    assert_eq!(state.inspector_scroll_offset, 2);
-
-    // Scroll up over right column
-    state.handle_mouse(mouse_scroll(75, 10, MouseEventKind::ScrollUp));
-    assert_eq!(state.selected_task_index, 1);
-    assert_eq!(state.inspector_scroll_offset, 1);
-
-    // 3. Mouse wheel back over left column scrolls task cards
-    state.handle_mouse(mouse_scroll(15, 10, MouseEventKind::ScrollUp));
-    assert_eq!(state.selected_task_index, 0);
-    assert_eq!(state.inspector_scroll_offset, 0); // reset on card change
-}
-
 #[test]
 fn test_tier3_selective_shift_a_bulk_approval_with_multi_selection() {
     let mut state = AppState::new();

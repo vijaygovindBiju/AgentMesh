@@ -62,15 +62,6 @@ impl HelpModalWidget {
             ]),
             Line::from(vec![
                 Span::styled(
-                    " Mouse ",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw("Click tabs to jump, wheel scroll across lists & DAG"),
-            ]),
-            Line::from(vec![
-                Span::styled(
                     " [:] ",
                     Style::default()
                         .fg(Color::Cyan)

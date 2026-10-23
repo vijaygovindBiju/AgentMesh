@@ -65,7 +65,6 @@ Phase 22 focuses on the visual layout, rendering, and usability of the Plan Revi
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ Tier 3: Cross-Feature Combinations                                           │
 │   - Combined focused + multi-selected card styling (▶ [✓] indicator)         │
-│   - Mouse scroll column disambiguation (left -> task list, right -> inspector)│
 │   - Inspector scroll offset auto-reset on task cursor navigation             │
 │   - PlanReviewFocus pane switching (TaskList <-> TaskInspector via Tab/Arrows)│
 │   - Selective Shift+A (subset approval) vs empty Shift+A (all pending tasks) │
@@ -121,9 +120,6 @@ Phase 22 focuses on the visual layout, rendering, and usability of the Plan Revi
 #### Tier 3: Cross-Feature Combinations
 1. **Focused + Multi-Selected Visual Distinction**:
    - Card simultaneously focused and selected renders combined indicator `▶ [✓] ` with dual-highlight border/badge, distinguishing it from merely focused (`▶   `) or merely selected (`  ✓ `).
-2. **Mouse Scroll Column Disambiguation**:
-   - Mouse wheel over left column (`column < list_width`) moves `selected_task_index`.
-   - Mouse wheel over right column (`column >= list_width`) moves `inspector_scroll_offset`.
 3. **Inspector Scroll Reset on Task Switch**:
    - Moving cursor (`selected_task_index` changes) resets `inspector_scroll_offset = 0`, ensuring inspector always opens at top of newly selected task.
 4. **PlanReviewFocus Pane Switching**:
@@ -159,11 +155,9 @@ fn assert_buffer_contains(terminal: &Terminal<TestBackend>, expected: &str);
 // Case-sensitive assertion that string does NOT appear in rendered terminal
 fn assert_buffer_does_not_contain(terminal: &Terminal<TestBackend>, unexpected: &str);
 
-// Synthetic keyboard & mouse event generators
 fn press_key(code: KeyCode) -> KeyEvent;
 fn press_char(c: char) -> KeyEvent;
 fn press_modified(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent;
-fn mouse_scroll(column: u16, row: u16, kind: MouseEventKind) -> MouseEvent;
 ```
 
 ---
@@ -192,7 +186,6 @@ fn mouse_scroll(column: u16, row: u16, kind: MouseEventKind) -> MouseEvent;
 | **Title Ellipsis Truncation (R3)** | Titles exceeding inner width gracefully truncated with `...` | Buffer match on `...` and absence of overflow |
 | **Sliding-Window Card Scroll (R3)** | Upward navigation scrolls smoothly without pinning cursor to bottom row | `scroll_offset` bounds assertion |
 | **Pane Focus Switching (R4)** | `Tab`/Arrows switch between `TaskList` and `TaskInspector`; active pane displays `[▶ FOCUSED]` | Focus enum & buffer check |
-| **Mouse Column Routing (R4)** | Left pane mouse scroll moves task index; right pane mouse scroll adjusts inspector offset | MouseEvent dispatch & state verification |
 | **Selective Bulk Approval (R4)** | `Shift+A` with multi-selection approves only selected; empty selection approves all pending | Task status transitions verification |
 | **Footer Hints & Toast (R4)** | No hint truncation at 80, 120, 180 cols; status toast allocated >=34 cols | Buffer match on hints and full toast string |
 | **Visual Consistency (R5)** | Cyan rounded borders, dark background, standard status color badges | Style and border assertions |
