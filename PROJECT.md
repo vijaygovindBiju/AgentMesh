@@ -89,11 +89,11 @@ Every requirement and survey finding mapped to an assigned milestone:
 |---|------|-------|-------------|--------|
 | M0 | Survey & Technical Mapping | Complete technical survey across all 5 requirements and test suites | none | DONE |
 | M1 | Core State & Navigation Extensions | `state.rs`: `PlanReviewFocus`, `inspector_scroll_offset`, selective `Shift+A`, mouse column routing, 6-screen test fix | M0 | DONE |
-| M2 | Responsive Plan Layout & Header/Footer Harmonization | `plan_review.rs`, `header.rs`, `footer.rs`: column constraints, 90-col breakpoint, compact hints, toast width | M1 | IN_PROGRESS |
+| M2 | Responsive Plan Layout & Header/Footer Harmonization | `plan_review.rs`, `header.rs`, `footer.rs`: column constraints, 90-col breakpoint, compact hints, toast width | M1 | DONE |
 | M3 | Content-Adaptive Task Inspector | `details_pane.rs`: dynamic section heights, `Wrap { trim: true }`, vertical scrolling with offset | M1 | DONE |
-| M4 | Task List Rendering & Card Ergonomics | `task_card.rs`, `plan_review.rs`: combined focus+select indicator, 2-line metadata, title ellipsis, sliding-window scroll | M1 | IN_PROGRESS |
+| M4 | Task List Rendering & Card Ergonomics | `task_card.rs`, `plan_review.rs`: combined focus+select indicator, 2-line metadata, title ellipsis, sliding-window scroll | M1 | DONE |
 | M_TEST | E2E Testing Track: Usability & Ergonomics Suite | `phase22_plan_review_ergonomics.rs`: Tiers 1-4 TestBackend verification, `TEST_READY.md` (25/25 passed) | M0 | DONE |
-| M5 | Final Milestone: 100% Pass & Coverage Hardening | All tests pass, clippy clean, Reviewers, Challengers, Forensic Auditor, git commits | M1, M2, M3, M4, M_TEST | PLANNED |
+| M5 | Final Milestone: 100% Pass & Coverage Hardening | All tests pass, clippy clean, Reviewers, Challengers, Forensic Auditor, git commits | M1, M2, M3, M4, M_TEST | DONE |
 
 ---
 

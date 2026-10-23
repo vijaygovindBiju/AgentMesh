@@ -89,7 +89,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Phase 19 — Real Multi-Machine Validation (DONE)
 - [x] Phase 20 — Operator TUI & CLI Preservation (DONE)
 - [x] Phase 21 — Operator TUI Enhancement & Production Console (DONE)
-- [~] Phase 22 — Operator TUI Usability & Ergonomics Enhancement (IN PROGRESS)
+- [x] Phase 22 — Operator TUI Usability & Ergonomics Enhancement (DONE)
 
 ---
 
@@ -1029,7 +1029,11 @@ The Operator TUI provides an intuitive, high-ergonomics interface with full mous
   - [x] Plan review left pane title focus badge clipping on 60..85 cols fixed by raising threshold from `>= 30` to `>= 42`
   - [x] Task inspector right pane title focus badge clipping at 60 cols fixed by raising threshold from `>= 30` to `>= 38`
   - [x] Updated stress test reproducer assertions in `phase22_preview_challenger_stress.rs` to verify zero clipping
-- [ ] M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening (All TUI tests passing, clippy clean, Reviewers, Challengers, Forensic Auditor, git commits) [TODO]
+- [x] Gate 3 Defect Remediation (`worker_fix_gate3`):
+  - [x] Right-sized focused inspector title threshold to `w >= 59` focused, `w >= 48` unfocused (commit `76f8494`), eliminating border clipping at 90 and 100 cols
+  - [x] Verified zero border clipping across all standard and compact breakpoints
+- [x] M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening (All TUI tests passing, clippy clean, Reviewers, Challengers, Forensic Auditor, git commits) [DONE]
+  - [x] Final verification complete: 376 passing tests (152 lib tests + 224 integration tests across `phase4_tui`, `phase20_tui_verification`, `phase21_tui_enhancements`, `phase22_tui_usability`, `phase22_plan_review_ergonomics`, `phase22_preview_challenger_stress`, and `phase22_challenger_verification`) with 0 errors, 0 failures, and 0 warnings.
 
 
 
