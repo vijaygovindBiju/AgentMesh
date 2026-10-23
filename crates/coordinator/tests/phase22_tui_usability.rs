@@ -293,9 +293,15 @@ fn test_bracket_keys_cycle_screens_forward_and_backward() {
     assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
     state.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
+    assert_eq!(state.current_screen, CurrentScreen::Settings);
+
+    state.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
     assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 
     // '[' cycles backward
+    state.handle_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE));
+    assert_eq!(state.current_screen, CurrentScreen::Settings);
+
     state.handle_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE));
     assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
@@ -307,6 +313,9 @@ fn test_bracket_keys_cycle_screens_forward_and_backward() {
 fn test_backtab_cycles_screen_backward() {
     let mut state = AppState::new();
     assert_eq!(state.current_screen, CurrentScreen::Dashboard);
+
+    state.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    assert_eq!(state.current_screen, CurrentScreen::Settings);
 
     state.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
     assert_eq!(state.current_screen, CurrentScreen::Diagnostics);

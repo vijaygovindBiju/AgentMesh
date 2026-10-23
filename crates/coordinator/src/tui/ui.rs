@@ -17,6 +17,7 @@ use crate::tui::widgets::{
 /// Top-level layout orchestrator
 pub fn render(frame: &mut Frame, state: &AppState) {
     let size = frame.area();
+    state.set_viewport_size(size.width, size.height);
 
     // Extreme size guard: terminal below minimum operational bounds
     if size.width < 48 || size.height < 10 {

@@ -144,6 +144,9 @@ fn test_tier1_screen_nav_5_screens_tab_cycling() {
     assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
     state.cycle_screen();
+    assert_eq!(state.current_screen, CurrentScreen::Settings);
+
+    state.cycle_screen();
     assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 }
 
@@ -166,9 +169,13 @@ fn test_tier1_screen_nav_numeric_hotkeys_1_to_5() {
     state.handle_key(press_char('5'));
     assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
-    // Key '6' is unmapped and does not switch screen
+    // Key '6' maps to Settings screen
     state.handle_key(press_char('6'));
-    assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
+    assert_eq!(state.current_screen, CurrentScreen::Settings);
+
+    // Key '7' is unmapped and does not switch screen
+    state.handle_key(press_char('7'));
+    assert_eq!(state.current_screen, CurrentScreen::Settings);
 }
 
 #[test]
@@ -192,7 +199,7 @@ fn test_tier1_screen_nav_all_5_screen_headers_render() {
     terminal
         .draw(|f| PlanReviewScreen::render(f, f.area(), &state))
         .unwrap();
-    assert_buffer_contains(&terminal, "Proposed Task Decomposition");
+    assert_buffer_contains(&terminal, "Proposed Tasks (Review)");
 
     // 4. Fleet Inspector
     terminal

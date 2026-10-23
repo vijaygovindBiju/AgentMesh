@@ -2,6 +2,7 @@ use crossterm::event::{
     KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 use std::collections::{HashSet, VecDeque};
+use std::sync::atomic::{AtomicU32, Ordering};
 use uuid::Uuid;
 
 use crate::domain::{
@@ -171,6 +172,12 @@ pub struct ConfirmationModalState {
     pub action: DestructiveAction,
 }
 
+impl Default for ConfirmationModalState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConfirmationModalState {
     pub fn new() -> Self {
         Self {
@@ -216,6 +223,14 @@ impl ConfirmationModalState {
             action: DestructiveAction::ApproveAllTasks,
         }
     }
+
+    pub fn approve_selected(count: usize) -> Self {
+        Self {
+            title: "Confirm Bulk Task Approval".to_string(),
+            message: format!("Approve selected {count} task(s)?"),
+            action: DestructiveAction::ApproveAllTasks,
+        }
+    }
 }
 
 /// Active focus pane on the Dashboard screen
@@ -225,6 +240,19 @@ pub enum DashboardFocus {
     AgentsTable,
     TasksTable,
     OverlapsTable,
+}
+
+/// Active focus pane on the PlanReview screen
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlanReviewFocus {
+    #[default]
+    TaskList,
+    TaskInspector,
+}
+
+impl PlanReviewFocus {
+    #[allow(non_upper_case_globals)]
+    pub const TaskCards: Self = Self::TaskList;
 }
 
 /// Active focus pane on the Diagnostics screen
@@ -299,6 +327,8 @@ pub struct AppState {
     pub show_details_pane: bool,
     pub show_dag_view: bool,
     pub dag_scroll_offset: usize,
+    pub inspector_scroll_offset: usize,
+    pub plan_review_focus: PlanReviewFocus,
     pub edit_buffer: String,
     pub edit_cursor: usize,
 
@@ -338,6 +368,7 @@ pub struct AppState {
     // Status bar & messaging
     pub status_message: Option<String>,
     pub should_quit: bool,
+    pub viewport_size: AtomicU32,
 }
 
 impl Default for AppState {
@@ -373,6 +404,8 @@ impl AppState {
             show_details_pane: true,
             show_dag_view: false,
             dag_scroll_offset: 0,
+            inspector_scroll_offset: 0,
+            plan_review_focus: PlanReviewFocus::TaskList,
             edit_buffer: String::new(),
             edit_cursor: 0,
 
@@ -408,7 +441,30 @@ impl AppState {
                 "Ready. Press [Tab] to switch screens.".to_string(),
             ),
             should_quit: false,
+            viewport_size: AtomicU32::new(0),
         }
+    }
+
+    pub fn set_viewport_size(&self, width: u16, height: u16) {
+        let packed = ((width as u32) << 16) | (height as u32);
+        self.viewport_size.store(packed, Ordering::Relaxed);
+    }
+
+    pub fn get_viewport_size(&self) -> (u16, u16) {
+        let packed = self.viewport_size.load(Ordering::Relaxed);
+        if packed == 0 {
+            crossterm::terminal::size().unwrap_or((80, 24))
+        } else {
+            ((packed >> 16) as u16, (packed & 0xFFFF) as u16)
+        }
+    }
+
+    /// Calculates the sliding-window task list scrolling offset so the active task card
+    /// is kept visible and centered without prematurely pinning to the bottom.
+    pub fn plan_task_scroll_offset(&self, visible_cards: usize) -> usize {
+        let half_visible = visible_cards / 2;
+        let max_offset = self.review_tasks.len().saturating_sub(visible_cards);
+        self.selected_task_index.saturating_sub(half_visible).min(max_offset)
     }
 
     /// Test fixture helper to seed mock data for UI unit/integration testing.
@@ -661,12 +717,30 @@ impl AppState {
             MouseEventKind::ScrollDown => {
                 match self.current_screen {
                     CurrentScreen::PlanReview => {
-                        if self.show_dag_view {
+                        let (width, _height) = self.get_viewport_size();
+                        let list_width = if self.show_details_pane {
+                            if self.show_dag_view {
+                                width * 50 / 100
+                            } else if width < 90 {
+                                width * 46 / 100
+                            } else if width < 140 {
+                                width * 44 / 100
+                            } else {
+                                64
+                            }
+                        } else {
+                            width
+                        };
+
+                        if self.show_details_pane && mouse.column >= list_width {
+                            self.inspector_scroll_down();
+                        } else if self.show_dag_view {
                             self.dag_scroll_offset = self.dag_scroll_offset.saturating_add(1);
                         } else if !self.review_tasks.is_empty()
                             && self.selected_task_index + 1 < self.review_tasks.len()
                         {
                             self.selected_task_index += 1;
+                            self.inspector_scroll_offset = 0;
                         }
                     }
                     CurrentScreen::Dashboard => match self.dashboard_focus {
@@ -711,6 +785,7 @@ impl AppState {
                                 && self.selected_task_index + 1 < self.review_tasks.len()
                             {
                                 self.selected_task_index += 1;
+                                self.inspector_scroll_offset = 0;
                             }
                         }
                     },
@@ -728,10 +803,28 @@ impl AppState {
             MouseEventKind::ScrollUp => {
                 match self.current_screen {
                     CurrentScreen::PlanReview => {
-                        if self.show_dag_view {
+                        let (width, _height) = self.get_viewport_size();
+                        let list_width = if self.show_details_pane {
+                            if self.show_dag_view {
+                                width * 50 / 100
+                            } else if width < 90 {
+                                width * 46 / 100
+                            } else if width < 140 {
+                                width * 44 / 100
+                            } else {
+                                64
+                            }
+                        } else {
+                            width
+                        };
+
+                        if self.show_details_pane && mouse.column >= list_width {
+                            self.inspector_scroll_up();
+                        } else if self.show_dag_view {
                             self.dag_scroll_offset = self.dag_scroll_offset.saturating_sub(1);
                         } else if self.selected_task_index > 0 {
                             self.selected_task_index -= 1;
+                            self.inspector_scroll_offset = 0;
                         }
                     }
                     CurrentScreen::Dashboard => match self.dashboard_focus {
@@ -800,10 +893,22 @@ impl AppState {
                         self.current_screen = CurrentScreen::Settings;
                     }
                 } else if self.current_screen == CurrentScreen::PlanReview && !self.show_dag_view {
-                    let (width, height) = crossterm::terminal::size().unwrap_or((80, 24));
+                    let (width, height) = self.get_viewport_size();
                     let header_height = if width < 90 { 2 } else { 3 };
                     let body_height = height.saturating_sub(header_height + 3);
-                    let list_width = if self.show_details_pane { width * 45 / 100 } else { width };
+                    let list_width = if self.show_details_pane {
+                        if self.show_dag_view {
+                            width * 50 / 100
+                        } else if width < 90 {
+                            width * 46 / 100
+                        } else if width < 140 {
+                            width * 44 / 100
+                        } else {
+                            64
+                        }
+                    } else {
+                        width
+                    };
                     let list_top = header_height + 1;
                     let list_inner_height = body_height.saturating_sub(2);
 
@@ -812,11 +917,12 @@ impl AppState {
                         && !self.review_tasks.is_empty()
                     {
                         let visible_cards = (list_inner_height / 5).max(1) as usize;
-                        let scroll_offset = if self.selected_task_index >= visible_cards {
-                            self.selected_task_index - visible_cards + 1
-                        } else { 0 };
+                        let scroll_offset = self.plan_task_scroll_offset(visible_cards);
                         let clicked_index = scroll_offset + ((mouse.row - list_top) / 5) as usize;
                         if clicked_index < self.review_tasks.len() {
+                            if self.selected_task_index != clicked_index {
+                                self.inspector_scroll_offset = 0;
+                            }
                             self.selected_task_index = clicked_index;
                             if mouse.modifiers.contains(KeyModifiers::CONTROL) {
                                 if !self.selected_task_indices.insert(clicked_index) {
@@ -923,16 +1029,32 @@ impl AppState {
                         }
                         DestructiveAction::ApproveAllTasks => {
                             let mut count = 0;
-                            for item in &mut self.review_tasks {
-                                if item.task.status == TaskStatus::HumanReview
-                                    || item.task.status == TaskStatus::Proposed
-                                {
-                                    item.human_decision = Some(ApprovalStatus::Approved);
-                                    item.task.status = TaskStatus::Approved;
-                                    count += 1;
+                            if !self.selected_task_indices.is_empty() {
+                                for &idx in &self.selected_task_indices {
+                                    if let Some(item) = self.review_tasks.get_mut(idx) {
+                                        if item.task.status == TaskStatus::HumanReview
+                                            || item.task.status == TaskStatus::Proposed
+                                        {
+                                            item.human_decision = Some(ApprovalStatus::Approved);
+                                            item.task.status = TaskStatus::Approved;
+                                            count += 1;
+                                        }
+                                    }
                                 }
+                                self.selected_task_indices.clear();
+                                self.status_message = Some(format!("Approved selected {count} task(s)."));
+                            } else {
+                                for item in &mut self.review_tasks {
+                                    if item.task.status == TaskStatus::HumanReview
+                                        || item.task.status == TaskStatus::Proposed
+                                    {
+                                        item.human_decision = Some(ApprovalStatus::Approved);
+                                        item.task.status = TaskStatus::Approved;
+                                        count += 1;
+                                    }
+                                }
+                                self.status_message = Some(format!("Approved all {count} tasks."));
                             }
-                            self.status_message = Some(format!("Approved all {count} tasks."));
                             return Some(TuiAction::ApproveAllTasks);
                         }
                     }
@@ -1596,7 +1718,7 @@ impl AppState {
             return None;
         }
 
-        // Shift+A approves all; Ctrl+A selects all without performing an action.
+        // Shift+A approves all / selected; Ctrl+A selects all without performing an action.
         if key.code == KeyCode::Char('A') && !key.modifiers.contains(KeyModifiers::CONTROL) {
             self.prompt_approve_all_tasks();
             return None;
@@ -1608,11 +1730,40 @@ impl AppState {
             return None;
         }
 
+        // Shift+Up/Down/J/K scrolls inspector regardless of pane focus if details pane is visible
+        if key.modifiers.contains(KeyModifiers::SHIFT) && self.show_details_pane {
+            match key.code {
+                KeyCode::Up | KeyCode::Char('k') | KeyCode::Char('K') => {
+                    self.inspector_scroll_up();
+                    return None;
+                }
+                KeyCode::Down | KeyCode::Char('j') | KeyCode::Char('J') => {
+                    self.inspector_scroll_down();
+                    return None;
+                }
+                _ => {}
+            }
+        }
+
         if self.review_tasks.is_empty() {
             return None;
         }
 
         match key.code {
+            KeyCode::Tab
+            | KeyCode::BackTab
+            | KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Char('h')
+            | KeyCode::Char('l') => {
+                if self.show_details_pane {
+                    self.plan_review_focus = match self.plan_review_focus {
+                        PlanReviewFocus::TaskList => PlanReviewFocus::TaskInspector,
+                        PlanReviewFocus::TaskInspector => PlanReviewFocus::TaskList,
+                    };
+                }
+                None
+            }
             KeyCode::Char(' ') => {
                 if !self.selected_task_indices.insert(self.selected_task_index) {
                     self.selected_task_indices.remove(&self.selected_task_index);
@@ -1626,19 +1777,28 @@ impl AppState {
                 None
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if self.selected_task_index > 0 {
+                if self.plan_review_focus == PlanReviewFocus::TaskInspector {
+                    self.inspector_scroll_up();
+                } else if self.selected_task_index > 0 {
                     self.selected_task_index -= 1;
+                    self.inspector_scroll_offset = 0;
                 }
                 None
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if self.selected_task_index + 1 < self.review_tasks.len() {
+                if self.plan_review_focus == PlanReviewFocus::TaskInspector {
+                    self.inspector_scroll_down();
+                } else if self.selected_task_index + 1 < self.review_tasks.len() {
                     self.selected_task_index += 1;
+                    self.inspector_scroll_offset = 0;
                 }
                 None
             }
             KeyCode::Enter => {
                 self.show_details_pane = !self.show_details_pane;
+                if !self.show_details_pane {
+                    self.plan_review_focus = PlanReviewFocus::TaskList;
+                }
                 None
             }
             KeyCode::Char('a') => {
@@ -1666,6 +1826,7 @@ impl AppState {
                     // Advance selection if not at end
                     if self.selected_task_index + 1 < self.review_tasks.len() {
                         self.selected_task_index += 1;
+                        self.inspector_scroll_offset = 0;
                     }
                     Some(TuiAction::ApproveTask { task_id })
                 } else {
@@ -1681,10 +1842,12 @@ impl AppState {
                     } else {
                         let short_id = item.task.short_id.clone();
                         item.human_decision = Some(ApprovalStatus::Rejected);
+                        item.task.status = TaskStatus::Rejected;
                         self.status_message = Some(format!("Task {short_id} marked Rejected."));
 
                         if self.selected_task_index + 1 < self.review_tasks.len() {
                             self.selected_task_index += 1;
+                            self.inspector_scroll_offset = 0;
                         }
                         Some(TuiAction::RejectTask { task_id })
                     }
@@ -1742,20 +1905,30 @@ impl AppState {
                 None
             }
             KeyCode::PageUp => {
-                if self.selected_task_index >= 5 {
-                    self.selected_task_index -= 5;
+                if self.plan_review_focus == PlanReviewFocus::TaskInspector {
+                    self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_sub(5);
                 } else {
-                    self.selected_task_index = 0;
+                    if self.selected_task_index >= 5 {
+                        self.selected_task_index -= 5;
+                    } else {
+                        self.selected_task_index = 0;
+                    }
+                    self.inspector_scroll_offset = 0;
+                    self.dag_scroll_offset = self.dag_scroll_offset.saturating_sub(5);
                 }
-                self.dag_scroll_offset = self.dag_scroll_offset.saturating_sub(5);
                 None
             }
             KeyCode::PageDown => {
-                if !self.review_tasks.is_empty() {
-                    self.selected_task_index =
-                        (self.selected_task_index + 5).min(self.review_tasks.len() - 1);
+                if self.plan_review_focus == PlanReviewFocus::TaskInspector {
+                    self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_add(5);
+                } else {
+                    if !self.review_tasks.is_empty() {
+                        self.selected_task_index =
+                            (self.selected_task_index + 5).min(self.review_tasks.len() - 1);
+                    }
+                    self.inspector_scroll_offset = 0;
+                    self.dag_scroll_offset = self.dag_scroll_offset.saturating_add(5);
                 }
-                self.dag_scroll_offset = self.dag_scroll_offset.saturating_add(5);
                 None
             }
             _ => None,
@@ -1909,20 +2082,36 @@ impl AppState {
         };
     }
 
-    /// Prompts confirmation modal for bulk approving all pending tasks
+    /// Prompts confirmation modal for bulk approving all pending tasks or selected tasks
     pub fn prompt_approve_all_tasks(&mut self) {
-        let count = self
-            .review_tasks
-            .iter()
-            .filter(|t| {
-                t.task.status == TaskStatus::HumanReview || t.task.status == TaskStatus::Proposed
-            })
-            .count();
-        if count == 0 {
-            self.status_message = Some("No pending tasks to approve.".to_string());
-            return;
+        if !self.selected_task_indices.is_empty() {
+            let count = self
+                .selected_task_indices
+                .iter()
+                .filter_map(|&idx| self.review_tasks.get(idx))
+                .filter(|t| {
+                    t.task.status == TaskStatus::HumanReview || t.task.status == TaskStatus::Proposed
+                })
+                .count();
+            if count == 0 {
+                self.status_message = Some("No pending tasks in selection to approve.".to_string());
+                return;
+            }
+            self.pending_confirmation = Some(ConfirmationModalState::approve_selected(count));
+        } else {
+            let count = self
+                .review_tasks
+                .iter()
+                .filter(|t| {
+                    t.task.status == TaskStatus::HumanReview || t.task.status == TaskStatus::Proposed
+                })
+                .count();
+            if count == 0 {
+                self.status_message = Some("No pending tasks to approve.".to_string());
+                return;
+            }
+            self.pending_confirmation = Some(ConfirmationModalState::approve_all(count));
         }
-        self.pending_confirmation = Some(ConfirmationModalState::approve_all(count));
     }
 
     pub fn selected_task(&self) -> Option<&ReviewTaskState> {
@@ -1940,6 +2129,7 @@ impl AppState {
                     .position(|t| t.task.id == blocker_id)
                 {
                     self.selected_task_index = pos;
+                    self.inspector_scroll_offset = 0;
                     if let Some(target) = self.review_tasks.get(pos) {
                         self.status_message = Some(format!(
                             "Jumped to prerequisite task {}.",
@@ -1964,6 +2154,7 @@ impl AppState {
                     .any(|d| d.depends_on_id == current_id)
                 {
                     self.selected_task_index = idx;
+                    self.inspector_scroll_offset = 0;
                     self.status_message =
                         Some(format!("Jumped to dependent task {}.", task.task.short_id));
                     return true;
@@ -1971,6 +2162,24 @@ impl AppState {
             }
         }
         false
+    }
+
+    /// Scroll the inspector pane downwards by 1 unit
+    pub fn inspector_scroll_down(&mut self) {
+        self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_add(1);
+    }
+
+    /// Scroll the inspector pane upwards by 1 unit
+    pub fn inspector_scroll_up(&mut self) {
+        self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_sub(1);
+    }
+
+    /// Select a task by index and reset inspector scroll offset
+    pub fn select_task(&mut self, index: usize) {
+        if index < self.review_tasks.len() && self.selected_task_index != index {
+            self.selected_task_index = index;
+            self.inspector_scroll_offset = 0;
+        }
     }
 
     /// Prompts confirmation modal for task cancellation
@@ -2672,6 +2881,7 @@ mod tests {
             state.review_tasks[0].human_decision,
             Some(ApprovalStatus::Rejected)
         );
+        assert_eq!(state.review_tasks[0].task.status, TaskStatus::Rejected);
         assert_eq!(state.selected_task_index, 1);
     }
 
@@ -3134,5 +3344,153 @@ mod tests {
         // Root tier must contain task 0 (PLAN-1)
         assert!(!tiers.is_empty());
         assert!(tiers[0].contains(&state.review_tasks[0].task.id));
+    }
+
+    #[test]
+    fn test_phase22_plan_review_focus_and_inspector_scroll() {
+        let mut state = AppState::new().with_mock_data();
+        state.current_screen = CurrentScreen::PlanReview;
+        assert_eq!(state.plan_review_focus, PlanReviewFocus::TaskList);
+        assert_eq!(state.inspector_scroll_offset, 0);
+
+        // Toggle focus with Right / 'l'
+        state.handle_plan_review_key(make_key(KeyCode::Right));
+        assert_eq!(state.plan_review_focus, PlanReviewFocus::TaskInspector);
+
+        // When inspector is focused, Up/Down/j/k scroll inspector offset
+        state.handle_plan_review_key(make_key(KeyCode::Char('j')));
+        assert_eq!(state.inspector_scroll_offset, 1);
+        assert_eq!(state.selected_task_index, 0);
+
+        state.handle_plan_review_key(make_key(KeyCode::Down));
+        assert_eq!(state.inspector_scroll_offset, 2);
+
+        state.handle_plan_review_key(make_key(KeyCode::PageDown));
+        assert_eq!(state.inspector_scroll_offset, 7);
+
+        state.handle_plan_review_key(make_key(KeyCode::PageUp));
+        assert_eq!(state.inspector_scroll_offset, 2);
+
+        state.handle_plan_review_key(make_key(KeyCode::Char('k')));
+        assert_eq!(state.inspector_scroll_offset, 1);
+
+        state.handle_plan_review_key(make_key(KeyCode::Up));
+        assert_eq!(state.inspector_scroll_offset, 0);
+
+        // Saturation at 0
+        state.handle_plan_review_key(make_key(KeyCode::Up));
+        assert_eq!(state.inspector_scroll_offset, 0);
+
+        // Toggle back with Left / 'h'
+        state.handle_plan_review_key(make_key(KeyCode::Left));
+        assert_eq!(state.plan_review_focus, PlanReviewFocus::TaskList);
+
+        // When TaskList is focused, Down/j navigates task selection
+        state.inspector_scroll_offset = 5;
+        state.handle_plan_review_key(make_key(KeyCode::Char('j')));
+        assert_eq!(state.selected_task_index, 1);
+        assert_eq!(state.inspector_scroll_offset, 0); // auto-reset!
+
+        // Shift+Down / Shift+J scrolls inspector regardless of pane focus
+        let shift_down = KeyEvent::new(KeyCode::Down, KeyModifiers::SHIFT);
+        state.handle_plan_review_key(shift_down);
+        assert_eq!(state.inspector_scroll_offset, 1);
+
+        let shift_up = KeyEvent::new(KeyCode::Up, KeyModifiers::SHIFT);
+        state.handle_plan_review_key(shift_up);
+        assert_eq!(state.inspector_scroll_offset, 0);
+
+        // When show_details_pane is false, focus toggle does not switch to inspector
+        state.show_details_pane = false;
+        state.handle_plan_review_key(make_key(KeyCode::Right));
+        assert_eq!(state.plan_review_focus, PlanReviewFocus::TaskList);
+    }
+
+    #[test]
+    fn test_phase22_mouse_scroll_plan_review_inspector_and_cards() {
+        let mut state = AppState::new().with_mock_data();
+        state.current_screen = CurrentScreen::PlanReview;
+        state.show_details_pane = true;
+        assert_eq!(state.selected_task_index, 0);
+        assert_eq!(state.inspector_scroll_offset, 0);
+
+        // Right pane scroll (column 60 >= 80 * 45 / 100 = 36) -> scrolls inspector
+        let scroll_down_right = MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 60,
+            row: 10,
+            modifiers: KeyModifiers::NONE,
+        };
+        state.handle_mouse(scroll_down_right);
+        assert_eq!(state.inspector_scroll_offset, 1);
+        assert_eq!(state.selected_task_index, 0);
+
+        let scroll_up_right = MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: 60,
+            row: 10,
+            modifiers: KeyModifiers::NONE,
+        };
+        state.handle_mouse(scroll_up_right);
+        assert_eq!(state.inspector_scroll_offset, 0);
+        assert_eq!(state.selected_task_index, 0);
+
+        // Left pane scroll (column 20 < 36) -> navigates tasks and resets inspector offset
+        state.inspector_scroll_offset = 3;
+        let scroll_down_left = MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 20,
+            row: 10,
+            modifiers: KeyModifiers::NONE,
+        };
+        state.handle_mouse(scroll_down_left);
+        assert_eq!(state.selected_task_index, 1);
+        assert_eq!(state.inspector_scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_phase22_selective_bulk_approval() {
+        let mut state = AppState::new().with_mock_data();
+        state.current_screen = CurrentScreen::PlanReview;
+
+        // Select task 0 and task 2 (out of 3 mock tasks)
+        state.selected_task_indices.insert(0);
+        state.selected_task_indices.insert(2);
+
+        // Trigger prompt_approve_all_tasks()
+        state.prompt_approve_all_tasks();
+        assert!(state.pending_confirmation.is_some());
+        let modal = state.pending_confirmation.as_ref().unwrap();
+        assert_eq!(modal.title, "Confirm Bulk Task Approval");
+        assert_eq!(modal.message, "Approve selected 2 task(s)?");
+
+        // Confirm with 'y'
+        let action = state.handle_key(make_key(KeyCode::Char('y')));
+        assert_eq!(action, Some(TuiAction::ApproveAllTasks));
+        assert!(state.pending_confirmation.is_none());
+        assert!(state.selected_task_indices.is_empty()); // selection cleared!
+
+        // Task 0 and Task 2 are approved
+        assert_eq!(state.review_tasks[0].task.status, TaskStatus::Approved);
+        assert_eq!(state.review_tasks[0].human_decision, Some(ApprovalStatus::Approved));
+        assert_eq!(state.review_tasks[2].task.status, TaskStatus::Approved);
+        assert_eq!(state.review_tasks[2].human_decision, Some(ApprovalStatus::Approved));
+
+        // Task 1 was NOT selected and remains in its initial status
+        assert_eq!(state.review_tasks[1].task.status, TaskStatus::HumanReview);
+
+        // Now with empty selection, prompts to approve remaining 1 pending task
+        state.prompt_approve_all_tasks();
+        assert!(state.pending_confirmation.is_some());
+        let modal = state.pending_confirmation.as_ref().unwrap();
+        assert!(modal.message.contains("1 pending tasks"));
+
+        state.handle_key(make_key(KeyCode::Char('y')));
+        assert_eq!(state.review_tasks[1].task.status, TaskStatus::Approved);
+
+        // When all tasks are approved, prompt shows no pending tasks
+        state.prompt_approve_all_tasks();
+        assert!(state.pending_confirmation.is_none());
+        assert_eq!(state.status_message.as_deref(), Some("No pending tasks to approve."));
     }
 }

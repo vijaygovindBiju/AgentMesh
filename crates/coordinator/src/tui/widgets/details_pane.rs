@@ -7,20 +7,40 @@ use ratatui::{
 };
 
 use crate::domain::{ApprovalStatus, OverlapSeverity};
-use crate::tui::state::{AppState, InputMode};
+use crate::tui::state::{AppState, InputMode, PlanReviewFocus};
 
 pub struct DetailsPaneWidget;
 
 impl DetailsPaneWidget {
     pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+
+        let is_focused = state.plan_review_focus == PlanReviewFocus::TaskInspector;
+        let (border_type, border_color) = if is_focused {
+            (BorderType::Thick, Color::Cyan)
+        } else {
+            (BorderType::Rounded, Color::DarkGray)
+        };
+
+        let title_text = match (is_focused, area.width) {
+            (true, w) if w >= 46 => " [▶ FOCUSED] Task Details & Inspector [Enter to toggle] ",
+            (true, w) if w >= 30 => " [▶ FOCUSED] Task Details [Enter] ",
+            (true, _) => " [▶ FOCUSED] Inspector ",
+            (false, w) if w >= 46 => " Task Details & Inspector [Enter to toggle] ",
+            (false, w) if w >= 30 => " Task Details [Enter] ",
+            (false, _) => " Inspector ",
+        };
+
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(Color::Cyan))
+            .border_type(border_type)
+            .border_style(Style::default().fg(border_color))
             .title(Span::styled(
-                " Task Details & Inspector [Enter to toggle] ",
+                title_text,
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(border_color)
                     .add_modifier(Modifier::BOLD),
             ));
 
@@ -34,14 +54,68 @@ impl DetailsPaneWidget {
             return;
         };
 
+        // Content-adaptive section height calculation
+        let dep_count = selected.dependencies.len();
+        let dep_len = if dep_count == 0 {
+            3
+        } else {
+            (dep_count as u16 + 2).min(8)
+        };
+
+        let resources = selected.task.resources();
+        let res_count = resources.len();
+        let res_len = if res_count == 0 {
+            3
+        } else {
+            (res_count as u16 + 2).min(8)
+        };
+
+        let warn_count = selected.overlap_warnings.len();
+        let warn_len = if warn_count == 0 {
+            3
+        } else {
+            (warn_count as u16 + 2).min(6)
+        };
+
+        let desc_text = if state.input_mode == InputMode::EditingDescription {
+            let cursor = state.edit_cursor.min(state.edit_buffer.len());
+            let safe_cursor = if state.edit_buffer.is_char_boundary(cursor) {
+                cursor
+            } else {
+                state.edit_buffer.len()
+            };
+            let mut s = String::with_capacity(state.edit_buffer.len() + 1);
+            s.push_str(&state.edit_buffer[..safe_cursor]);
+            s.push('_');
+            s.push_str(&state.edit_buffer[safe_cursor..]);
+            s
+        } else {
+            selected.task.description.clone()
+        };
+
+        // Calculate natural lines needed across inner width (inner_area.width.saturating_sub(2))
+        let desc_inner_width = (inner_area.width.saturating_sub(2) as usize).max(1);
+        let _desc_natural_lines: usize = desc_text
+            .lines()
+            .map(|line| {
+                let count = line.chars().count();
+                if count == 0 {
+                    1
+                } else {
+                    count.div_ceil(desc_inner_width)
+                }
+            })
+            .sum::<usize>()
+            .max(1);
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(4), // Header / IDs / Agent
-                Constraint::Min(6),    // Description / Edit area
-                Constraint::Length(5), // Dependencies
-                Constraint::Length(5), // Affected Resources
-                Constraint::Length(6), // Overlap Warnings
+                Constraint::Length(3),       // Metadata: 3 lines
+                Constraint::Min(4),          // Description: absorbs remaining vertical space (Min 4)
+                Constraint::Length(dep_len), // Dependencies: 3 if empty, else (dep_count + 2).min(8)
+                Constraint::Length(res_len), // Affected Resources: 3 if empty, else (res_count + 2).min(8)
+                Constraint::Length(warn_len),// Overlap Warnings: 3 if empty, else (warn_count + 2).min(6)
             ])
             .split(inner_area);
 
@@ -81,7 +155,7 @@ impl DetailsPaneWidget {
             Span::styled(decision_str, Style::default().fg(Color::Yellow)),
         ]));
 
-        let meta_p = Paragraph::new(meta_lines);
+        let meta_p = Paragraph::new(meta_lines).wrap(Wrap { trim: true });
         frame.render_widget(meta_p, chunks[0]);
 
         // 2. Description / Inline Editor
@@ -100,25 +174,10 @@ impl DetailsPaneWidget {
                 " Description [Press 'E' to edit inline] "
             });
 
-        let desc_text = if state.input_mode == InputMode::EditingDescription {
-            let cursor = state.edit_cursor.min(state.edit_buffer.len());
-            let safe_cursor = if state.edit_buffer.is_char_boundary(cursor) {
-                cursor
-            } else {
-                state.edit_buffer.len()
-            };
-            let mut s = String::with_capacity(state.edit_buffer.len() + 1);
-            s.push_str(&state.edit_buffer[..safe_cursor]);
-            s.push('_');
-            s.push_str(&state.edit_buffer[safe_cursor..]);
-            s
-        } else {
-            selected.task.description.clone()
-        };
-
         let desc_p = Paragraph::new(desc_text)
             .block(desc_block)
-            .wrap(Wrap { trim: false })
+            .wrap(Wrap { trim: true })
+            .scroll((state.inspector_scroll_offset as u16, 0))
             .style(if state.input_mode == InputMode::EditingDescription {
                 Style::default().fg(Color::Yellow)
             } else {
@@ -186,7 +245,9 @@ impl DetailsPaneWidget {
                 .collect()
         };
 
-        let deps_p = Paragraph::new(dep_lines).block(deps_block);
+        let deps_p = Paragraph::new(dep_lines)
+            .block(deps_block)
+            .wrap(Wrap { trim: true });
         frame.render_widget(deps_p, chunks[2]);
 
         // 4. Affected Resources
@@ -195,7 +256,6 @@ impl DetailsPaneWidget {
             .border_style(Style::default().fg(Color::DarkGray))
             .title(" Affected Resources ");
 
-        let resources = selected.task.resources();
         let res_lines: Vec<Line> = if resources.is_empty() {
             vec![Line::from(Span::styled(
                 "  No shared file/module resources specified",
@@ -213,7 +273,9 @@ impl DetailsPaneWidget {
                 .collect()
         };
 
-        let res_p = Paragraph::new(res_lines).block(res_block);
+        let res_p = Paragraph::new(res_lines)
+            .block(res_block)
+            .wrap(Wrap { trim: true });
         frame.render_widget(res_p, chunks[3]);
 
         // 5. Overlap Warnings Banner
@@ -273,7 +335,203 @@ impl DetailsPaneWidget {
                 .collect()
         };
 
-        let warn_p = Paragraph::new(warn_lines).block(warn_block);
+        let warn_p = Paragraph::new(warn_lines)
+            .block(warn_block)
+            .wrap(Wrap { trim: true });
         frame.render_widget(warn_p, chunks[4]);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use serde_json::json;
+    use uuid::Uuid;
+
+    use crate::domain::{DependencyKind, OverlapWarning, Task, TaskDependency, TaskStatus};
+    use crate::tui::state::ReviewTaskState;
+
+    fn sample_task(id: Uuid, short_id: &str, title: &str) -> Task {
+        Task {
+            id,
+            project_id: Uuid::new_v4(),
+            short_id: short_id.to_string(),
+            title: title.to_string(),
+            description: format!("Description for {short_id}"),
+            affected_resources: json!(["crates/coordinator/src/main.rs"]),
+            status: TaskStatus::HumanReview,
+            assigned_agent_id: None,
+            estimated_size: Some("M".to_string()),
+            proposal_id: Uuid::new_v4(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    fn sample_review_task(short_id: &str, title: &str) -> ReviewTaskState {
+        let task_id = Uuid::new_v4();
+        ReviewTaskState {
+            task: sample_task(task_id, short_id, title),
+            suggested_agent_name: Some("Agent-Alpha".to_string()),
+            overlap_warnings: Vec::new(),
+            dependencies: Vec::new(),
+            human_decision: None,
+            progress_percent: None,
+        }
+    }
+
+    fn buffer_to_string(terminal: &Terminal<TestBackend>) -> String {
+        let buffer = terminal.backend().buffer();
+        let mut out = String::new();
+        for y in 0..buffer.area.height {
+            for x in 0..buffer.area.width {
+                out.push_str(buffer[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn test_adaptive_block_title_breakpoints() {
+        let mut state = AppState::new();
+        state.review_tasks.push(sample_review_task("T-1", "Test Task"));
+
+        // Width >= 46: Full title
+        let backend = TestBackend::new(60, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered = buffer_to_string(&terminal);
+        assert!(rendered.contains("Task Details & Inspector [Enter to toggle]"));
+
+        // Width >= 30 and < 46: Medium title
+        let backend = TestBackend::new(40, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered = buffer_to_string(&terminal);
+        assert!(rendered.contains("Task Details [Enter]"));
+
+        // Width < 30: Compact title
+        let backend = TestBackend::new(25, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered = buffer_to_string(&terminal);
+        assert!(rendered.contains("Inspector"));
+    }
+
+    #[test]
+    fn test_focus_highlighting_and_badge() {
+        let mut state = AppState::new();
+        state.review_tasks.push(sample_review_task("T-1", "Test Task"));
+
+        // When unfocused (TaskList)
+        state.plan_review_focus = PlanReviewFocus::TaskList;
+        let backend = TestBackend::new(60, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered = buffer_to_string(&terminal);
+        assert!(!rendered.contains("[▶ FOCUSED]"));
+        assert!(rendered.contains("Task Details & Inspector"));
+
+        // When focused (TaskInspector)
+        state.plan_review_focus = PlanReviewFocus::TaskInspector;
+        let backend = TestBackend::new(60, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered = buffer_to_string(&terminal);
+        assert!(rendered.contains("[▶ FOCUSED]"));
+        assert!(rendered.contains("Task Details & Inspector"));
+    }
+
+    #[test]
+    fn test_content_adaptive_heights_empty_and_populated() {
+        let mut state = AppState::new();
+        let mut item = sample_review_task("T-1", "Test Task");
+        item.task.description = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6".to_string();
+        state.review_tasks.push(item);
+
+        // Standard 120x30: description has abundant vertical space (> 6 lines visible)
+        let backend = TestBackend::new(120, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered = buffer_to_string(&terminal);
+        assert!(rendered.contains("Line 1"));
+        assert!(rendered.contains("Line 4"));
+        assert!(rendered.contains("None (Task can execute immediately once approved)"));
+
+        // Populated dependencies and overlap warnings
+        let dep_id = Uuid::new_v4();
+        let target_task_id = state.review_tasks[0].task.id;
+        let target_project_id = state.review_tasks[0].task.project_id;
+        state.review_tasks[0].dependencies.push(TaskDependency {
+            dependent_id: target_task_id,
+            depends_on_id: dep_id,
+            kind: DependencyKind::Blocks,
+        });
+        state.review_tasks[0].overlap_warnings.push(OverlapWarning {
+            id: Uuid::new_v4(),
+            project_id: target_project_id,
+            task_ids: json!([target_task_id]),
+            resource: "crates/coordinator/src/main.rs".to_string(),
+            severity: OverlapSeverity::Critical,
+            acknowledged: false,
+            created_at: Utc::now(),
+        });
+
+        let backend = TestBackend::new(120, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered = buffer_to_string(&terminal);
+        assert!(rendered.contains("Depends on:"));
+        assert!(rendered.contains("[Critical]"));
+    }
+
+    #[test]
+    fn test_vertical_scrolling_inspector_offset() {
+        let mut state = AppState::new();
+        let mut item = sample_review_task("SCROLL-1", "Scrollable Task");
+        item.task.description = (1..=20)
+            .map(|i| format!("Desc paragraph item {i:02}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        state.review_tasks.push(item);
+
+        // At offset 0, item 01 is visible
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered_0 = buffer_to_string(&terminal);
+        assert!(rendered_0.contains("Desc paragraph item 01"));
+
+        // At offset 5, item 01 is scrolled out and item 06 is visible
+        state.inspector_scroll_offset = 5;
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| DetailsPaneWidget::render(f, f.area(), &state))
+            .unwrap();
+        let rendered_5 = buffer_to_string(&terminal);
+        assert!(!rendered_5.contains("Desc paragraph item 01"));
+        assert!(rendered_5.contains("Desc paragraph item 06"));
+    }
+}
+

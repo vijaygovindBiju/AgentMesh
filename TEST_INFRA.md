@@ -20,7 +20,7 @@ Testing terminal user interfaces requires a clear separation between internal im
    No network requests, database pools, or filesystem I/O are invoked within the rendering pipeline.
 
 4. **Zero Regressions Baseline**:
-   All 86 pre-existing tests in `crates/coordinator/tests/phase20_tui_verification.rs` serve as the inviolable baseline. Every Phase 21 enhancement must preserve backward compatibility with existing screen indexes, keyboard shortcuts, and state schemas.
+   All 86 pre-existing tests in `crates/coordinator/tests/phase20_tui_verification.rs` and 62 tests in `crates/coordinator/tests/phase21_tui_enhancements.rs` serve as the inviolable baseline. Every Phase 22 enhancement must preserve backward compatibility with existing screen indexes, keyboard shortcuts, and state schemas.
 
 ---
 
@@ -44,40 +44,101 @@ The test suite is structured around a rigorous 4-tier verification hierarchy des
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Tier 1: Feature Coverage (Primary Happy Paths)
-Validates core functionality for every distinct component and screen:
-- **Screen Navigation**: Verification of active screen titles, numeric switching (`1`–`5`), `Tab` / `BackTab` cycling across all 5 screens (`Dashboard`, `ProjectManagement`, `PlanReview`, `FleetInspector`, `Diagnostics`).
-- **Global Status Header**: Validates rendering of connectivity indicators (`[PG: ● OK]`, `[NATS: ● OK]`), active agent ratio (`[Agents: M/N]`), and pending approvals counter (`[Pending: K]`).
-- **Command Palette Modal (`:`)**: Opening via `:`, input typing, fuzzy/substring query filtering, selection navigation (`Up`/`Down`), and action dispatch.
-- **Safety Confirmation Dialog**: Interception of destructive actions (`CancelTask`, `RejectTask`), rendering title and warning message, confirming via `y` / `Enter`, aborting via `n` / `Esc`.
-- **Project Management Screen**: Navigation of projects table (`j`/`k`/`Up`/`Down`), emitting `TuiAction::LoadProject`, display of project metadata and Git branch info.
-- **Interactive DAG Dependency Tree**: Rendering multi-level recursive dependency trees ($A \rightarrow B \rightarrow C$), topological execution tiers, status indicators (`[P]`, `[A]`, `[E]`, `[C]`, `[F]`), and blocker/dependent jump shortcuts (`[` / `]`).
-- **Fleet Inspector & Telemetry Cards**: Rendering of agent cards, liveness timestamps, heartbeat latency, runtime badges, error banners, and capability pills.
-- **Diagnostics Event Stream**: Event table rendering, timestamp formatting, entity badge display, and severity/entity filter controls.
+### Phase 21 Baseline Summary
+- **Tier 1 (Feature Coverage)**: Screen navigation across all top-level screens, status header connectivity indicators, command palette modal (`:`), safety confirmation modal, project management table, recursive DAG trees, and fleet inspector cards.
+- **Tier 2 (Boundary & Corner Cases)**: Terminal resizing across 5 profiles (`60x18`, `70x20`, `80x24`, `100x30`, `160x50`), event ring buffer bounds ($\le 300$), and selection index clamping.
+- **Tier 3 (Combinations)**: Modal layering, focus trapping, overlap warning action gating, and project switching state resets.
+- **Tier 4 (Real-World Workflows)**: End-to-end operator review sessions, DAG blocker drill-downs, and incident triage.
 
-### Tier 2: Boundary & Corner Cases
-Stresses resilience against extreme conditions, empty buffers, and input bounds:
-- **Terminal Resize Resilience**: Deterministic rendering across 5 standard and compact profiles without panics or clipping:
-  1. Compact Minimal: `60x18`
-  2. Compact Standard: `70x20`
-  3. Standard Terminal: `80x24`
-  4. Expanded Desktop: `100x30`
-  5. Ultra-Wide Console: `160x50`
-- **Rapid Event Burst Stress**: Flooding the event ring buffer with 1,000 to 10,000 events to verify the invariant:
-  $$\text{capacity} \le 300 \quad \text{and} \quad O(1)\text{ insertion amortized}$$
-- **Empty State Fallbacks**: Rendering when zero tasks, zero agents, zero projects, or zero events exist without crashes or visual corruption.
-- **Selection Index Clamping**: Scrolling beyond buffer boundaries (`index > len`) clamped safely to zero or `len - 1`.
+---
 
-### Tier 3: Cross-Feature Combinations
-Tests interactions between overlapping UI systems:
-- **Modal Layering & Focus Trapping**: Verifying that opening a modal (Help, Command Palette, Confirmation) captures keyboard events and prevents background screen shortcut leakage.
-- **Action Gating with Overlaps**: Tasks with unacknowledged overlap warnings require explicit acknowledgement (`a`) or safety confirmation before approval transitions.
-- **Project Switching State Reset**: Loading a new project clears old review states, updates DAG selection, and refreshes the status header.
+### Phase 22 Ergonomics & Plan Review 4-Tier Test Architecture
 
-### Tier 4: Real-World Operator Workflows
-Simulates complete operator sessions:
-- **Review & Approval Session**: Operator loads project $\rightarrow$ inspects DAG blockers $\rightarrow$ acknowledges overlap warning $\rightarrow$ approves unblocked tasks $\rightarrow$ attempts cancellation on failed task with confirmation.
-- **Incident Response & Fleet Triage**: Alert arrives $\rightarrow$ operator navigates to Fleet Inspector $\rightarrow$ identifies degraded agent with high heartbeat latency $\rightarrow$ drills down into Diagnostics event stream filtered by entity ID $\rightarrow$ issues retry.
+Phase 22 focuses on the visual layout, rendering, and usability of the Plan Review screen, task list, task inspector, keyboard navigation, and responsive terminal resizing per requirements R1 through R5:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Tier 4: Real-World Operator Workflows                                        │
+│   - Complete operator review cycle (compact -> standard -> wide terminal)    │
+│   - Rapid terminal resize with active multi-selection & inspector state      │
+│   - DAG blocker traversal, overlap acknowledgement & selective bulk approval  │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ Tier 3: Cross-Feature Combinations                                           │
+│   - Combined focused + multi-selected card styling (▶ [✓] indicator)         │
+│   - Mouse scroll column disambiguation (left -> task list, right -> inspector)│
+│   - Inspector scroll offset auto-reset on task cursor navigation             │
+│   - PlanReviewFocus pane switching (TaskList <-> TaskInspector via Tab/Arrows)│
+│   - Selective Shift+A (subset approval) vs empty Shift+A (all pending tasks) │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ Tier 2: Boundary & Corner Conditions                                         │
+│   - Empty plan quick start guide rendering at 80x24, 120x30, 180x50          │
+│   - Task with extensive multi-line description (>10 lines) & word wrapping   │
+│   - Task with many dependencies (>3 items) dynamic height allocation         │
+│   - Long task title graceful truncation with ellipsis (...)                  │
+│   - Selection bounds (Ctrl+A all, Esc clear, Space toggle, cursor clamping)  │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ Tier 1: Feature Coverage                                                     │
+│   - Responsive two-column layout at 80x24, 120x30, 180x50 (compact/std/wide) │
+│   - Content-adaptive task inspector sections (collapse empty, expand items)  │
+│   - Task card metadata layout (status, agent, progress bar, dependencies)    │
+│   - Keyboard navigation (arrows, Enter details, Space toggle, single-keys)   │
+│   - Footer action hint visibility & absence of clipping at 80, 120, 180 cols │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Tier 1: Feature Coverage (Primary Happy Paths)
+1. **Responsive Two-Column Plan Layout**:
+   - Compact (<90 cols, e.g. 80x24): 46%/54% split, compact title `" Proposed Tasks "`, unclipped borders.
+   - Standard (90..139 cols, e.g. 120x30): 44%/56% split, standard title `" Proposed Task Decomposition (Human Review) "`.
+   - Wide (>=140 cols, e.g. 180x50): Fixed 64-col task list, min 76-col inspector eliminating wasted whitespace.
+2. **Content-Adaptive Task Inspector**:
+   - All 5 sections render cleanly: Metadata, Description, Dependencies, Affected Resources, Overlap Analysis.
+   - Empty sections collapse to `Length(3)` with green/dark badges, avoiding squashing descriptions.
+   - Section content wraps cleanly with `Wrap { trim: true }`.
+3. **Task Card Metadata & Progress Display**:
+   - Formatted in multi-line structure so status badge (`HUMAN REVIEW`, `APPROVED`, `REJECTED`), agent assignee, and progress bar (`[██████████] 100%`) are fully visible without horizontal clipping.
+4. **Keyboard Navigation & Hotkeys**:
+   - Arrow keys (`Up`/`Down`) navigate cards smoothly.
+   - `Enter` toggles details inspector pane.
+   - `Space` toggles task selection.
+   - Single-key actions: `[Y]` approve, `[N]` reject, `[E]` edit description, `[C]` cancel, `[A]` ack overlap.
+5. **Contextual Footer Hints Synchronization**:
+   - Footer hints render without truncation at 80x24, 120x30, and 180x50.
+   - Primary operator actions (`[Y]`, `[N]`, `[E]`, `[C]`, `[Shift+A]`) preserved in compact mode (<85 cols).
+
+#### Tier 2: Boundary & Corner Conditions
+1. **Empty Plan State Resilience**:
+   - Zero tasks in plan: renders 4-step quick start guide (`[2]` Proj, `[I]` Input, `[Enter]` Submit) across 80x24, 120x30, and 180x50 without panics or border collisions.
+2. **Extensive Multi-Line Description (>10 lines)**:
+   - Paragraph wraps cleanly without ragged indents (`trim: true`) and scrolls vertically via `inspector_scroll_offset`.
+3. **Extensive Dependency Chain**:
+   - Tasks with >3 prerequisites allocate dynamic height or render scrollable content without clipping outer borders.
+4. **Long Task Titles with Ellipsis**:
+   - Long titles (e.g. 60+ chars on 32-col inner width) are gracefully truncated with ellipsis (`...`) preserving short ID and selection prefix.
+5. **Selection Boundary Handling**:
+   - `Ctrl+A` selects all tasks, `Esc` clears selection, `Space` toggles individual tasks, cursor clamps at `review_tasks.len() - 1`.
+
+#### Tier 3: Cross-Feature Combinations
+1. **Focused + Multi-Selected Visual Distinction**:
+   - Card simultaneously focused and selected renders combined indicator `▶ [✓] ` with dual-highlight border/badge, distinguishing it from merely focused (`▶   `) or merely selected (`  ✓ `).
+2. **Mouse Scroll Column Disambiguation**:
+   - Mouse wheel over left column (`column < list_width`) moves `selected_task_index`.
+   - Mouse wheel over right column (`column >= list_width`) moves `inspector_scroll_offset`.
+3. **Inspector Scroll Reset on Task Switch**:
+   - Moving cursor (`selected_task_index` changes) resets `inspector_scroll_offset = 0`, ensuring inspector always opens at top of newly selected task.
+4. **PlanReviewFocus Pane Switching**:
+   - `Tab` or `Left`/`Right` switches `plan_review_focus` between `TaskList` and `TaskInspector` when details pane is open. Active pane displays `[▶ FOCUSED]` and `BorderType::Thick` / `Color::Cyan`.
+5. **Selective `Shift+A` vs All-Tasks `Shift+A`**:
+   - When `selected_task_indices` is non-empty: `Shift+A` prompts `"Approve selected X task(s)?"` and approves only the selected subset.
+   - When `selected_task_indices` is empty: `Shift+A` prompts to approve all pending tasks in the plan.
+
+#### Tier 4: Real-World Operator Workflows
+1. **End-to-End Operator Plan Review Workflow**:
+   - Operator starts in compact terminal -> resizes to 120x30 -> navigates tasks -> switches focus to inspector -> scrolls long description -> selects tasks 1 and 3 -> bulk-approves selected with `Shift+A` -> confirms dialog -> verifies final state.
+2. **Live Resize Invariant Preservation**:
+   - Resizing terminal dynamically (80x24 -> 120x30 -> 180x50 -> 80x24) retains cursor position, multi-selected set, and inspector state without visual tearing.
+3. **DAG Blocker Traversal & State Transition Cycle**:
+   - Traverse blockers via `[` / `]`, toggle DAG view with `G`, acknowledge overlap warnings with `A`, approve unblocked tasks with `Y`, cancel blocked task with `C`.
 
 ---
 
@@ -98,10 +159,11 @@ fn assert_buffer_contains(terminal: &Terminal<TestBackend>, expected: &str);
 // Case-sensitive assertion that string does NOT appear in rendered terminal
 fn assert_buffer_does_not_contain(terminal: &Terminal<TestBackend>, unexpected: &str);
 
-// Synthetic keyboard event generator
+// Synthetic keyboard & mouse event generators
 fn press_key(code: KeyCode) -> KeyEvent;
 fn press_char(c: char) -> KeyEvent;
 fn press_modified(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent;
+fn mouse_scroll(column: u16, row: u16, kind: MouseEventKind) -> MouseEvent;
 ```
 
 ---
@@ -120,13 +182,26 @@ fn press_modified(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent;
 | Fleet Inspector | Displays health badges (`Healthy`, `Degraded`, `Unhealthy`) & latency | Buffer check in agent cards |
 | Bounded Event Ring Buffer | `recent_events.len() <= 300` under 10,000 rapid event inserts | Vector/deque length assertion |
 | Event Filters | Filters events by severity (`ERROR`, `WARN`, `INFO`) or entity ID | Buffer check of filtered stream |
-| Resize Resilience | No panics, valid buffer layout for dimensions from 60x18 to 160x50 | Multi-size render loop |
+| Resize Resilience | No panics, valid buffer layout for dimensions from 60x18 to 180x50 | Multi-size render loop |
+| **Plan Two-Column Split (R1)** | Compact (<90 cols) 46%/54%, Standard 44%/56%, Wide (>=140 cols) fixed 64 / min 76 | Layout chunk width assertion & buffer check |
+| **Inspector Dynamic Heights (R2)** | Empty sections collapse to `Length(3)`, occupied sections expand dynamically | Section height & paragraph bounds |
+| **Inspector Word Wrapping (R2)** | Clean wrapping with `Wrap { trim: true }`, no ragged leading spaces | Line start trim assertion |
+| **Inspector Vertical Scroll (R2)** | `inspector_scroll_offset` scrolls description/content; resets on task change | Buffer content shift assertion |
+| **Card Focus+Select Contrast (R3)** | Distinct indicator `▶ [✓]` when both focused and selected | Buffer match on card prefix |
+| **Card Metadata Alignment (R3)** | Status, agent, and progress bar visible on 80 and 120 col screens | Buffer match on all 3 metadata items |
+| **Title Ellipsis Truncation (R3)** | Titles exceeding inner width gracefully truncated with `...` | Buffer match on `...` and absence of overflow |
+| **Sliding-Window Card Scroll (R3)** | Upward navigation scrolls smoothly without pinning cursor to bottom row | `scroll_offset` bounds assertion |
+| **Pane Focus Switching (R4)** | `Tab`/Arrows switch between `TaskList` and `TaskInspector`; active pane displays `[▶ FOCUSED]` | Focus enum & buffer check |
+| **Mouse Column Routing (R4)** | Left pane mouse scroll moves task index; right pane mouse scroll adjusts inspector offset | MouseEvent dispatch & state verification |
+| **Selective Bulk Approval (R4)** | `Shift+A` with multi-selection approves only selected; empty selection approves all pending | Task status transitions verification |
+| **Footer Hints & Toast (R4)** | No hint truncation at 80, 120, 180 cols; status toast allocated >=34 cols | Buffer match on hints and full toast string |
+| **Visual Consistency (R5)** | Cyan rounded borders, dark background, standard status color badges | Style and border assertions |
 
 ---
 
 ## 5. Execution Command
 
-To execute the full test battery:
+To execute the test battery:
 
 ```bash
 # Run existing Phase 20 baseline verification
@@ -134,6 +209,12 @@ cargo test -p coordinator --test phase20_tui_verification
 
 # Run Phase 21 Operator TUI enhancements test suite
 cargo test -p coordinator --test phase21_tui_enhancements
+
+# Run Phase 22 Plan Review Ergonomics test suite
+cargo test -p coordinator --test phase22_plan_review_ergonomics
+
+# Run all coordinator TUI test suites together
+cargo test -p coordinator --test phase4_tui --test phase20_tui_verification --test phase21_tui_enhancements --test phase22_plan_review_ergonomics
 
 # Run entire workspace
 cargo test --workspace

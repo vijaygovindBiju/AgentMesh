@@ -1010,6 +1010,22 @@ Run Demo fix verification (2026-10-23):
 ### Acceptance Criteria:
 The Operator TUI provides an intuitive, high-ergonomics interface with full mouse support (scrolling across all scrollable lists, graphs, and logs; left-click on header tabs), one-key bulk task approvals (`Shift+A`) guarded by safety confirmation modals, Unicode block progress bars, color-coded status badges with icons, severity-styled toast banners, informative onboarding guidance for empty states, and fast tab cycling shortcuts (`[` and `]`, `BackTab`). All 180 TUI unit and integration tests across Phase 20, 21, and 22 pass cleanly with zero regressions.
 
+---
+
+## Phase 22 Active Track — Plan Review Visual Layout, Rendering & Usability Fixes
+
+**Goal:** Resolve visual layout, rendering, and usability issues in the AgentMesh terminal UI, specifically across the Plan screen, task list, task inspector, keyboard navigation, and responsive terminal resizing per user requirements R1 through R5.
+
+### Milestones & Status
+- [x] M0: Survey & Technical Mapping (3 parallel explorers mapped R1-R5 & test gaps) [DONE]
+- [x] M1: Core State & Navigation Extensions (`PlanReviewFocus`, `inspector_scroll_offset`, mouse column routing, selective `Shift+A`, 6-screen tab cycle fix) [DONE]
+- [x] M2: Responsive Plan Layout & Header/Footer Harmonization (Adaptive columns, unified 90-col breakpoint, compact footer hints, dynamic status chunk) [DONE]
+- [x] M3: Content-Adaptive Task Inspector (Dynamic height allocation, `Wrap { trim: true }`, vertical scrolling, scroll reset on task change) [DONE]
+- [x] M4: Task List Rendering & Card Ergonomics (Combined focus+selection badge, 2-line metadata wrapping, title ellipsis, dynamic card height, sliding-window scroll) [DONE]
+- [x] M_TEST: E2E Testing Track: Usability & Ergonomics Test Suite (Expanded `phase22_plan_review_ergonomics.rs`, `TEST_INFRA.md`, publish `TEST_READY.md` - 25/25 passed) [DONE]
+- [ ] M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening (All TUI tests passing, clippy clean, Reviewers, Challengers, Forensic Auditor, git commits) [TODO]
+
+
 
 
 

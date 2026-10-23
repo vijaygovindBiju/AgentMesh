@@ -108,7 +108,11 @@ fn test_tier1_screen_nav_tab_cycling() {
     state.handle_key(press_key(KeyCode::Tab));
     assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
-    // Tab 5: Diagnostics -> Dashboard
+    // Tab 5: Diagnostics -> Settings
+    state.handle_key(press_key(KeyCode::Tab));
+    assert_eq!(state.current_screen, CurrentScreen::Settings);
+
+    // Tab 6: Settings -> Dashboard
     state.handle_key(press_key(KeyCode::Tab));
     assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 }
@@ -146,7 +150,7 @@ fn test_tier1_screen_nav_headers_render_correct_titles() {
     // 2. Plan Review Screen Title
     state.current_screen = CurrentScreen::PlanReview;
     terminal.draw(|f| render(f, &state)).unwrap();
-    assert_buffer_contains(&terminal, "Proposed Task Decomposition (Human Review)");
+    assert_buffer_contains(&terminal, "Proposed Tasks (Review)");
 
     // 3. Dashboard Screen Title
     state.current_screen = CurrentScreen::Dashboard;
@@ -1312,7 +1316,7 @@ fn test_tier3_dag_view_toggle_and_rendering() {
     state.handle_key(press_key(KeyCode::Char('g')));
     assert!(!state.show_dag_view);
     terminal.draw(|f| render(f, &state)).unwrap();
-    assert_buffer_contains(&terminal, "Proposed Task Decomposition (Human Review)");
+    assert_buffer_contains(&terminal, "Proposed Tasks (Review)");
 }
 
 // ----------------------------------------------------------------------------

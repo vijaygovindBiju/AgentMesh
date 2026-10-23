@@ -187,7 +187,7 @@ fn test_tier1_responsive_plan_layout_standard_120x30() {
         .expect("Terminal draw failed at 120x30");
 
     // Outer titles for both columns rendered cleanly
-    assert_buffer_contains(&terminal, "Proposed Task Decomposition (Human Review)");
+    assert_buffer_contains(&terminal, "Proposed Tasks (Review)");
     assert_buffer_contains(&terminal, "Task Details & Inspector");
 
     // Task items visible
@@ -710,10 +710,15 @@ fn test_tier3_pane_focus_switching() {
 
     // Initial focus is TaskList
     assert_eq!(state.plan_review_focus, PlanReviewFocus::TaskList);
+    let mut terminal = create_terminal(120, 30);
+    terminal.draw(|frame| ui::render(frame, &state)).unwrap();
+    assert_buffer_contains(&terminal, "[▶ FOCUSED]");
 
     // Press Right (or Left/h/l) switches focus to TaskInspector
     state.handle_key(press(KeyCode::Right));
     assert_eq!(state.plan_review_focus, PlanReviewFocus::TaskInspector);
+    terminal.draw(|frame| ui::render(frame, &state)).unwrap();
+    assert_buffer_contains(&terminal, "[▶ FOCUSED]");
 
     // When TaskInspector is focused, Down / j scrolls inspector_scroll_offset
     assert_eq!(state.inspector_scroll_offset, 0);
@@ -741,6 +746,8 @@ fn test_tier3_pane_focus_switching() {
     // Press Left / Right switches back to TaskList
     state.handle_key(press(KeyCode::Left));
     assert_eq!(state.plan_review_focus, PlanReviewFocus::TaskList);
+    terminal.draw(|frame| ui::render(frame, &state)).unwrap();
+    assert_buffer_contains(&terminal, "[▶ FOCUSED]");
 
     // When TaskList is focused, Down advances selected_task_index
     state.handle_key(press(KeyCode::Down));
@@ -1091,6 +1098,7 @@ fn test_tier3_single_task_approval_vs_rejection_actions() {
         state.review_tasks[1].human_decision,
         Some(ApprovalStatus::Rejected)
     );
+    assert_eq!(state.review_tasks[1].task.status, TaskStatus::Rejected);
 }
 
 // ============================================================================

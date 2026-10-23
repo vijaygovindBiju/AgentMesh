@@ -16,7 +16,7 @@ impl HeaderWidget {
             return;
         }
 
-        let is_compact = area.width < 130;
+        let is_compact = area.width < 90;
 
         // Connectivity and status pills
         let pg_pill = if state.pg_connected {
@@ -79,32 +79,50 @@ impl HeaderWidget {
                     .constraints([Constraint::Length(1), Constraint::Length(1)])
                     .split(area);
 
-                // Row 1: Brand/version + Status pills
-                let mut row1_spans = vec![
-                    Span::styled(
-                        "AgentMesh ",
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ];
+                // Row 1: Brand/version + Status pills (prioritizing connectivity pills)
+                let brand_span = Span::styled(
+                    "AgentMesh ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                );
+
+                let mut row1_spans = vec![brand_span];
+
                 if proj_name != "No Project Selected" {
-                    row1_spans.push(Span::styled(
-                        format!("[{proj_name}] "),
-                        Style::default()
-                            .fg(Color::White)
-                            .add_modifier(Modifier::BOLD),
-                    ));
+                    // Truncate long project names so connectivity pills never clip
+                    let reserved_for_pills = if area.width >= 75 { 52 } else { 40 };
+                    let max_proj_space = (area.width as usize).saturating_sub(reserved_for_pills);
+                    if max_proj_space >= 8 {
+                        let max_inner = max_proj_space.saturating_sub(3);
+                        let display_proj = if proj_name.chars().count() > max_inner {
+                            let truncated: String = proj_name.chars().take(max_inner.saturating_sub(1)).collect();
+                            format!("{truncated}…")
+                        } else {
+                            proj_name.to_string()
+                        };
+                        row1_spans.push(Span::styled(
+                            format!("[{display_proj}] "),
+                            Style::default()
+                                .fg(Color::White)
+                                .add_modifier(Modifier::BOLD),
+                        ));
+                    }
                 }
+
                 row1_spans.extend([
                     pg_pill,
                     Span::raw(" "),
                     nats_pill,
                     Span::raw(" "),
                     agent_ratio,
-                    Span::raw(" "),
-                    pending_pill,
                 ]);
+
+                if area.width >= 72 {
+                    row1_spans.push(Span::raw(" "));
+                    row1_spans.push(pending_pill);
+                }
+
                 let row1_p = Paragraph::new(Line::from(row1_spans));
                 frame.render_widget(row1_p, rows[0]);
 
@@ -121,7 +139,7 @@ impl HeaderWidget {
                 frame.render_widget(tabs, rows[1]);
             } else {
                 // Extreme vertical constraint (1 line)
-                let row1_spans = vec![
+                let mut row1_spans = vec![
                     Span::styled(
                         "AgentMesh ",
                         Style::default()
@@ -133,9 +151,11 @@ impl HeaderWidget {
                     nats_pill,
                     Span::raw(" "),
                     agent_ratio,
-                    Span::raw(" "),
-                    pending_pill,
                 ];
+                if area.width >= 72 {
+                    row1_spans.push(Span::raw(" "));
+                    row1_spans.push(pending_pill);
+                }
                 let row1_p = Paragraph::new(Line::from(row1_spans));
                 frame.render_widget(row1_p, area);
             }
@@ -144,9 +164,9 @@ impl HeaderWidget {
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Length(22), // Brand/version
+                    Constraint::Length(18), // Brand/version
                     Constraint::Min(25),    // Active project name & status pills
-                    Constraint::Length(60), // Screen tabs, including Settings
+                    Constraint::Length(58), // Screen tabs, right-sized for 6 tabs
                 ])
                 .split(area);
 
@@ -169,9 +189,9 @@ impl HeaderWidget {
 
             // Chunk 1: Active project name & status pills
             let inner_width = chunks[1].width.saturating_sub(if area.height >= 3 { 2 } else { 0 });
-            let status_lines = if inner_width >= 75 {
+            let status_lines = if inner_width >= 80 {
                 vec![Line::from(vec![
-                    Span::styled(" Project: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("Project: ", Style::default().fg(Color::DarkGray)),
                     Span::styled(
                         format!("{proj_name} "),
                         Style::default()
@@ -187,25 +207,49 @@ impl HeaderWidget {
                     pending_pill,
                 ])]
             } else if area.height >= 4 {
-                vec![
-                    Line::from(vec![
-                        Span::styled(" Project: ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(
-                            format!("{proj_name} "),
-                            Style::default()
-                                .fg(Color::Yellow)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                        pg_pill,
-                    ]),
-                    Line::from(vec![
-                        nats_pill,
-                        Span::raw(" "),
-                        agent_ratio,
-                        Span::raw(" "),
-                        pending_pill,
-                    ]),
-                ]
+                let required_for_row1 = 10 + proj_name.len() + 1 + 12; // " Project: " + proj_name + " " + pg_pill
+                if usize::from(inner_width) >= required_for_row1 {
+                    vec![
+                        Line::from(vec![
+                            Span::styled(" Project: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(
+                                format!("{proj_name} "),
+                                Style::default()
+                                    .fg(Color::Yellow)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            pg_pill,
+                        ]),
+                        Line::from(vec![
+                            nats_pill,
+                            Span::raw(" "),
+                            agent_ratio,
+                            Span::raw(" "),
+                            pending_pill,
+                        ]),
+                    ]
+                } else {
+                    vec![
+                        Line::from(vec![
+                            Span::styled(" Project: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(
+                                proj_name.to_string(),
+                                Style::default()
+                                    .fg(Color::Yellow)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            pg_pill,
+                            Span::raw(" "),
+                            nats_pill,
+                            Span::raw(" "),
+                            agent_ratio,
+                            Span::raw(" "),
+                            pending_pill,
+                        ]),
+                    ]
+                }
             } else {
                 vec![Line::from(vec![
                     pg_pill,
@@ -227,6 +271,7 @@ impl HeaderWidget {
 
             // Chunk 2: Screen tabs
             let tabs = Tabs::new(tab_titles)
+                .divider(Span::raw("│"))
                 .block(
                     Block::default()
                         .borders(if area.height >= 3 { Borders::ALL } else { Borders::NONE })

@@ -16,7 +16,7 @@ impl FooterWidget {
             return;
         }
 
-        let is_compact = area.width < 85;
+        let is_compact = area.width < 90;
 
         let chunks = if is_compact {
             Layout::default()
@@ -27,11 +27,12 @@ impl FooterWidget {
                 ])
                 .split(area)
         } else {
+            let status_len = 36.max(area.width / 4);
             Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Percentage(75),
-                    Constraint::Percentage(25),
+                    Constraint::Min(area.width.saturating_sub(status_len)),
+                    Constraint::Length(status_len),
                 ])
                 .split(area)
         };
@@ -156,15 +157,30 @@ impl FooterWidget {
                                 Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
                                 Span::raw("Help"),
                             ]
-                        } else if state.current_screen == CurrentScreen::PlanReview && has_selected_task {
-                            vec![
-                                Span::styled(" [Ctrl+A] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                                Span::raw("Select All  "),
-                                Span::styled(" [Space] ", Style::default().fg(Color::Cyan)),
-                                Span::raw("Toggle  "),
-                                Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
-                                Span::raw("Move"),
-                            ]
+                        } else if state.current_screen == CurrentScreen::PlanReview {
+                            if has_selected_task {
+                                vec![
+                                    Span::styled(" [Ctrl+A] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                                    Span::raw("Select All  "),
+                                    Span::styled(" [Space] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Tog  "),
+                                    Span::styled(" [Y] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                                    Span::raw("Appr  "),
+                                    Span::styled(" [N] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                                    Span::raw("Rej  "),
+                                    Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                                    Span::raw("Edit"),
+                                ]
+                            } else {
+                                vec![
+                                    Span::styled(" [Ctrl+A] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                                    Span::raw("All "),
+                                    Span::styled(" [Space] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Tog "),
+                                    Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Move"),
+                                ]
+                            }
                         } else if has_overlaps {
                             vec![
                                 Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
@@ -204,52 +220,97 @@ impl FooterWidget {
                                 Span::raw("Dashboard"),
                             ],
                             CurrentScreen::PlanReview => {
-                                let dag_label = if state.show_dag_view { "Cards" } else { "DAG" };
-                                let mut hints = vec![
-                                    Span::styled(
-                                        format!(" [G: {dag_label}] "),
-                                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                                    ),
-                                ];
-                                if has_selected_task {
+                                if area.width < 150 {
+                                    // Concise hints for standard terminals (<150 cols)
+                                    let mut hints = Vec::new();
+                                    if has_selected_task {
+                                        hints.extend([
+                                            Span::styled(" [Y] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                                            Span::raw("Appr "),
+                                            Span::styled(" [Shift+A] ", Style::default().fg(Color::Green)),
+                                            Span::raw("All "),
+                                            Span::styled(" [N] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                                            Span::raw("Rej "),
+                                            Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                                            Span::raw("Edit "),
+                                            Span::styled(" [C] ", Style::default().fg(Color::Red)),
+                                            Span::raw("Canc "),
+                                        ]);
+                                    }
                                     hints.extend([
-                                        Span::styled(" [Y] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                                        Span::raw("Approve "),
-                                        Span::styled(" [Shift+A] ", Style::default().fg(Color::Green)),
-                                        Span::raw("All "),
-                                        Span::styled(" [N] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-                                        Span::raw("Reject "),
-                                        Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                                        Span::raw("Edit "),
-                                        Span::styled(" [C] ", Style::default().fg(Color::Red)),
-                                        Span::raw("Cancel "),
+                                        Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
+                                        Span::raw("Nav "),
+                                        Span::styled(" [Space] ", Style::default().fg(Color::Cyan)),
+                                        Span::raw("Tog "),
+                                        Span::styled(" [Enter] ", Style::default().fg(Color::Cyan)),
+                                        Span::raw("Det "),
                                     ]);
-                                }
-                                hints.extend([
-                                    Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
-                                    Span::raw("Nav "),
-                                    Span::styled(" [Ctrl+A] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                                    Span::raw("Select All "),
-                                    Span::styled(" [Space] ", Style::default().fg(Color::Cyan)),
-                                    Span::raw("Toggle "),
-                                    Span::styled(" [Enter] ", Style::default().fg(Color::Cyan)),
-                                    Span::raw("Details "),
-                                ]);
-                                if has_overlaps {
+                                    if has_overlaps {
+                                        hints.extend([
+                                            Span::styled(" [A] ", Style::default().fg(Color::Yellow)),
+                                            Span::raw("Ack "),
+                                        ]);
+                                    }
                                     hints.extend([
-                                        Span::styled(" [A] ", Style::default().fg(Color::Yellow)),
-                                        Span::raw("Ack "),
+                                        Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
+                                        Span::raw("Help "),
+                                        Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
+                                        Span::raw("Quit"),
                                     ]);
+                                    hints
+                                } else {
+                                    // Expanded text hints for wide terminals (>=150 cols)
+                                    let dag_label = if state.show_dag_view { "Cards" } else { "DAG" };
+                                    let mut hints = vec![
+                                        Span::styled(
+                                            format!(" [G: {dag_label}] "),
+                                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                                        ),
+                                    ];
+                                    if has_selected_task {
+                                        hints.extend([
+                                            Span::styled(" [Y] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                                            Span::raw("Approve "),
+                                            Span::styled(" [Shift+A] ", Style::default().fg(Color::Green)),
+                                            Span::raw("All "),
+                                            Span::styled(" [N] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                                            Span::raw("Reject "),
+                                            Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                                            Span::raw("Edit "),
+                                            Span::styled(" [C] ", Style::default().fg(Color::Red)),
+                                            Span::raw("Cancel "),
+                                            Span::styled(" [R] ", Style::default().fg(Color::Green)),
+                                            Span::raw("Retry "),
+                                            Span::styled(" [Esc] ", Style::default().fg(Color::Yellow)),
+                                            Span::raw("Deselect "),
+                                        ]);
+                                    }
+                                    hints.extend([
+                                        Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
+                                        Span::raw("Nav "),
+                                        Span::styled(" [Ctrl+A] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                                        Span::raw("Select All "),
+                                        Span::styled(" [Space] ", Style::default().fg(Color::Cyan)),
+                                        Span::raw("Toggle "),
+                                        Span::styled(" [Enter] ", Style::default().fg(Color::Cyan)),
+                                        Span::raw("Details "),
+                                    ]);
+                                    if has_overlaps {
+                                        hints.extend([
+                                            Span::styled(" [A] ", Style::default().fg(Color::Yellow)),
+                                            Span::raw("Ack "),
+                                        ]);
+                                    }
+                                    hints.extend([
+                                        Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
+                                        Span::raw("Cmd "),
+                                        Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
+                                        Span::raw("Help "),
+                                        Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
+                                        Span::raw("Quit"),
+                                    ]);
+                                    hints
                                 }
-                                hints.extend([
-                                    Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
-                                    Span::raw("Cmd "),
-                                    Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
-                                    Span::raw("Help "),
-                                    Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
-                                    Span::raw("Quit"),
-                                ]);
-                                hints
                             }
                             CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => vec![
                                 Span::styled(" [C] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),

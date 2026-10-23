@@ -120,7 +120,8 @@ fn test_stress_deep_screen_cycling() {
             }
             CurrentScreen::PlanReview => assert_eq!(state.current_screen, CurrentScreen::FleetInspector),
             CurrentScreen::FleetInspector => assert_eq!(state.current_screen, CurrentScreen::Diagnostics),
-            CurrentScreen::Diagnostics => assert_eq!(state.current_screen, CurrentScreen::Dashboard),
+            CurrentScreen::Diagnostics => assert_eq!(state.current_screen, CurrentScreen::Settings),
+            CurrentScreen::Settings => assert_eq!(state.current_screen, CurrentScreen::Dashboard),
         }
     }
 
@@ -131,10 +132,11 @@ fn test_stress_deep_screen_cycling() {
         (KeyCode::Char('3'), CurrentScreen::PlanReview),
         (KeyCode::Char('4'), CurrentScreen::FleetInspector),
         (KeyCode::Char('5'), CurrentScreen::Diagnostics),
+        (KeyCode::Char('6'), CurrentScreen::Settings),
     ];
 
     for i in 0..2000 {
-        let (key, expected) = targets[i % 5];
+        let (key, expected) = targets[i % 6];
         state.handle_key(press(key));
         assert_eq!(state.current_screen, expected);
     }
