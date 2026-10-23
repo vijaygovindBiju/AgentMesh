@@ -958,6 +958,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 ## Phase 22 — Operator TUI Usability & Ergonomics Enhancement
 
 - [x] Fix two stale TUI test expectations found in the full test run (2026-10-23).
+- [!] Rerun full workspace test suite on request (2026-10-23): `cargo test --workspace` stops in `phase18_real_world_validation` with the same three failures noted in the previous coordinator-wide run; workspace tests after that suite were not reached.
 
 Verification run (2026-10-23):
 - Updated the command palette test to include the `task:approve_all` command, and enabled DAG view in the dependency jump test to reflect its `[`/`]` navigation context.
