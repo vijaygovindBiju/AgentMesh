@@ -957,6 +957,12 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 
 ## Phase 22 — Operator TUI Usability & Ergonomics Enhancement
 
+- [!] Run full coordinator test suite for TUI verification (requested 2026-10-23): 128/129 coordinator library tests passed; one TUI command palette assertion failed. TUI integration suites: 244 passed, 1 failed (`phase21_preview_challenger::test_challenge1_blocker_and_dependent_navigation`).
+
+Verification run (2026-10-23):
+- `cargo test -p coordinator`: FAILED — `tui::widgets::command_palette::tests::test_filtered_commands_case_insensitive_matching` got 6 matches, expected 5; 128/129 library tests passed.
+- TUI integration suites run individually: 244 passed, 1 failed. `phase21_preview_challenger::test_challenge1_blocker_and_dependent_navigation` expected selection index 1, got 2; remaining selected suites passed.
+
 **Goal:** Elevate the Coordinator Terminal User Interface (TUI) into an intuitive, responsive, and delightful operator console with native mouse navigation (tab clicking, wheel scrolling), vibrant visual hierarchy and focus badges, bulk task approval workflow, rich toast notification banners, informative empty states, and expanded cheatsheets.
 
 - [x] Task 22.1: Native Mouse Interaction & Scroll Wheel Support
