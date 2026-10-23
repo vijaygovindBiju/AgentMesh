@@ -158,6 +158,8 @@ impl FooterWidget {
                             ]
                         } else if state.current_screen == CurrentScreen::PlanReview && has_selected_task {
                             vec![
+                                Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
+                                Span::raw("Select  "),
                                 Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
                                 Span::raw("Help "),
                                 Span::styled(" [:] ", Style::default().fg(Color::Cyan)),

@@ -797,6 +797,27 @@ impl AppState {
                     } else if col < 66 {
                         self.current_screen = CurrentScreen::Settings;
                     }
+                } else if self.current_screen == CurrentScreen::PlanReview && !self.show_dag_view {
+                    let (width, height) = crossterm::terminal::size().unwrap_or((80, 24));
+                    let header_height = if width < 90 { 2 } else { 3 };
+                    let body_height = height.saturating_sub(header_height + 3);
+                    let list_width = if self.show_details_pane { width * 45 / 100 } else { width };
+                    let list_top = header_height + 1;
+                    let list_inner_height = body_height.saturating_sub(2);
+
+                    if mouse.column < list_width && mouse.row >= list_top
+                        && mouse.row < header_height + body_height - 1
+                        && !self.review_tasks.is_empty()
+                    {
+                        let visible_cards = (list_inner_height / 5).max(1) as usize;
+                        let scroll_offset = if self.selected_task_index >= visible_cards {
+                            self.selected_task_index - visible_cards + 1
+                        } else { 0 };
+                        let clicked_index = scroll_offset + ((mouse.row - list_top) / 5) as usize;
+                        if clicked_index < self.review_tasks.len() {
+                            self.selected_task_index = clicked_index;
+                        }
+                    }
                 }
                 None
             }
@@ -2562,6 +2583,23 @@ mod tests {
         // Clamped at 0
         state.handle_key(make_key(KeyCode::Up));
         assert_eq!(state.selected_task_index, 0);
+    }
+
+    #[test]
+    fn test_mouse_click_selects_visible_plan_task_card() {
+        let mut state = AppState::new().with_mock_data();
+        state.current_screen = CurrentScreen::PlanReview;
+        state.selected_task_index = 0;
+        let click_second_card = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 8,
+            modifiers: KeyModifiers::NONE,
+        };
+
+        state.handle_mouse(click_second_card);
+
+        assert_eq!(state.selected_task_index, 1);
     }
 
     #[test]
