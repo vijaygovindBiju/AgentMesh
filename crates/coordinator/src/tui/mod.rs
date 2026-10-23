@@ -127,5 +127,9 @@ mod tests {
         state.current_screen = CurrentScreen::Dashboard;
         state.input_mode = InputMode::Normal;
         terminal.draw(|f| render(f, &state)).unwrap();
+
+        // 5. Render the Doctor screen without blocking on diagnostics
+        state.current_screen = CurrentScreen::Doctor;
+        terminal.draw(|f| render(f, &state)).unwrap();
     }
 }

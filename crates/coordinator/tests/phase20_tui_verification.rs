@@ -117,7 +117,11 @@ fn test_tier1_screen_nav_tab_cycling() {
     state.handle_key(press_key(KeyCode::Tab));
     assert_eq!(state.current_screen, CurrentScreen::Settings);
 
-    // Tab 6: Settings -> Dashboard
+    // Tab 6: Settings -> Doctor
+    state.handle_key(press_key(KeyCode::Tab));
+    assert_eq!(state.current_screen, CurrentScreen::Doctor);
+
+    // Tab 7: Doctor -> Dashboard
     state.handle_key(press_key(KeyCode::Tab));
     assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 }
@@ -638,6 +642,7 @@ fn test_tier1_cli_is_headless_evaluation() {
         project_id: None,
         auto_approve: false,
         status: false,
+        doctor: false,
         show_help: false,
         show_version: false,
     };
@@ -651,6 +656,7 @@ fn test_tier1_cli_is_headless_evaluation() {
         project_id: None,
         auto_approve: false,
         status: false,
+        doctor: false,
         show_help: false,
         show_version: false,
     };
@@ -664,6 +670,7 @@ fn test_tier1_cli_is_headless_evaluation() {
         project_id: None,
         auto_approve: false,
         status: false,
+        doctor: false,
         show_help: false,
         show_version: false,
     };

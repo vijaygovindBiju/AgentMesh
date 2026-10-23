@@ -69,6 +69,21 @@ async fn main() -> Result<()> {
     let nats_token =
         std::env::var("NATS_AUTH_TOKEN").unwrap_or_else(|_| "agentmesh_dev_token".to_string());
 
+    if args.doctor {
+        let report = coordinator::doctor::run_doctor(coordinator::doctor::DoctorConfig {
+            database_url: db_url,
+            nats_url,
+            nats_token,
+            repository_path: std::env::current_dir()?,
+        })
+        .await;
+        print_doctor_report(&report);
+        if report.readiness == coordinator::doctor::Readiness::Blocked {
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+
     // 3. Attempt connection to PostgreSQL and NATS JetStream
     let pool_res = create_pool(&db_url).await;
     let nats_res = connect(&nats_url, Some(&nats_token)).await;
@@ -456,9 +471,11 @@ async fn print_system_status(pool: &sqlx::PgPool) -> Result<()> {
     for p in projects.iter().take(5) {
         println!("  - [{}] {} (Status: {:?})", p.id, p.name, p.status);
     }
+
     if projects.len() > 5 {
         println!("  ... and {} more", projects.len() - 5);
     }
+
     println!();
     println!("Tasks Summary:");
     println!("  Total Tasks:          {}", metrics.total_tasks);
@@ -505,6 +522,31 @@ async fn print_system_status(pool: &sqlx::PgPool) -> Result<()> {
     Ok(())
 }
 
+fn print_doctor_report(report: &coordinator::doctor::DoctorReport) {
+    use coordinator::doctor::{DoctorStatus, Readiness};
+    println!("AgentMesh Doctor: {:?}", report.readiness);
+    for check in &report.checks {
+        let status = match check.status {
+            DoctorStatus::Pass => "PASS",
+            DoctorStatus::Warn => "WARN",
+            DoctorStatus::Fail => "FAIL",
+            DoctorStatus::Skip => "SKIP",
+        };
+        println!("[{status}] {} — {}", check.id, check.summary);
+        println!("       Evidence: {}", check.evidence);
+        if let Some(remediation) = &check.remediation {
+            println!("       Remediation: {remediation}");
+        }
+    }
+    println!(
+        "Summary: {} required failure(s), {} warning(s)",
+        report.required_failures, report.warnings
+    );
+    if report.readiness == Readiness::Degraded {
+        println!("System dependencies are available, but optional readiness warnings remain.");
+    }
+}
+
 /// Loads tasks, dependencies, and overlap warnings for a project into `ReviewTaskState`.
 async fn load_project_review_state(
     pool: &sqlx::PgPool,
@@ -540,6 +582,17 @@ async fn handle_tui_action(
     action_tx: &tokio::sync::mpsc::UnboundedSender<TuiUpdateEvent>,
 ) {
     match action {
+        TuiAction::RunDoctor => {
+            state.doctor_running = true;
+            let tx = action_tx.clone();
+            tokio::spawn(async move {
+                let report = coordinator::doctor::run_doctor(
+                    coordinator::doctor::DoctorConfig::from_environment(),
+                )
+                .await;
+                let _ = tx.send(TuiUpdateEvent::DoctorReport(report));
+            });
+        }
         TuiAction::SubmitProject { name, description } => {
             state.status_message = Some(format!(
                 "Decomposing project '{name}' with AI planner in background..."

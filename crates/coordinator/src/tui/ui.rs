@@ -5,6 +5,7 @@ use ratatui::{
     Frame,
 };
 
+use crate::tui::screens::DoctorScreen;
 use crate::tui::screens::{
     DashboardScreen, DiagnosticsScreen, FleetInspectorScreen, PlanReviewScreen, ProjectInputScreen,
 };
@@ -56,6 +57,7 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         CurrentScreen::FleetInspector => FleetInspectorScreen::render(frame, chunks[1], state),
         CurrentScreen::Diagnostics => DiagnosticsScreen::render(frame, chunks[1], state),
         CurrentScreen::Settings => SettingsWidget::render(frame, chunks[1], state),
+        CurrentScreen::Doctor => DoctorScreen::render(frame, chunks[1], state),
     }
 
     // 3. Footer

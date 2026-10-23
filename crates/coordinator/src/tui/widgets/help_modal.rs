@@ -62,6 +62,17 @@ impl HelpModalWidget {
             ]),
             Line::from(vec![
                 Span::styled(
+                    " [7] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("Doctor: safe readiness checks  |  "),
+                Span::styled(" [R] ", Style::default().fg(Color::Green)),
+                Span::raw("Re-run Doctor checks"),
+            ]),
+            Line::from(vec![
+                Span::styled(
                     " [:] ",
                     Style::default()
                         .fg(Color::Cyan)

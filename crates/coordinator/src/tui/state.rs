@@ -44,6 +44,8 @@ pub enum TuiAction {
     RetryTask { task_id: Uuid },
     /// Human requested deep timeline drilldown inspection for a task
     InspectTaskTimeline { task_id: Uuid },
+    /// Run safe Doctor checks in the background.
+    RunDoctor,
 }
 
 /// Incoming real-time events sent to the TUI from NATS subscriber or coordinator.
@@ -62,6 +64,7 @@ pub enum TuiUpdateEvent {
     Projects(Vec<Project>),
     ActiveProject(Project),
     Connectivity { pg: bool, nats: bool },
+    DoctorReport(crate::doctor::DoctorReport),
 }
 
 /// Active top-level screen
@@ -75,6 +78,7 @@ pub enum CurrentScreen {
     FleetInspector,
     Diagnostics,
     Settings,
+    Doctor,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -150,6 +154,7 @@ impl CurrentScreen {
             CurrentScreen::FleetInspector => "4. Fleet Inspector",
             CurrentScreen::Diagnostics => "5. Diagnostics",
             CurrentScreen::Settings => "6. Settings",
+            CurrentScreen::Doctor => "7. Doctor",
         }
     }
 }
@@ -350,6 +355,9 @@ pub struct AppState {
     pub show_timeline_modal: bool,
     pub event_filter_severity: Option<String>,
     pub event_filter_entity: Option<String>,
+    pub doctor_report: Option<crate::doctor::DoctorReport>,
+    pub doctor_running: bool,
+    pub doctor_selected_index: usize,
 
     // Command palette state
     pub show_command_palette: bool,
@@ -425,6 +433,9 @@ impl AppState {
             show_timeline_modal: false,
             event_filter_severity: None,
             event_filter_entity: None,
+            doctor_report: None,
+            doctor_running: false,
+            doctor_selected_index: 0,
 
             show_command_palette: false,
             command_palette_query: String::new(),
@@ -1116,7 +1127,16 @@ impl AppState {
                 self.current_screen = CurrentScreen::Settings;
                 None
             }
+            KeyCode::Char('7') => {
+                self.current_screen = CurrentScreen::Doctor;
+                self.doctor_running = true;
+                Some(TuiAction::RunDoctor)
+            }
             KeyCode::Char('r') | KeyCode::Char('R') => {
+                if self.current_screen == CurrentScreen::Doctor {
+                    self.doctor_running = true;
+                    return Some(TuiAction::RunDoctor);
+                }
                 if self.current_screen == CurrentScreen::PlanReview {
                     if let Some(item) = self.review_tasks.get(self.selected_task_index) {
                         if item.task.status == TaskStatus::Failed
@@ -1217,6 +1237,20 @@ impl AppState {
                 CurrentScreen::FleetInspector => self.handle_fleet_inspector_key(key),
                 CurrentScreen::Diagnostics => self.handle_diagnostics_key(key),
                 CurrentScreen::Settings => None,
+                CurrentScreen::Doctor => match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.doctor_selected_index = self.doctor_selected_index.saturating_sub(1);
+                        None
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if let Some(report) = &self.doctor_report {
+                            self.doctor_selected_index = (self.doctor_selected_index + 1)
+                                .min(report.checks.len().saturating_sub(1));
+                        }
+                        None
+                    }
+                    _ => None,
+                },
             },
         }
     }
@@ -1838,14 +1872,16 @@ impl AppState {
             CurrentScreen::PlanReview => CurrentScreen::FleetInspector,
             CurrentScreen::FleetInspector => CurrentScreen::Diagnostics,
             CurrentScreen::Diagnostics => CurrentScreen::Settings,
-            CurrentScreen::Settings => CurrentScreen::Dashboard,
+            CurrentScreen::Settings => CurrentScreen::Doctor,
+            CurrentScreen::Doctor => CurrentScreen::Dashboard,
         };
     }
 
     pub fn cycle_screen_back(&mut self) {
         self.current_screen = match self.current_screen {
-            CurrentScreen::Dashboard => CurrentScreen::Settings,
+            CurrentScreen::Dashboard => CurrentScreen::Doctor,
             CurrentScreen::Settings => CurrentScreen::Diagnostics,
+            CurrentScreen::Doctor => CurrentScreen::Settings,
             CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => {
                 CurrentScreen::Dashboard
             }
@@ -2489,6 +2525,11 @@ impl AppState {
                 self.pg_connected = pg;
                 self.nats_connected = nats;
             }
+            TuiUpdateEvent::DoctorReport(report) => {
+                self.doctor_running = false;
+                self.doctor_selected_index = 0;
+                self.doctor_report = Some(report);
+            }
         }
     }
 }
@@ -2530,9 +2571,12 @@ mod tests {
         assert_eq!(state.current_screen, CurrentScreen::Settings);
 
         state.handle_key(make_key(KeyCode::Tab));
+        assert_eq!(state.current_screen, CurrentScreen::Doctor);
+
+        state.handle_key(make_key(KeyCode::Tab));
         assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 
-        // Direct number keys (1:Dash, 2:Proj, 3:Plan, 4:Fleet, 5:Diag, 6:Settings)
+        // Direct number keys (1:Dash, 2:Proj, 3:Plan, 4:Fleet, 5:Diag, 6:Settings, 7:Doctor)
         state.handle_key(make_key(KeyCode::Char('1')));
         assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 

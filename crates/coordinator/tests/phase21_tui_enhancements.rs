@@ -129,10 +129,11 @@ fn test_tier1_screen_nav_5_screens_initial_and_titles() {
     assert_eq!(CurrentScreen::PlanReview.title(), "3. Plan Review");
     assert_eq!(CurrentScreen::FleetInspector.title(), "4. Fleet Inspector");
     assert_eq!(CurrentScreen::Diagnostics.title(), "5. Diagnostics");
+    assert_eq!(CurrentScreen::Doctor.title(), "7. Doctor");
 }
 
 #[test]
-fn test_tier1_screen_nav_5_screens_tab_cycling() {
+fn test_tier1_screen_nav_all_screens_tab_cycling() {
     let mut state = AppState::new();
     assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 
@@ -150,6 +151,9 @@ fn test_tier1_screen_nav_5_screens_tab_cycling() {
 
     state.cycle_screen();
     assert_eq!(state.current_screen, CurrentScreen::Settings);
+
+    state.cycle_screen();
+    assert_eq!(state.current_screen, CurrentScreen::Doctor);
 
     state.cycle_screen();
     assert_eq!(state.current_screen, CurrentScreen::Dashboard);
@@ -178,9 +182,9 @@ fn test_tier1_screen_nav_numeric_hotkeys_1_to_5() {
     state.handle_key(press_char('6'));
     assert_eq!(state.current_screen, CurrentScreen::Settings);
 
-    // Key '7' is unmapped and does not switch screen
+    // Key '7' maps to Doctor.
     state.handle_key(press_char('7'));
-    assert_eq!(state.current_screen, CurrentScreen::Settings);
+    assert_eq!(state.current_screen, CurrentScreen::Doctor);
 }
 
 #[test]

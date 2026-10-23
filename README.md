@@ -14,6 +14,7 @@ AgentMesh is not a replacement for an agent runtime. The included `agent-agy` bi
 - Explicit human approval before a task can be assigned.
 - NATS JetStream delivery with acknowledgements, idempotency, heartbeats, and recovery.
 - PostgreSQL-backed task, agent, delivery, event, overlap, and audit state.
+- Safe Doctor diagnostics available as `coordinator --doctor` or TUI screen `7`.
 - Git worktree isolation, resource tracking, merge checks, and completion finalization.
 - Real `agent-agy` workers on the same machine or on reachable worker machines.
 
@@ -120,17 +121,18 @@ cargo run --bin coordinator -- --tui
 cargo run --bin coordinator -- --headless
 cargo run --bin coordinator -- --project "<UUID or project name>"
 cargo run --bin coordinator -- --status
+cargo run --bin coordinator -- --doctor
 ```
 
 Without an attached TTY, the coordinator selects headless mode unless `--tui` is specified. Use `--status` to print a database-backed summary and exit.
 
 ## TUI essentials
 
-The TUI is keyboard-only. The main screens are Dashboard, Project Management/Input, Plan Review, Fleet Inspector, Diagnostics, and Settings.
+The TUI is keyboard-only. The main screens are Dashboard, Project Management/Input, Plan Review, Fleet Inspector, Diagnostics, Settings, and Doctor.
 
 | Key | Action |
 | --- | --- |
-| `1`–`6` | Jump to a screen |
+| `1`–`7` | Jump to a screen |
 | `Tab`, `BackTab`, `[`, `]` | Cycle screens |
 | `?` | Open help |
 | `:` | Open command palette |
@@ -145,6 +147,7 @@ The TUI is keyboard-only. The main screens are Dashboard, Project Management/Inp
 | `Shift-A` / `Ctrl-A` | Bulk approval flow |
 | `G` | Toggle the plan DAG view |
 | Arrow keys / `h`,`j`,`k`,`l` | Navigate lists and panes |
+| `R` on Doctor | Re-run safe diagnostic checks |
 
 The detailed workflow, safety notes, environment reference, and troubleshooting are in the **[User Guide](docs/USER_GUIDE.md)**.
 

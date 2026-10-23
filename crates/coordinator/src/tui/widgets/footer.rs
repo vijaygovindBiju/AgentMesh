@@ -600,6 +600,16 @@ impl FooterWidget {
                                     Span::raw("Quit"),
                                 ],
                             },
+                            CurrentScreen::Doctor => vec![
+                                Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
+                                Span::raw("Select Check  "),
+                                Span::styled(" [R] ", Style::default().fg(Color::Green)),
+                                Span::raw("Run Doctor  "),
+                                Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
+                                Span::raw("Help  "),
+                                Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
+                                Span::raw("Quit"),
+                            ],
                         }
                     }
                 }

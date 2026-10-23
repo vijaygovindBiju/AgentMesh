@@ -217,15 +217,18 @@ Useful non-interactive commands:
 cargo run --bin coordinator -- --help
 cargo run --bin coordinator -- --headless
 cargo run --bin coordinator -- --status
+cargo run --bin coordinator -- --doctor
 cargo run --bin coordinator -- --project "<UUID or project name>"
 ```
 
 The TUI has Dashboard, Project Management/Input, Plan Review, Fleet
-Inspector, Diagnostics, and Settings screens. It does not capture mouse input.
+Inspector, Diagnostics, Settings, and Doctor screens. It does not capture mouse
+input.
 
 | Key | Result |
 | --- | --- |
 | `1`–`6` | Jump to a screen |
+| `7` | Open Doctor and run safe checks |
 | `Tab` / `BackTab` / `[` / `]` | Cycle screens |
 | `?` / `Esc` | Open or close help |
 | `:` | Open command palette |
@@ -242,9 +245,32 @@ Inspector, Diagnostics, and Settings screens. It does not capture mouse input.
 | `Shift-A` / `Ctrl-A` | Start bulk approval |
 | `G` | Toggle the plan DAG |
 | `Space` | Select a task for selective bulk approval |
+| `R` on Doctor | Re-run all safe Doctor checks |
 
 The help overlay and footer are the final authority for context-specific
 shortcuts.
+
+### Doctor
+
+Doctor is diagnostic-first and read-only. Use `coordinator --doctor` for a
+machine-readable-by-humans terminal report, or press `7` in the TUI. The TUI
+runs checks in a background task so network checks do not freeze navigation.
+
+Statuses mean:
+
+- **PASS**: The check collected positive evidence.
+- **WARN**: The system can continue, but optional readiness is incomplete.
+- **FAIL**: A required dependency or readiness condition is blocked.
+- **SKIP**: Doctor could not verify the condition or it requires an explicit
+  execution probe; this is not proof that the capability works.
+
+Doctor checks configuration, PostgreSQL connectivity and schema presence, NATS
+connectivity and required streams, `agy --version`, Git repository access,
+registered worker health/heartbeats, and the active human approval boundary.
+It does not run migrations, execute coding tasks, modify repositories, restart
+services, install dependencies, or print credentials. A registered worker is
+not treated as execution-verified: the real execution probe is deliberately
+reported as **SKIP**.
 
 ## 9. Creating a project and submitting a goal
 

@@ -15,6 +15,8 @@ pub struct CliArgs {
     pub auto_approve: bool,
     /// Print system metrics and fleet summary to stdout, then exit.
     pub status: bool,
+    /// Run safe environment diagnostics and exit.
+    pub doctor: bool,
     /// Display help information and exit.
     pub show_help: bool,
     /// Display version information and exit.
@@ -81,6 +83,9 @@ impl CliArgs {
                 "-s" | "--status" => {
                     cli.status = true;
                 }
+                "--doctor" => {
+                    cli.doctor = true;
+                }
                 "-h" | "--help" => {
                     cli.show_help = true;
                 }
@@ -138,6 +143,7 @@ impl CliArgs {
             "    -p, --project <ID_OR_NAME> Target specific project by UUID or name\n",
             "        --auto-approve         Automatically approve proposed tasks without critical overlap warnings (headless mode)\n",
             "    -s, --status               Print system metrics and fleet summary, then exit\n",
+            "        --doctor               Run safe environment diagnostics, then exit\n",
             "    -h, --help                 Print help information\n",
             "    -V, --version              Print version information\n"
         )
@@ -304,6 +310,7 @@ mod tests {
         assert!(help.contains("--project"));
         assert!(help.contains("--auto-approve"));
         assert!(help.contains("--status"));
+        assert!(help.contains("--doctor"));
 
         let version = CliArgs::version_text();
         assert!(version.contains("AgentMesh Coordinator v"));

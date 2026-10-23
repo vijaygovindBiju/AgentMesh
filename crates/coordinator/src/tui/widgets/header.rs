@@ -62,6 +62,7 @@ impl HeaderWidget {
             Line::from("4:Fleet"),
             Line::from("5:Diag"),
             Line::from("6:Set"),
+            Line::from("7:Doc"),
         ];
 
         let selected_idx = match state.current_screen {
@@ -71,6 +72,7 @@ impl HeaderWidget {
             CurrentScreen::FleetInspector => 3,
             CurrentScreen::Diagnostics => 4,
             CurrentScreen::Settings => 5,
+            CurrentScreen::Doctor => 6,
         };
 
         if is_compact {

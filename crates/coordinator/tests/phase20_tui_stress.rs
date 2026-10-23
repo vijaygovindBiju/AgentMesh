@@ -127,7 +127,8 @@ fn test_stress_deep_screen_cycling() {
                 assert_eq!(state.current_screen, CurrentScreen::Diagnostics)
             }
             CurrentScreen::Diagnostics => assert_eq!(state.current_screen, CurrentScreen::Settings),
-            CurrentScreen::Settings => assert_eq!(state.current_screen, CurrentScreen::Dashboard),
+            CurrentScreen::Settings => assert_eq!(state.current_screen, CurrentScreen::Doctor),
+            CurrentScreen::Doctor => assert_eq!(state.current_screen, CurrentScreen::Dashboard),
         }
     }
 

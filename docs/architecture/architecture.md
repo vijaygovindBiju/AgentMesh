@@ -20,6 +20,7 @@ AgentMesh is a central AI coordinator for multiple human-controlled AI coding ag
 │  │    Y/N/E/A/↑↓/Enter  │    │  ● Dependency graph            │  │
 │  │  ● Live dashboard    │    │  ● Assignment logic            │  │
 │  │  ● Diagnostics       │    │  ● Overlap detector            │  │
+│  │  ● Doctor checks     │    │  ● Safe readiness report       │  │
 │  │  ● Overlap warnings  │    │  ● Event processor             │  │
 │  └──────────────────────┘    └──────────────┬──────────────────┘  │
 │                                             │                    │
@@ -57,13 +58,13 @@ AgentMesh is a central AI coordinator for multiple human-controlled AI coding ag
                        ┌───────────────┴───────────────┐
                        │                               │
              ┌─────────▼──────────┐        ┌──────────▼───────────┐
-             │   Agy Agent        │        │   agy Adapter        │
+             │   agent-agy        │        │   agy CLI             │
              │                    │        │                      │
              │  Implements full   │        │  Spawns agy CLI      │
              │  AgentAdapter      │        │  as subprocess       │
              │  protocol          │        │  Parses stdout       │
-             │  Simulates work    │        │  Translates to       │
-             │  with delays       │        │  AgentMessage types  │
+             │  Runs real agy      │        │  Translates to       │
+             │  subprocess tasks  │        │  AgentMessage types  │
              └────────────────────┘        └──────────────────────┘
 ```
 
@@ -103,7 +104,7 @@ v1.0 (Phases 8–16) integrates the following subsystems directly into the runni
 4. **Security, Authentication & Audit Logging (Phase 12)** — `security/`
    - SHA-256 `am_ak_` API keys with constant-time verification, `AgentRole`, path-based `PermissionBoundary`, `TaskAuthorizer`, `SecretRedactor`, `audit_logs`. *Wired in registration, assignment and event ingestion. TLS/mTLS via `connect_secure` is library-supported.*
 5. **Observability, Timelines & Diagnostics (Phases 13 & 16)** — `observability/`
-   - `TimelineService`, `DeliveryDiagnostics`, `FailureDiagnostics`, `MetricsCollector`, `coordinator_events`, and the Diagnostics TUI screen. *Wired: `MetricsCollector` periodically pushes live metrics to TUI; `CoordinatorEventRepository` records coordinator events across all lifecycle operations.*
+   - `TimelineService`, `DeliveryDiagnostics`, `FailureDiagnostics`, `MetricsCollector`, `coordinator_events`, the Diagnostics TUI screen, and the read-only `doctor/` readiness checks. *Wired: `MetricsCollector` periodically pushes live metrics to TUI; `CoordinatorEventRepository` records coordinator events across all lifecycle operations; Doctor runs safe checks from the CLI or TUI without applying migrations or executing tasks.*
 6. **Reliability (Phases 14 & 16)** — `reliability/`
    - `CoordinatorRecoveryService` (startup), `StaleTaskSweeper`, `EventDeduplicator`, `ResilientConnection`. *Wired: `CoordinatorRecoveryService::recover_on_startup` runs on coordinator start; `StaleTaskSweeper` runs periodic background sweeps reclaiming stale tasks; background worker reconciles pending deliveries and dispatches unblocked ready tasks.*
 
