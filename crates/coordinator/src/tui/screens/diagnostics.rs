@@ -402,7 +402,9 @@ impl DiagnosticsScreen {
                 Line::from(""),
                 Line::from(Span::styled(
                     "No timeline loaded. Press [Enter] on a task to query real timeline.",
-                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
                 )),
             ];
             let p = Paragraph::new(lines).block(block);
@@ -413,16 +415,19 @@ impl DiagnosticsScreen {
                 .block(block);
             frame.render_widget(p, area);
         } else {
-            let p = Paragraph::new("No timeline loaded. Press [Enter] on a task to query real timeline.")
-                .wrap(ratatui::widgets::Wrap { trim: true })
-                .block(block);
+            let p = Paragraph::new(
+                "No timeline loaded. Press [Enter] on a task to query real timeline.",
+            )
+            .wrap(ratatui::widgets::Wrap { trim: true })
+            .block(block);
             frame.render_widget(p, area);
         }
     }
 
     /// Renders the recent CoordinatorEvents log stream with sliding window scrolling and severity colour coding.
     fn render_events_stream(frame: &mut Frame, area: Rect, state: &AppState) {
-        let is_focused = state.diagnostics_focus == crate::tui::state::DiagnosticsFocus::EventsStream;
+        let is_focused =
+            state.diagnostics_focus == crate::tui::state::DiagnosticsFocus::EventsStream;
         let border_color = if is_focused {
             Color::Magenta
         } else {
@@ -536,7 +541,11 @@ impl DiagnosticsScreen {
                         .unwrap_or_else(|| "-".to_string());
 
                     let is_selected = idx == selected_idx;
-                    let prefix = if is_selected && is_focused { "▶ " } else { "  " };
+                    let prefix = if is_selected && is_focused {
+                        "▶ "
+                    } else {
+                        "  "
+                    };
                     let time_display = format!("{prefix}{ts_str}");
 
                     let mut row_style = Style::default().fg(level_col);
@@ -618,15 +627,17 @@ impl DiagnosticsScreen {
         let inner = block.inner(popup_area);
         frame.render_widget(block, popup_area);
 
-        let payload_pretty = serde_json::to_string_pretty(&ev.payload)
-            .unwrap_or_else(|_| "{}".to_string());
+        let payload_pretty =
+            serde_json::to_string_pretty(&ev.payload).unwrap_or_else(|_| "{}".to_string());
 
         let mut lines = vec![
             Line::from(vec![
                 Span::styled("Event Type: ", Style::default().fg(Color::DarkGray)),
                 Span::styled(
                     &ev.event_type,
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled("  |  Time: ", Style::default().fg(Color::DarkGray)),
                 Span::styled(
@@ -640,17 +651,26 @@ impl DiagnosticsScreen {
             ]),
             Line::from(vec![
                 Span::styled("Message: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(&ev.message, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    &ev.message,
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
             ]),
             Line::from(vec![
                 Span::styled("Target Task: ", Style::default().fg(Color::DarkGray)),
                 Span::styled(
-                    ev.task_id.map(|id| id.to_string()).unwrap_or_else(|| "None".to_string()),
+                    ev.task_id
+                        .map(|id| id.to_string())
+                        .unwrap_or_else(|| "None".to_string()),
                     Style::default().fg(Color::Cyan),
                 ),
                 Span::styled("  |  Target Agent: ", Style::default().fg(Color::DarkGray)),
                 Span::styled(
-                    ev.agent_id.map(|id| id.to_string()).unwrap_or_else(|| "None".to_string()),
+                    ev.agent_id
+                        .map(|id| id.to_string())
+                        .unwrap_or_else(|| "None".to_string()),
                     Style::default().fg(Color::Cyan),
                 ),
             ]),
@@ -722,13 +742,20 @@ impl DiagnosticsScreen {
             Line::from(vec![
                 Span::styled("Task: ", Style::default().fg(Color::DarkGray)),
                 Span::styled(
-                    format!("[{}] {}", selected_task.task.short_id, selected_task.task.title),
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                    format!(
+                        "[{}] {}",
+                        selected_task.task.short_id, selected_task.task.title
+                    ),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled("  |  Status: ", Style::default().fg(Color::DarkGray)),
                 Span::styled(
                     format!("{:?}", selected_task.task.status),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
                 ),
             ]),
             Line::from(vec![
@@ -756,9 +783,18 @@ impl DiagnosticsScreen {
                         .map(|ms| format!("+{}ms", ms))
                         .unwrap_or_else(|| "0ms".to_string());
                     lines.push(Line::from(vec![
-                        Span::styled(format!("[{:>7}] ", elapsed_str), Style::default().fg(Color::DarkGray)),
-                        Span::styled(format!("{:<14} ", item.stage), Style::default().fg(Color::Cyan)),
-                        Span::styled(format!("{:<16} ", item.actor), Style::default().fg(Color::Yellow)),
+                        Span::styled(
+                            format!("[{:>7}] ", elapsed_str),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled(
+                            format!("{:<14} ", item.stage),
+                            Style::default().fg(Color::Cyan),
+                        ),
+                        Span::styled(
+                            format!("{:<16} ", item.actor),
+                            Style::default().fg(Color::Yellow),
+                        ),
                         Span::raw(&item.message),
                     ]));
                 }

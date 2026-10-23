@@ -7,7 +7,7 @@
 //! - This crate contains **no runtime logic** — only data types and trait definitions.
 //! - It has **no dependency on NATS, tokio, or any specific transport**.
 //!   Any async dependencies belong in the crates that do actual I/O.
-//! - Every agent adapter (mock, agy, future runtimes) imports this crate
+//! - Every agent adapter (agy, agy, future runtimes) imports this crate
 //!   and speaks the same vocabulary.
 //! - The coordinator imports this crate to construct and parse messages.
 

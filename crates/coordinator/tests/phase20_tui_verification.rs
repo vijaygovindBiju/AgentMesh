@@ -7,8 +7,7 @@ use uuid::Uuid;
 
 use agent_protocol::AgentMessage;
 use coordinator::domain::{
-    AdapterType, Agent, AgentStatus, ApprovalStatus, HealthStatus,
-    Task, TaskStatus,
+    AdapterType, Agent, AgentStatus, ApprovalStatus, HealthStatus, Task, TaskStatus,
 };
 use coordinator::observability::CoordinatorEvent;
 use coordinator::tui::{
@@ -53,7 +52,13 @@ fn create_terminal(width: u16, height: u16) -> Terminal<TestBackend> {
     Terminal::new(backend).expect("Failed to initialize TestBackend terminal")
 }
 
-fn sample_task(id: Uuid, project_id: Uuid, short_id: &str, title: &str, status: TaskStatus) -> Task {
+fn sample_task(
+    id: Uuid,
+    project_id: Uuid,
+    short_id: &str,
+    title: &str,
+    status: TaskStatus,
+) -> Task {
     Task {
         id,
         project_id,
@@ -119,7 +124,7 @@ fn test_tier1_screen_nav_tab_cycling() {
 
 #[test]
 fn test_tier1_screen_nav_numeric_hotkeys() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
 
     state.handle_key(press_key(KeyCode::Char('2')));
     assert_eq!(state.current_screen, CurrentScreen::ProjectManagement);
@@ -140,7 +145,7 @@ fn test_tier1_screen_nav_numeric_hotkeys() {
 #[test]
 fn test_tier1_screen_nav_headers_render_correct_titles() {
     let mut terminal = create_terminal(120, 30);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
 
     // 1. Project Input Screen Title
     state.current_screen = CurrentScreen::ProjectInput;
@@ -165,7 +170,7 @@ fn test_tier1_screen_nav_headers_render_correct_titles() {
 
 #[test]
 fn test_tier1_screen_nav_preserves_state_across_switches() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.project_name_input = "State Preservation Project".to_string();
     state.selected_task_index = 2;
 
@@ -186,7 +191,7 @@ fn test_tier1_screen_nav_preserves_state_across_switches() {
 
 #[test]
 fn test_tier1_plan_review_approve_task_y() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task0_id = state.review_tasks[0].task.id;
 
     let action = state.handle_key(press_key(KeyCode::Char('y')));
@@ -201,7 +206,7 @@ fn test_tier1_plan_review_approve_task_y() {
 
 #[test]
 fn test_tier1_plan_review_reject_task_n() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task0_id = state.review_tasks[0].task.id;
 
     let action = state.handle_key(press_key(KeyCode::Char('n')));
@@ -215,7 +220,7 @@ fn test_tier1_plan_review_reject_task_n() {
 
 #[test]
 fn test_tier1_plan_review_inline_edit_description() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task0_id = state.review_tasks[0].task.id;
     let orig_desc = state.review_tasks[0].task.description.clone();
 
@@ -254,7 +259,7 @@ fn test_tier1_plan_review_inline_edit_description() {
 #[test]
 fn test_tier1_plan_review_details_toggle_enter() {
     let mut terminal = create_terminal(120, 30);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     assert!(state.show_details_pane);
 
     // Details Pane visible
@@ -273,7 +278,7 @@ fn test_tier1_plan_review_details_toggle_enter() {
 
 #[test]
 fn test_tier1_plan_review_acknowledge_overlap_a() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     assert_eq!(state.selected_task_index, 0);
     assert!(!state.review_tasks[0].overlap_warnings.is_empty());
     let warning_id = state.review_tasks[0].overlap_warnings[0].id;
@@ -286,12 +291,16 @@ fn test_tier1_plan_review_acknowledge_overlap_a() {
 
 #[test]
 fn test_tier1_plan_review_cancel_task_c() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task0_id = state.review_tasks[0].task.id;
 
     let action = state.handle_key(press_key(KeyCode::Char('c')));
     assert_eq!(action, Some(TuiAction::CancelTask { task_id: task0_id }));
-    assert!(state.status_message.as_ref().unwrap().contains("Cancelling task"));
+    assert!(state
+        .status_message
+        .as_ref()
+        .unwrap()
+        .contains("Cancelling task"));
 }
 
 // ----------------------------------------------------------------------------
@@ -301,7 +310,7 @@ fn test_tier1_plan_review_cancel_task_c() {
 #[test]
 fn test_tier1_dashboard_renders_active_project_summary() {
     let mut terminal = create_terminal(120, 35);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -313,7 +322,7 @@ fn test_tier1_dashboard_renders_active_project_summary() {
 #[test]
 fn test_tier1_dashboard_renders_fleet_agents_table() {
     let mut terminal = create_terminal(120, 35);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -327,7 +336,7 @@ fn test_tier1_dashboard_renders_fleet_agents_table() {
 #[test]
 fn test_tier1_dashboard_renders_agent_status_badges() {
     let mut terminal = create_terminal(120, 35);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -338,7 +347,7 @@ fn test_tier1_dashboard_renders_agent_status_badges() {
 #[test]
 fn test_tier1_dashboard_renders_tasks_overview_table() {
     let mut terminal = create_terminal(120, 35);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -351,7 +360,7 @@ fn test_tier1_dashboard_renders_tasks_overview_table() {
 #[test]
 fn test_tier1_dashboard_renders_task_metrics_kpi() {
     let mut terminal = create_terminal(120, 35);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -364,7 +373,7 @@ fn test_tier1_dashboard_renders_task_metrics_kpi() {
 #[test]
 fn test_tier1_dashboard_renders_overlap_warnings_list() {
     let mut terminal = create_terminal(120, 35);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -380,7 +389,7 @@ fn test_tier1_dashboard_renders_overlap_warnings_list() {
 #[test]
 fn test_tier1_diagnostics_renders_operational_kpi_bar() {
     let mut terminal = create_terminal(140, 35);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Diagnostics;
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -394,7 +403,7 @@ fn test_tier1_diagnostics_renders_operational_kpi_bar() {
 #[test]
 fn test_tier1_diagnostics_renders_fleet_health_table() {
     let mut terminal = create_terminal(160, 35);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Diagnostics;
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -407,7 +416,7 @@ fn test_tier1_diagnostics_renders_fleet_health_table() {
 #[test]
 fn test_tier1_diagnostics_renders_recent_events_stream() {
     let mut terminal = create_terminal(140, 35);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Diagnostics;
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -420,7 +429,7 @@ fn test_tier1_diagnostics_renders_recent_events_stream() {
 #[test]
 fn test_tier1_diagnostics_renders_task_timeline_drilldown() {
     let mut terminal = create_terminal(140, 35);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Diagnostics;
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -429,7 +438,7 @@ fn test_tier1_diagnostics_renders_task_timeline_drilldown() {
 
 #[test]
 fn test_tier1_diagnostics_event_stream_navigation() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Diagnostics;
     assert_eq!(state.selected_event_index, 0);
 
@@ -453,7 +462,7 @@ fn test_tier1_diagnostics_event_stream_navigation() {
 #[test]
 fn test_tier1_project_input_rendering_initial() {
     let mut terminal = create_terminal(100, 25);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::ProjectInput;
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -465,7 +474,7 @@ fn test_tier1_project_input_rendering_initial() {
 
 #[test]
 fn test_tier1_project_input_enter_edit_mode() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::ProjectInput;
     assert_eq!(state.input_mode, InputMode::Normal);
 
@@ -475,7 +484,7 @@ fn test_tier1_project_input_enter_edit_mode() {
 
 #[test]
 fn test_tier1_project_input_tab_field_focus() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.input_mode = InputMode::EnteringProject;
     assert_eq!(state.project_focus_field, 0); // Name field
 
@@ -488,7 +497,7 @@ fn test_tier1_project_input_tab_field_focus() {
 
 #[test]
 fn test_tier1_project_input_text_typing_and_backspace() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.input_mode = InputMode::EnteringProject;
 
     // Type into Name field
@@ -511,7 +520,7 @@ fn test_tier1_project_input_text_typing_and_backspace() {
 
 #[test]
 fn test_tier1_project_input_validation_empty_name() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.input_mode = InputMode::EnteringProject;
     state.project_name_input = "".to_string();
     state.project_desc_input = "Description without name".to_string();
@@ -519,12 +528,16 @@ fn test_tier1_project_input_validation_empty_name() {
     let action = state.handle_key(press_key(KeyCode::Enter));
     assert_eq!(action, None);
     assert_eq!(state.input_mode, InputMode::EnteringProject);
-    assert!(state.status_message.as_ref().unwrap().contains("Project name cannot be empty"));
+    assert!(state
+        .status_message
+        .as_ref()
+        .unwrap()
+        .contains("Project name cannot be empty"));
 }
 
 #[test]
 fn test_tier1_project_input_successful_submission() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.input_mode = InputMode::EnteringProject;
     state.project_name_input = "Cloud Modernization".to_string();
     state.project_desc_input = "Microservices transition plan".to_string();
@@ -538,7 +551,11 @@ fn test_tier1_project_input_successful_submission() {
             description: "Microservices transition plan".to_string(),
         })
     );
-    assert!(state.status_message.as_ref().unwrap().contains("Submitted project 'Cloud Modernization'"));
+    assert!(state
+        .status_message
+        .as_ref()
+        .unwrap()
+        .contains("Submitted project 'Cloud Modernization'"));
 }
 
 // ----------------------------------------------------------------------------
@@ -696,7 +713,7 @@ fn test_tier2_scrolling_window_keeps_selected_card_visible() {
 #[test]
 fn test_tier2_scrolling_window_navigate_top_to_bottom() {
     let mut terminal = create_terminal(80, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
 
     let proj_id = Uuid::new_v4();
@@ -720,7 +737,7 @@ fn test_tier2_scrolling_window_navigate_top_to_bottom() {
 
 #[test]
 fn test_tier2_scrolling_window_clamp_at_bottom() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let max_idx = state.review_tasks.len() - 1;
     state.selected_task_index = max_idx;
 
@@ -733,7 +750,7 @@ fn test_tier2_scrolling_window_clamp_at_bottom() {
 
 #[test]
 fn test_tier2_scrolling_window_clamp_at_top() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.selected_task_index = 0;
 
     // Up keypresses at 0 must clamp
@@ -746,7 +763,7 @@ fn test_tier2_scrolling_window_clamp_at_top() {
 #[test]
 fn test_tier2_scrolling_window_empty_tasks_list() {
     let mut terminal = create_terminal(80, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
     state.review_tasks.clear();
 
@@ -783,7 +800,7 @@ fn test_tier2_scrolling_window_single_task() {
 #[test]
 fn test_tier2_terminal_resize_standard_80x24() {
     let mut terminal = create_terminal(80, 24);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
 
     for screen in [
         CurrentScreen::ProjectInput,
@@ -792,14 +809,16 @@ fn test_tier2_terminal_resize_standard_80x24() {
         CurrentScreen::Diagnostics,
     ] {
         state.current_screen = screen;
-        terminal.draw(|f| render(f, &state)).expect("Render 80x24 standard");
+        terminal
+            .draw(|f| render(f, &state))
+            .expect("Render 80x24 standard");
     }
 }
 
 #[test]
 fn test_tier2_terminal_resize_compact_100x30() {
     let mut terminal = create_terminal(100, 30);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
 
     for screen in [
         CurrentScreen::ProjectInput,
@@ -808,14 +827,16 @@ fn test_tier2_terminal_resize_compact_100x30() {
         CurrentScreen::Diagnostics,
     ] {
         state.current_screen = screen;
-        terminal.draw(|f| render(f, &state)).expect("Render 100x30 compact");
+        terminal
+            .draw(|f| render(f, &state))
+            .expect("Render 100x30 compact");
     }
 }
 
 #[test]
 fn test_tier2_terminal_resize_wide_160x50() {
     let mut terminal = create_terminal(160, 50);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
 
     for screen in [
         CurrentScreen::ProjectInput,
@@ -824,14 +845,16 @@ fn test_tier2_terminal_resize_wide_160x50() {
         CurrentScreen::Diagnostics,
     ] {
         state.current_screen = screen;
-        terminal.draw(|f| render(f, &state)).expect("Render 160x50 wide");
+        terminal
+            .draw(|f| render(f, &state))
+            .expect("Render 160x50 wide");
     }
 }
 
 #[test]
 fn test_tier2_terminal_resize_minimal_70x20() {
     let mut terminal = create_terminal(70, 20);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
 
     for screen in [
         CurrentScreen::ProjectInput,
@@ -840,14 +863,16 @@ fn test_tier2_terminal_resize_minimal_70x20() {
         CurrentScreen::Diagnostics,
     ] {
         state.current_screen = screen;
-        terminal.draw(|f| render(f, &state)).expect("Render 70x20 minimal");
+        terminal
+            .draw(|f| render(f, &state))
+            .expect("Render 70x20 minimal");
     }
 }
 
 #[test]
 fn test_tier2_terminal_resize_narrow_60x18() {
     let mut terminal = create_terminal(60, 18);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
 
     for screen in [
         CurrentScreen::ProjectInput,
@@ -856,7 +881,9 @@ fn test_tier2_terminal_resize_narrow_60x18() {
         CurrentScreen::Diagnostics,
     ] {
         state.current_screen = screen;
-        terminal.draw(|f| render(f, &state)).expect("Render 60x18 boundary");
+        terminal
+            .draw(|f| render(f, &state))
+            .expect("Render 60x18 boundary");
     }
 }
 
@@ -866,7 +893,7 @@ fn test_tier2_terminal_resize_narrow_60x18() {
 
 #[test]
 fn test_tier2_editor_empty_buffer_navigation() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.input_mode = InputMode::EditingDescription;
     state.edit_buffer = String::new();
     state.edit_cursor = 0;
@@ -881,7 +908,7 @@ fn test_tier2_editor_empty_buffer_navigation() {
 
 #[test]
 fn test_tier2_editor_backspace_at_start() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.input_mode = InputMode::EditingDescription;
     state.edit_buffer = "Initial buffer".to_string();
     state.edit_cursor = 0;
@@ -894,7 +921,7 @@ fn test_tier2_editor_backspace_at_start() {
 
 #[test]
 fn test_tier2_editor_cursor_bounds_clamping() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.input_mode = InputMode::EditingDescription;
     state.edit_buffer = "ABC".to_string();
     state.edit_cursor = 3;
@@ -916,7 +943,7 @@ fn test_tier2_editor_cursor_bounds_clamping() {
 
 #[test]
 fn test_tier2_editor_esc_cancellation_restores_original() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let original_desc = state.review_tasks[0].task.description.clone();
 
     state.handle_key(press_key(KeyCode::Char('e')));
@@ -939,7 +966,7 @@ fn test_tier2_editor_esc_cancellation_restores_original() {
 
 #[test]
 fn test_tier2_editor_symbols_and_punctuation_integrity() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.input_mode = InputMode::EditingDescription;
     state.edit_buffer = String::new();
     state.edit_cursor = 0;
@@ -958,7 +985,7 @@ fn test_tier2_editor_symbols_and_punctuation_integrity() {
 #[test]
 fn test_tier2_event_stream_empty() {
     let mut terminal = create_terminal(120, 30);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Diagnostics;
     state.recent_events.clear();
 
@@ -968,7 +995,7 @@ fn test_tier2_event_stream_empty() {
 
 #[test]
 fn test_tier2_event_stream_truncation_to_max_capacity() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     for i in 1..=250 {
         let event = CoordinatorEvent {
             id: Uuid::new_v4(),
@@ -1019,7 +1046,7 @@ fn test_tier2_event_stream_scrolling_bounds() {
 #[test]
 fn test_tier2_event_stream_single_event() {
     let mut terminal = create_terminal(120, 30);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Diagnostics;
     state.recent_events = vec![CoordinatorEvent {
         id: Uuid::new_v4(),
@@ -1040,7 +1067,7 @@ fn test_tier2_event_stream_single_event() {
 #[test]
 fn test_tier2_event_stream_rapid_burst() {
     let mut terminal = create_terminal(120, 30);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Diagnostics;
 
     for i in 0..250 {
@@ -1057,7 +1084,9 @@ fn test_tier2_event_stream_rapid_burst() {
     }
 
     assert_eq!(state.recent_events.len(), 200);
-    terminal.draw(|f| render(f, &state)).expect("Render after rapid burst");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render after rapid burst");
 }
 
 // ----------------------------------------------------------------------------
@@ -1067,7 +1096,7 @@ fn test_tier2_event_stream_rapid_burst() {
 #[test]
 fn test_tier2_fleet_rendering_no_agents() {
     let mut terminal = create_terminal(140, 30);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.agents.clear();
 
     state.current_screen = CurrentScreen::Dashboard;
@@ -1082,15 +1111,45 @@ fn test_tier2_fleet_rendering_no_agents() {
 #[test]
 fn test_tier2_fleet_rendering_all_statuses() {
     let mut terminal = create_terminal(140, 35);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
     state.agents = vec![
-        Agent::mock(Uuid::new_v4(), "agent-idle", AdapterType::Mock, vec![], AgentStatus::Idle),
-        Agent::mock(Uuid::new_v4(), "agent-busy", AdapterType::Agy, vec![], AgentStatus::Busy),
-        Agent::mock(Uuid::new_v4(), "agent-blocked", AdapterType::Mock, vec![], AgentStatus::Blocked),
-        Agent::mock(Uuid::new_v4(), "agent-error", AdapterType::Agy, vec![], AgentStatus::Error),
-        Agent::mock(Uuid::new_v4(), "agent-offline", AdapterType::Mock, vec![], AgentStatus::Offline),
+        Agent::new_for_test(
+            Uuid::new_v4(),
+            "agent-idle",
+            AdapterType::Agy,
+            vec![],
+            AgentStatus::Idle,
+        ),
+        Agent::new_for_test(
+            Uuid::new_v4(),
+            "agent-busy",
+            AdapterType::Agy,
+            vec![],
+            AgentStatus::Busy,
+        ),
+        Agent::new_for_test(
+            Uuid::new_v4(),
+            "agent-blocked",
+            AdapterType::Agy,
+            vec![],
+            AgentStatus::Blocked,
+        ),
+        Agent::new_for_test(
+            Uuid::new_v4(),
+            "agent-error",
+            AdapterType::Agy,
+            vec![],
+            AgentStatus::Error,
+        ),
+        Agent::new_for_test(
+            Uuid::new_v4(),
+            "agent-offline",
+            AdapterType::Agy,
+            vec![],
+            AgentStatus::Offline,
+        ),
     ];
 
     terminal.draw(|f| render(f, &state)).unwrap();
@@ -1104,10 +1163,10 @@ fn test_tier2_fleet_rendering_all_statuses() {
 #[test]
 fn test_tier2_fleet_rendering_unhealthy_agents() {
     let mut terminal = create_terminal(140, 35);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Diagnostics;
 
-    let mut agent_unhealthy = Agent::mock(
+    let mut agent_unhealthy = Agent::new_for_test(
         Uuid::new_v4(),
         "agent-failing",
         AdapterType::Agy,
@@ -1131,27 +1190,33 @@ fn test_tier2_fleet_rendering_large_fleet() {
     state.current_screen = CurrentScreen::Dashboard;
 
     for i in 1..=30 {
-        state.agents.push(Agent::mock(
+        state.agents.push(Agent::new_for_test(
             Uuid::new_v4(),
             &format!("worker-node-{i:02}"),
             AdapterType::Agy,
             vec!["rust".to_string()],
-            if i % 2 == 0 { AgentStatus::Busy } else { AgentStatus::Idle },
+            if i % 2 == 0 {
+                AgentStatus::Busy
+            } else {
+                AgentStatus::Idle
+            },
         ));
     }
 
     assert_eq!(state.agents.len(), 30);
-    terminal.draw(|f| render(f, &state)).expect("Render 30 agents fleet");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render 30 agents fleet");
 }
 
 #[test]
 fn test_tier2_fleet_rendering_agent_with_long_strings() {
     let mut terminal = create_terminal(140, 35);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
     let long_name = "agent-supercalifragilisticexpialidocious-cluster-worker-99";
-    state.agents.push(Agent::mock(
+    state.agents.push(Agent::new_for_test(
         Uuid::new_v4(),
         long_name,
         AdapterType::Agy,
@@ -1159,7 +1224,9 @@ fn test_tier2_fleet_rendering_agent_with_long_strings() {
         AgentStatus::Idle,
     ));
 
-    terminal.draw(|f| render(f, &state)).expect("Render long agent strings");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render long agent strings");
     let content = buffer_to_string(&terminal);
     assert!(!content.is_empty());
 }
@@ -1174,7 +1241,7 @@ fn test_tier2_fleet_rendering_agent_with_long_strings() {
 
 #[test]
 fn test_tier3_lifecycle_projection_task_started() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task_id = state.review_tasks[0].task.id;
     let agent_id = state.agents[0].id;
 
@@ -1194,7 +1261,7 @@ fn test_tier3_lifecycle_projection_task_started() {
 
 #[test]
 fn test_tier3_lifecycle_projection_progress_update() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task_id = state.review_tasks[0].task.id;
     let agent_id = state.agents[0].id;
 
@@ -1208,12 +1275,16 @@ fn test_tier3_lifecycle_projection_progress_update() {
     state.apply_update(TuiUpdateEvent::AgentMessage(msg));
 
     assert!(state.status_message.as_ref().unwrap().contains("50%"));
-    assert!(state.status_message.as_ref().unwrap().contains("Compiling crates/coordinator"));
+    assert!(state
+        .status_message
+        .as_ref()
+        .unwrap()
+        .contains("Compiling crates/coordinator"));
 }
 
 #[test]
 fn test_tier3_lifecycle_projection_blocked() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task_id = state.review_tasks[0].task.id;
     let agent_id = state.agents[0].id;
 
@@ -1233,7 +1304,7 @@ fn test_tier3_lifecycle_projection_blocked() {
 
 #[test]
 fn test_tier3_lifecycle_projection_completed() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task_id = state.review_tasks[0].task.id;
     let agent_id = state.agents[0].id;
 
@@ -1253,7 +1324,7 @@ fn test_tier3_lifecycle_projection_completed() {
 
 #[test]
 fn test_tier3_lifecycle_projection_failed() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task_id = state.review_tasks[0].task.id;
     let agent_id = state.agents[0].id;
 
@@ -1277,18 +1348,24 @@ fn test_tier3_lifecycle_projection_failed() {
 
 #[test]
 fn test_tier3_overlap_acknowledgment_unblocks_approval() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task0_id = state.review_tasks[0].task.id;
     let warning_id = state.review_tasks[0].overlap_warnings[0].id;
 
     // Acknowledge overlap
     let ack_action = state.handle_key(press_key(KeyCode::Char('a')));
-    assert_eq!(ack_action, Some(TuiAction::AcknowledgeOverlap { warning_id }));
+    assert_eq!(
+        ack_action,
+        Some(TuiAction::AcknowledgeOverlap { warning_id })
+    );
     assert!(state.review_tasks[0].overlap_warnings[0].acknowledged);
 
     // Now approve task
     let approve_action = state.handle_key(press_key(KeyCode::Char('y')));
-    assert_eq!(approve_action, Some(TuiAction::ApproveTask { task_id: task0_id }));
+    assert_eq!(
+        approve_action,
+        Some(TuiAction::ApproveTask { task_id: task0_id })
+    );
     assert_eq!(state.review_tasks[0].task.status, TaskStatus::Approved);
 }
 
@@ -1299,7 +1376,7 @@ fn test_tier3_overlap_acknowledgment_unblocks_approval() {
 #[test]
 fn test_tier3_dag_view_toggle_and_rendering() {
     let mut terminal = create_terminal(120, 30);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
     assert!(!state.show_dag_view);
 
@@ -1326,7 +1403,7 @@ fn test_tier3_dag_view_toggle_and_rendering() {
 #[test]
 fn test_tier3_help_modal_toggle_and_rendering() {
     let mut terminal = create_terminal(120, 30);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     assert!(!state.show_help_modal);
 
     // Press [?] to toggle help modal
@@ -1351,7 +1428,7 @@ fn test_tier3_help_modal_toggle_and_rendering() {
 #[test]
 fn test_tier3_agent_capability_inspection_modal() {
     let mut terminal = create_terminal(120, 30);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
     assert!(!state.show_agent_inspector);
 
@@ -1399,13 +1476,34 @@ fn test_tier4_e2e_operator_review_flow() {
 
     // 3. Submits project
     let submit_action = state.handle_key(press_key(KeyCode::Enter));
-    assert!(matches!(submit_action, Some(TuiAction::SubmitProject { .. })));
+    assert!(matches!(
+        submit_action,
+        Some(TuiAction::SubmitProject { .. })
+    ));
 
     // 4. Coordinator proposes 3 tasks
     let proj_id = Uuid::new_v4();
-    let task1 = sample_task(Uuid::new_v4(), proj_id, "TASK-1", "Database schema init", TaskStatus::HumanReview);
-    let task2 = sample_task(Uuid::new_v4(), proj_id, "TASK-2", "NATS JetStream handler", TaskStatus::HumanReview);
-    let task3 = sample_task(Uuid::new_v4(), proj_id, "TASK-3", "TUI visual verification", TaskStatus::HumanReview);
+    let task1 = sample_task(
+        Uuid::new_v4(),
+        proj_id,
+        "TASK-1",
+        "Database schema init",
+        TaskStatus::HumanReview,
+    );
+    let task2 = sample_task(
+        Uuid::new_v4(),
+        proj_id,
+        "TASK-2",
+        "NATS JetStream handler",
+        TaskStatus::HumanReview,
+    );
+    let task3 = sample_task(
+        Uuid::new_v4(),
+        proj_id,
+        "TASK-3",
+        "TUI visual verification",
+        TaskStatus::HumanReview,
+    );
 
     state.review_tasks = vec![
         ReviewTaskState::new(task1.clone()),
@@ -1433,7 +1531,10 @@ fn test_tier4_e2e_operator_review_flow() {
     let edit2 = state.handle_key(press_key(KeyCode::Enter));
     assert!(matches!(edit2, Some(TuiAction::EditTaskDescription { .. })));
     assert_eq!(state.review_tasks[1].task.status, TaskStatus::Approved);
-    assert!(state.review_tasks[1].task.description.contains("(with idempotency guard)"));
+    assert!(state.review_tasks[1]
+        .task
+        .description
+        .contains("(with idempotency guard)"));
 
     // 8. Operator approves Task 3
     state.selected_task_index = 2;
@@ -1442,7 +1543,10 @@ fn test_tier4_e2e_operator_review_flow() {
     assert_eq!(state.review_tasks[2].task.status, TaskStatus::Approved);
 
     // All tasks now approved
-    assert!(state.review_tasks.iter().all(|rt| rt.task.status == TaskStatus::Approved));
+    assert!(state
+        .review_tasks
+        .iter()
+        .all(|rt| rt.task.status == TaskStatus::Approved));
 }
 
 // ----------------------------------------------------------------------------
@@ -1452,7 +1556,7 @@ fn test_tier4_e2e_operator_review_flow() {
 #[test]
 fn test_tier4_e2e_operator_monitoring_flow() {
     let mut terminal = create_terminal(140, 40);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task0_id = state.review_tasks[0].task.id;
     let agent0_id = state.agents[0].id;
     let task1_id = state.review_tasks[1].task.id;

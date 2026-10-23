@@ -6,7 +6,7 @@ AgentMesh is a high-reliability coordination and orchestration layer for multipl
 
 When multiple autonomous agents edit code simultaneously, coordination quickly collapses: agents overwrite each other's changes, violate architectural dependencies, duplicate effort, and fail to recover when a process crashes or loses network connectivity. AgentMesh solves this by treating the LLM strictly as an advisor, keeping the human operator in control, and using isolated Git worktrees and a transactional state machine to guarantee project-wide integrity.
 
-PostgreSQL 16 is the authoritative single source of truth; NATS 2.10 JetStream provides durable, transport-independent work distribution across local processes or physical machines; and the Agent Protocol keeps agent runtimes interchangeable (mock agents for deterministic testing or real Antigravity `agy` CLI instances).
+PostgreSQL 16 is the authoritative single source of truth; NATS 2.10 JetStream provides durable, transport-independent work distribution across local processes or physical machines; and the Agent Protocol keeps agent runtimes interchangeable (agy agents for deterministic testing or real Antigravity `agy` CLI instances).
 
 ---
 
@@ -30,7 +30,7 @@ PostgreSQL 16 is the authoritative single source of truth; NATS 2.10 JetStream p
 - [Configuration Reference](#configuration-reference)
 - [Quick Start](#quick-start)
 - [Running the Coordinator](#running-the-coordinator)
-- [Running Mock Agents](#running-mock-agents)
+- [Running Agy Agents](#running-agy-agents)
 - [Running AGY Agents](#running-agy-agents)
 - [Multi-Machine Fleet Setup](#multi-machine-fleet-setup)
 - [Real Repository Workflow](#real-repository-workflow)
@@ -82,7 +82,7 @@ Agent Capability Matching & Health Gating
      ↓
 NATS JetStream WorkQueue Delivery
      ↓
-Coding Agents (agent-mock / agent-agy)
+Coding Agents (agent-agy)
      ↓
 Isolated Git Worktrees (.agentmesh/worktrees/<short_id>)
      ↓
@@ -130,7 +130,7 @@ Automated Recovery (Stale Sweeper, Dependency Unblocking, Dynamic Replanning)
                      (WorkQueue & Event Streams)
                    ┌─────────────┴─────────────┐
                    ▼                           ▼
-              agent-mock                   agent-agy
+              agent-agy
            (Simulated Work)             (Subprocess Mgr)
                                                │
                                                ▼
@@ -144,13 +144,13 @@ Automated Recovery (Stale Sweeper, Dependency Unblocking, Dynamic Replanning)
 
 - **Ratatui TUI (`crates/coordinator/src/tui/`)**: Renders reactive terminal screens (Project Input, Plan Review, Fleet Dashboard, Diagnostics KPI). Emits user intent as `TuiAction`; contains zero database or network logic.
 - **Coordinator Core (`crates/coordinator/src/coordinator/`)**: Encodes the task lifecycle state machine (`Proposed → HumanReview → Approved → Assigned → Executing → Completed/Failed/Blocked/Cancelled`). Enforces the human approval gate, coordinates transactional assignment, and detects resource overlaps.
-- **AI Planning (`crates/coordinator/src/ai/`)**: Scans codebase structure via `RepositoryScanner`, prompts LLMs (`AnthropicProvider` or `MockLlmProvider`), validates DAG acyclicity via `PlanValidator`, matches agent capabilities, and generates corrective replans via `ReplanEngine`.
+- **AI Planning (`crates/coordinator/src/ai/`)**: Scans codebase structure via `RepositoryScanner`, prompts LLMs (`AnthropicProvider` or `AgyProvider`), validates DAG acyclicity via `PlanValidator`, matches agent capabilities, and generates corrective replans via `ReplanEngine`.
 - **Git Coordination (`crates/coordinator/src/git/`)**: Automatically provisions isolated worktrees at `.agentmesh/worktrees/<short_id>` on `agentmesh/<short_id>` branches upon task dispatch. Audits modified resources against planned paths, simulates 3-way mergeability via `git merge-tree`, records completion commits, and removes worktrees upon task completion or cancellation.
 - **Reliability Loops (`crates/coordinator/src/reliability/`)**: Runs crash recovery on coordinator boot, sweeps stale tasks from offline agents every 5 seconds, reconciles pending deliveries, and drives a 2-second periodic assignment loop for unblocked tasks.
 - **Security & Audit (`crates/coordinator/src/security/`, `crates/agent-protocol/src/security.rs`)**: Constant-time SHA-256 API key authentication (`am_ak_*`), role-based permissions (`AgentRole`), path glob boundaries (`PermissionBoundary`), impersonation prevention (`TaskAuthorizer`), and credential redaction (`SecretRedactor`).
 - **Observability (`crates/coordinator/src/observability/`)**: Records structured coordinator events, measures execution timelines, diagnoses merge failures with actionable remediation advice, and streams real-time metrics to the TUI.
 - **Agent Protocol (`crates/agent-protocol/`)**: Pure, transport-agnostic Serde definitions for all coordinator-agent messages. Zero network dependencies.
-- **Mock Agent (`crates/agent-mock/`)**: Protocol-compliant worker with configurable simulated execution delays; used for testing, demos, and CI.
+- **Agy Agent (`crates/agent-agy/`)**: Protocol-compliant worker with configurable simulated execution delays; used for testing, demos, and CI.
 - **AGY Adapter (`crates/agent-agy/`)**: Supervised runner that wraps the Antigravity `agy` CLI, parses real-time NDJSON event streams, dynamically resolves binary paths, handles process timeouts, redacts secrets, and gracefully surfaces upstream quota limits.
 
 ---
@@ -180,7 +180,7 @@ Git Worktree Preparation   (Runtime)   GitCoordinator creates isolated .agentmes
    ↓                                   worktree on agentmesh/<short-id> branch, populating TaskSpec.repo_path
 Transport Dispatch         (Runtime)   TaskAssignment published to coordinator.tasks.assign.{agent_id} on JetStream
    ↓
-Agent Execution            (Agent)     agent-mock simulates; agent-agy executes `agy` inside task worktree
+Agent Execution            (Agent)     agent-agy executes `agy` inside task worktree
    ↓
 Progress / Events          (Agent)     TaskStarted, ProgressUpdate, Blocked, Completed, Failed → agents.{id}.events
    ↓
@@ -235,8 +235,8 @@ Every technology listed below is actively used in the AgentMesh codebase:
 | **Coordinator TUI** | **Ratatui** (v0.28), **Crossterm** (v0.27) | Cross-platform immediate-mode terminal user interface with keyboard navigation and reactive layout. |
 | **Authoritative Storage** | **PostgreSQL 16**, **SQLx** (v0.8, runtime-tokio, tls-rustls, postgres) | Authoritative persistence with compile-time checked SQL queries, connection pooling, and embedded compile-time migrations (`sqlx::migrate!`). |
 | **Transport & Messaging** | **NATS 2.10**, **async-nats** (v0.35) | High-throughput messaging with **JetStream** (`TASK_ASSIGNMENTS` WorkQueue stream, `AGENT_EVENTS` Limits stream). |
-| **AI Planning** | `LlmProvider` trait, `MockLlmProvider`, `AnthropicProvider`, **Reqwest** (v0.12, rustls-tls, json) | Model-agnostic planning layer supporting deterministic offline mocks and Anthropic Claude REST API. |
-| **Agents & Protocol** | `agent-protocol`, `agent-mock`, `agent-agy`, **Serde** (v1, derive), **serde_json** | Shared protocol types, NDJSON stream parsing, simulated mock workloads, and `rand` (v0.8) simulation jitter. |
+| **AI Planning** | `LlmProvider` trait, `AgyProvider`, `AnthropicProvider`, **Reqwest** (v0.12, rustls-tls, json) | Model-agnostic planning layer supporting deterministic offline agys and Anthropic Claude REST API. |
+| **Agents & Protocol** | `agent-protocol`, `agent-agy`, **Serde** (v1, derive), **serde_json** | Shared protocol types, NDJSON stream parsing, real agy workloads. |
 | **Git Coordination** | **Git CLI** (`git worktree`, `git merge-tree`, `git rev-parse`, `git status`) | Workspace isolation, automatic task branch creation (`agentmesh/<short-id>`), 3-way conflict simulation, and clean cleanup. |
 | **Security & Auth** | **sha2** (v0.10), **hex** (v0.4), **subtle** (v2.5) | Constant-time SHA-256 API key hashing, `PermissionBoundary` path glob enforcement, and `SecretRedactor` regex sanitization. |
 | **Observability** | **tracing** (v0.1), **tracing-subscriber** (v0.3, env-filter, fmt), **chrono** (v0.4), **uuid** (v1, v4) | Structured contextual logging with trace spans, microsecond event timestamps, and UUID correlation IDs. |
@@ -262,7 +262,7 @@ Every technology listed below is actively used in the AgentMesh codebase:
 - Verify your local CLI with: `agy --version`.
 
 ### AI Provider Requirements (for Coordinator Planner)
-- By default, `AI_PROVIDER=mock` requires **no API keys** and runs completely offline.
+- By default, `AI_PROVIDER=agy` requires **no API keys** and runs completely offline.
 - When `AI_PROVIDER=anthropic`, an `ANTHROPIC_API_KEY` is required.
 
 ---
@@ -294,11 +294,10 @@ cd AgentMesh
 1. **Verifies Prerequisites**: Checks for `git`, `curl`, the Rust toolchain (`cargo` and `rustc`), and Docker with the Docker Compose v2 plugin (`docker compose`). If Rust is missing, it offers interactive installation via `rustup`.
 2. **Configures Environment**: Safely copies `.env.example` to `.env` if `.env` does not already exist, preserving your existing configuration if present.
 3. **Starts Infrastructure Services**: Automatically executes `docker compose up -d` to launch PostgreSQL 16 (`postgres:16-alpine`, port 5432) and NATS 2.10 (`nats:2.10-alpine`, client port 4222, monitoring port 8222) with JetStream enabled, and waits up to 15 seconds for healthy container status. (Can be bypassed with `--skip-docker`).
-4. **Compiles Workspace Binaries**: Executes `cargo build --workspace` (or `cargo build --release --workspace` if `--release` / `-r` is passed), building all three workspace binaries:
+4. **Compiles Workspace Binaries**: Executes `cargo build --workspace` (or `cargo build --release --workspace` if `--release` / `-r` is passed), building the two workspace binaries:
    - `coordinator` (`crates/coordinator/src/main.rs`)
-   - `agent-mock` (`crates/agent-mock/src/main.rs`)
    - `agent-agy` (`crates/agent-agy/src/main.rs`)
-5. **Installs Binaries (Optional)**: If `-p, --prefix <DIR>` or `--install` is provided, it installs the three compiled executables into the target directory (`install -m 0755`) and checks whether the directory is in your `PATH`.
+5. **Installs Binaries (Optional)**: If `-p, --prefix <DIR>` or `--install` is provided, it installs the two compiled executables into the target directory (`install -m 0755`) and checks whether the directory is in your `PATH`.
 
 #### `./install.sh` Flags and Options
 ```text
@@ -356,12 +355,12 @@ cargo build --release --workspace
 
 This compiles three executables in `target/release/`:
 - `target/release/coordinator` — Central coordinator TUI, state engine, and Git manager.
-- `target/release/agent-mock` — Simulated test worker agent.
+- `target/release/agent-agy` — Simulated test worker agent.
 - `target/release/agent-agy` — Antigravity CLI agent adapter.
 
 Copy them to your path if desired:
 ```bash
-cp target/release/coordinator target/release/agent-mock target/release/agent-agy ~/.local/bin/
+cp target/release/coordinator target/release/agent-agy ~/.local/bin/
 ```
 
 ---
@@ -382,7 +381,7 @@ When running a multi-machine fleet (coordinator on Machine A, remote agents on M
 ```text
 Machine A (Coordinator Host)                       Machine B (Worker Host)
 ─────────────────────────────                      ───────────────────────
-• Coordinator Runtime                              • agent-agy or agent-mock
+• Coordinator Runtime                              • agent-agy
 • PostgreSQL 16 (port 5432)                        • Antigravity agy CLI (installed separately)
 • NATS 2.10 (port 4222) ◄────── TCP Connection ────┘ (no Docker or PostgreSQL needed!)
 ```
@@ -409,9 +408,9 @@ git clone https://github.com/vijaygovindBiju/AgentMesh.git
 cd AgentMesh
 
 # Compile and install only the agent binaries into ~/.local/bin
-cargo build --release --bin agent-agy --bin agent-mock
+cargo build --release --bin agent-agy
 mkdir -p ~/.local/bin
-cp target/release/agent-agy target/release/agent-mock ~/.local/bin/
+cp target/release/agent-agy target/release/agent-agy ~/.local/bin/
 ```
 *(Or use `./install.sh --release --skip-docker -p ~/.local/bin`)*
 
@@ -476,7 +475,7 @@ docker compose down -v
 
 ## Configuration Reference
 
-The **coordinator** automatically loads environment variables from `.env` via `dotenvy`. **Agents (`agent-mock`, `agent-agy`) do not read `.env`**—they read variables from the process environment (export them or prepend them on the command line).
+The **coordinator** automatically loads environment variables from `.env` via `dotenvy`. **The `agent-agy` agent do not read `.env`**—they read variables from the process environment (export them or prepend them on the command line).
 
 Copy the template:
 ```bash
@@ -491,14 +490,13 @@ cp .env.example .env
 | `POSTGRES_PASSWORD` | Yes | `agentmesh_dev` | Docker Compose | Password for the PostgreSQL container (must match `DATABASE_URL`). |
 | `NATS_URL` | Yes | `nats://localhost:4222` | Coordinator, Agents | NATS broker URL. Remote agents replace `localhost` with the host IP. |
 | `NATS_AUTH_TOKEN` | Yes | `agentmesh_dev_token` | Coordinator, Agents | Token required to connect to NATS (`-auth` flag in Compose). |
-| `AI_PROVIDER` | No | `mock` | Coordinator | AI planner provider: `mock` (built-in offline) or `anthropic` (Claude). |
+| `AI_PROVIDER` | No | `agy` | Coordinator | AI planner provider: `agy` (authenticated CLI) or `anthropic` (Claude). |
 | `AI_MODEL` | No | `claude-3-5-sonnet-20241022` | Coordinator | Model name used when `AI_PROVIDER=anthropic`. |
 | `ANTHROPIC_API_KEY` | Conditional | *(empty)* | Coordinator | Required if `AI_PROVIDER=anthropic`. Never logged or stored in DB. |
 | `RUST_LOG` | No | `agentmesh=debug,coordinator=debug,info` | All Binaries | Tracing filter directive. Coordinator logs to stderr. |
-| `MOCK_AGENT_OWNER` | No | `MockDev` | `agent-mock` | Human owner label displayed in the fleet dashboard. |
-| `MOCK_AGENT_ID` | No | *(generated UUID)* | `agent-mock` | Fixed UUID. Must be a valid UUIDv4 string if provided. |
-| `MOCK_AGENT_API_KEY` | No | `agentmesh_mock_key` | `agent-mock` | API key presented during registration (`am_ak_*` supported). |
-| `MOCK_TASK_DELAY_MS` | No | `1000` | `agent-mock` | Simulated execution delay per progress stage in milliseconds. |
+| `AGY_AGENT_OWNER` | No | `AgyDev` | `agent-agy` | Human owner label displayed in the fleet dashboard. |
+| `AGY_AGENT_ID` | No | *(generated UUID)* | `agent-agy` | Fixed UUID. Must be a valid UUIDv4 string if provided. |
+| `AGY_AGENT_API_KEY` | No | `agentmesh_agy_key` | `agent-agy` | API key presented during registration (`am_ak_*` supported). |
 | `AGY_AGENT_OWNER` | No | `AgyDev` | `agent-agy` | Human owner label displayed in the fleet dashboard. |
 | `AGY_AGENT_ID` | No | *(generated UUID)* | `agent-agy` | Fixed UUID. Keeps registration row stable across restarts. |
 | `AGY_AGENT_API_KEY` | No | `agentmesh_agy_key` | `agent-agy` | API key presented during registration (`am_ak_*` format recommended). |
@@ -525,13 +523,13 @@ cargo run --bin coordinator
 ```
 *(On boot, the coordinator connects to PostgreSQL, runs SQL migrations automatically, creates JetStream streams, performs startup recovery, and launches background workers).*
 
-### 3. Start Two Mock Workers (in separate terminals)
+### 3. Start Two Agy Workers (in separate terminals)
 ```bash
 # Terminal 2: Alice
-MOCK_AGENT_OWNER="Alice (Backend Lead)" cargo run --bin agent-mock
+AGY_AGENT_OWNER="Alice (Backend Lead)" cargo run --bin agent-agy
 
 # Terminal 3: Bob
-MOCK_AGENT_OWNER="Bob (Infra Lead)" cargo run --bin agent-mock
+AGY_AGENT_OWNER="Bob (Infra Lead)" cargo run --bin agent-agy
 ```
 
 ### 4. Create and Approve a Project
@@ -580,22 +578,7 @@ cargo run --bin coordinator > /dev/null 2>&1
 
 ---
 
-## Running Mock Agents
-
-`agent-mock` simulates execution without invoking third-party LLMs or external CLI tools:
-
-```bash
-# Start a basic mock worker
-cargo run --bin agent-mock
-
-# Start with custom owner and execution speed
-MOCK_AGENT_OWNER="Backend Worker" MOCK_TASK_DELAY_MS=500 cargo run --bin agent-mock
-
-# Pin a persistent agent ID across restarts
-MOCK_AGENT_ID="11111111-1111-4111-8111-111111111111" cargo run --bin agent-mock
-```
-
----
+## Running Agy Agents
 
 ## Running AGY Agents
 
@@ -639,7 +622,7 @@ Run the coordinator on Machine A and remote agents on Machine B (via LAN, WireGu
 ```text
      Machine A (Coordinator Host)                       Machine B (Worker Host)
 ┌───────────────────────────────────────┐       ┌───────────────────────────────────────┐
-│ Coordinator Runtime                   │       │ agent-agy or agent-mock               │
+│ Coordinator Runtime                   │       │ agent-agy               │
 │ PostgreSQL 16 (:5432, local only)     │       │ agy CLI                               │
 │ NATS 2.10 (:4222, exposed to network) │◄──────┼─ NATS TCP Connection                  │
 └───────────────────────────────────────┘       └───────────────────────────────────────┘
@@ -669,7 +652,7 @@ Run the coordinator on Machine A and remote agents on Machine B (via LAN, WireGu
    ```
 
 ### Step 2: Configure Machine B (Remote Worker)
-1. On Machine B, install `agent-agy` (or `agent-mock`):
+1. On Machine B, install `agent-agy`:
    ```bash
    git clone https://github.com/vijaygovindBiju/AgentMesh.git
    cd AgentMesh
@@ -860,15 +843,15 @@ test result: ok. 207 passed; 0 failed; 0 ignored
 | Crate / Integration Suite | Tests | Purpose & Verification Scope |
 | :--- | :---: | :--- |
 | **`agent-protocol`** | 13 | Serde serialization round-trips, message schemas, capability models, health state transitions, glob matching, and secret redaction. |
-| **`agent-mock`** | 4 | Registration flow, simulated delay handling, heartbeat loop, and JetStream message consumption. |
+| **`agent-agy`** | 4 | Registration flow, simulated delay handling, heartbeat loop, and JetStream message consumption. |
 | **`agent-agy`** | 10 | NDJSON stream parser, subprocess lifecycle supervision, timeout management, dynamic binary lookup, and error propagation. |
 | **`coordinator (lib)`** | 101 | Unit tests for domain models, state machine transitions, SQL repositories, DAG acyclicity validation, capability matching, and overlap detection. |
-| **`phase2_integration`** | 3 | JetStream durable consumers, redelivery on NAK, and mock lifecycle event delivery. |
+| **`phase2_integration`** | 3 | JetStream durable consumers, redelivery on NAK, and agy lifecycle event delivery. |
 | **`phase3_planning`** | 3 | AI planning service workflows, provider error handling, and DAG cycle rejection. |
 | **`phase4_tui`** | 2 | Headless TUI rendering across all modes, keybindings, and action emission. |
 | **`phase5_coordinator`** | 6 | Approval gating, dependency tracking, concurrency locking, and human reassignment. |
 | **`phase6_dashboard_overlap`** | 5 | Resource overlap detection, warning banners, and real-time TUI dashboard event forwarding. |
-| **`phase7_e2e_demo`** | 1 | Complete end-to-end integration demo with multiple mock agents. |
+| **`phase7_e2e_demo`** | 1 | Complete end-to-end integration demo with multiple agy agents. |
 | **`phase8_agy_integration`** | 6 | AGY adapter registration, execution lifecycle, timeout/crash recovery, parallel execution, and quota handling. |
 | **`phase9_git_integration`** | 6 | Git repository discovery, worktree isolation, unexpected change detection, 3-way merge conflict detection, and parallel JetStream workflows. |
 | **`phase10_intelligent_planning`** | 6 | Repository scanner, architecture discovery, complexity estimation, and dynamic replanning context generation. |
@@ -939,7 +922,7 @@ AgentMesh/
 └── crates/
     ├── agent-protocol/              # Shared data types, message enums, security & capabilities
     │   └── src/
-    ├── agent-mock/                  # Simulated test agent binary
+    ├── agent-agy/                  # Simulated test agent binary
     │   └── src/
     ├── agent-agy/                   # Antigravity agy CLI adapter library & binary
     │   └── src/

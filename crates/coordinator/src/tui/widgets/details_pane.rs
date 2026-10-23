@@ -111,11 +111,11 @@ impl DetailsPaneWidget {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),       // Metadata: 3 lines
-                Constraint::Min(4),          // Description: absorbs remaining vertical space (Min 4)
+                Constraint::Length(3),        // Metadata: 3 lines
+                Constraint::Min(4), // Description: absorbs remaining vertical space (Min 4)
                 Constraint::Length(dep_len), // Dependencies: 3 if empty, else (dep_count + 2).min(8)
                 Constraint::Length(res_len), // Affected Resources: 3 if empty, else (res_count + 2).min(8)
-                Constraint::Length(warn_len),// Overlap Warnings: 3 if empty, else (warn_count + 2).min(6)
+                Constraint::Length(warn_len), // Overlap Warnings: 3 if empty, else (warn_count + 2).min(6)
             ])
             .split(inner_area);
 
@@ -223,10 +223,7 @@ impl DetailsPaneWidget {
                     };
 
                     Line::from(vec![
-                        Span::styled(
-                            "  ↳ Depends on: ",
-                            Style::default().fg(Color::DarkGray),
-                        ),
+                        Span::styled("  ↳ Depends on: ", Style::default().fg(Color::DarkGray)),
                         Span::styled(
                             target_id_str,
                             Style::default()
@@ -398,7 +395,9 @@ mod tests {
     #[test]
     fn test_adaptive_block_title_breakpoints() {
         let mut state = AppState::new();
-        state.review_tasks.push(sample_review_task("T-1", "Test Task"));
+        state
+            .review_tasks
+            .push(sample_review_task("T-1", "Test Task"));
 
         // Unfocused - Width >= 48: Full title
         let backend = TestBackend::new(60, 20);
@@ -462,7 +461,9 @@ mod tests {
     #[test]
     fn test_focus_highlighting_and_badge() {
         let mut state = AppState::new();
-        state.review_tasks.push(sample_review_task("T-1", "Test Task"));
+        state
+            .review_tasks
+            .push(sample_review_task("T-1", "Test Task"));
 
         // When unfocused (TaskList)
         state.plan_review_focus = PlanReviewFocus::TaskList;
@@ -565,4 +566,3 @@ mod tests {
         assert!(rendered_5.contains("Desc paragraph item 06"));
     }
 }
-

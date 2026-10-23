@@ -119,11 +119,11 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
 
         // 1. Render ProjectInput screen
-        let mut state = AppState::new();
+        let mut state = AppState::new().with_test_data();
         terminal.draw(|f| render(f, &state)).unwrap();
 
-        // 2. Render PlanReview screen with mock tasks
-        state = state.with_mock_data();
+        // 2. Render PlanReview screen with agy tasks
+        state = AppState::new().with_test_data();
         assert_eq!(state.current_screen, CurrentScreen::PlanReview);
         terminal.draw(|f| render(f, &state)).unwrap();
 

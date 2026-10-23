@@ -35,8 +35,8 @@ coordinator.agents.heartbeat.{agent_id}
 | Retention | WorkQueue |
 | Storage | File (persisted in Docker volume) |
 | Max Deliver | 5 (set on the agent consumers) |
-| Ack Wait | `agent-mock`: 60 s; `agent-agy`: 600 s (real coding tasks are long-running) |
-| Consumer | Per-agent durable pull consumer: `agent-{agent_id_simple}` (mock) / `agent-agy-{agent_id_simple}` (agy), filtered to `coordinator.tasks.assign.{agent_id}` |
+| Ack Wait | `agent-agy`: 60 s; `agent-agy`: 600 s (real coding tasks are long-running) |
+| Consumer | Per-agent durable pull consumer: `agent-{agent_id_simple}` (agy) / `agent-agy-{agent_id_simple}` (agy), filtered to `coordinator.tasks.assign.{agent_id}` |
 
 Independently of JetStream redelivery, the coordinator records a `TaskDelivery` row per attempt with `expires_at = now + 60 s`; a delivery that is not acknowledged by `TaskStarted` before then is treated as expired by the stale sweeper.
 
@@ -59,12 +59,12 @@ All messages are JSON-encoded.
 ### Agent → Coordinator (`AgentMessage`)
 
 ```json
-// Registration (adapter_type is matched case-insensitively: "mock" | "agy")
+// Registration (adapter_type is matched case-insensitively: "agy" | "agy")
 {
   "type": "Register",
   "agent_id": "uuid",
   "human_owner": "Alice",
-  "adapter_type": "Mock",
+  "adapter_type": "Agy",
   "capabilities": ["rust", "python"],
   "profile": {                       // optional AgentCapabilities (v1.0)
     "runtime":   { "os": "linux", "arch": "x86_64", "adapter_type": "Agy", "cpu_count": 8 },
@@ -146,7 +146,7 @@ All messages are JSON-encoded.
 }
 ```
 
-Note: the shipped `agent-mock` and `agent-agy` binaries always heartbeat with `status: "Idle"` and no `health` block; the coordinator derives `Busy`/`Idle` from `TaskStarted`/`Completed` and latency from the heartbeat timestamp. Agents with no heartbeat for 30 s are marked `offline`.
+Note: the shipped `agent-agy` and `agent-agy` binaries always heartbeat with `status: "Idle"` and no `health` block; the coordinator derives `Busy`/`Idle` from `TaskStarted`/`Completed` and latency from the heartbeat timestamp. Agents with no heartbeat for 30 s are marked `offline`.
 
 ### Coordinator → Agent (`CoordinatorMessage`)
 
@@ -206,7 +206,7 @@ Agent publishes to coordinator.agents.register (request-reply)
     ▼
 Coordinator (RegistrationHandler::process_registration)
     │
-    ├── adapter_type not "mock"/"agy"  → { status: "error", error: "Unsupported adapter type" }
+    ├── adapter_type not "agy"/"agy"  → { status: "error", error: "Unsupported adapter type" }
     │
     ├── agent_id unknown (first registration)
     │     → creates the agents row: role "worker", max_concurrency 1, default PermissionBoundary
@@ -240,4 +240,4 @@ Recommended agent behaviour (contract):
 3. If yes: ACK the message immediately, do not reprocess
 4. If no: begin processing, record the key, then report `TaskStarted`
 
-**Current implementation status:** the shipped `agent-mock` and `agent-agy` adapters transport-ACK on receipt and echo the key in `TaskStarted`, but do not keep a local set of processed keys. Duplicate protection is therefore provided on the coordinator side: `EventDeduplicator` (in-memory TTL keyed by agent/task/event type/percent) drops repeated lifecycle events, and `TaskAuthorizer` rejects events from any agent other than the task's assignee. Redelivery of an already-completed assignment would cause a mock/agy agent to re-run the task; the resulting duplicate `TaskStarted`/`Completed` events are dropped, but the work itself is repeated.
+**Current implementation status:** the shipped `agent-agy` and `agent-agy` adapters transport-ACK on receipt and echo the key in `TaskStarted`, but do not keep a local set of processed keys. Duplicate protection is therefore provided on the coordinator side: `EventDeduplicator` (in-memory TTL keyed by agent/task/event type/percent) drops repeated lifecycle events, and `TaskAuthorizer` rejects events from any agent other than the task's assignee. Redelivery of an already-completed assignment would cause a agy/agy agent to re-run the task; the resulting duplicate `TaskStarted`/`Completed` events are dropped, but the work itself is repeated.

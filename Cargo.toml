@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "crates/coordinator",
     "crates/agent-protocol",
-    "crates/agent-mock",
     "crates/agent-agy",
 ]
 

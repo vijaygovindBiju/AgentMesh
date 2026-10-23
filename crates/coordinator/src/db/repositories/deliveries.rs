@@ -424,7 +424,7 @@ mod tests {
             &NewAgent {
                 human_owner: "Bob".to_string(),
                 api_key_hash: "hash1".to_string(),
-                adapter_type: AdapterType::Mock,
+                adapter_type: AdapterType::Agy,
                 capabilities: vec!["rust".to_string()],
                 nats_subject: "agents.bob.events".to_string(),
                 ..Default::default()
@@ -438,7 +438,7 @@ mod tests {
             &NewAgent {
                 human_owner: "Charlie".to_string(),
                 api_key_hash: "hash2".to_string(),
-                adapter_type: AdapterType::Mock,
+                adapter_type: AdapterType::Agy,
                 capabilities: vec!["rust".to_string()],
                 nats_subject: "agents.charlie.events".to_string(),
                 ..Default::default()
@@ -571,7 +571,7 @@ mod tests {
             &NewAgent {
                 human_owner: "AgentA-Owner".to_string(),
                 api_key_hash: "hash_a".to_string(),
-                adapter_type: AdapterType::Mock,
+                adapter_type: AdapterType::Agy,
                 capabilities: vec!["rust".to_string()],
                 nats_subject: "agents.a.events".to_string(),
                 ..Default::default()
@@ -585,7 +585,7 @@ mod tests {
             &NewAgent {
                 human_owner: "AgentB-Owner".to_string(),
                 api_key_hash: "hash_b".to_string(),
-                adapter_type: AdapterType::Mock,
+                adapter_type: AdapterType::Agy,
                 capabilities: vec!["rust".to_string()],
                 nats_subject: "agents.b.events".to_string(),
                 ..Default::default()

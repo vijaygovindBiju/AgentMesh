@@ -1,6 +1,6 @@
 # AgentMesh — Multi-Machine Deployment
 
-This guide covers running the coordinator on one machine and agents (`agent-mock` or `agent-agy`) on others. It documents what the v1.0 binaries actually support. For the security caveats that apply to any deployment beyond a trusted LAN, see the "Security" section of the [README](../../README.md#15-security).
+This guide covers running the coordinator on one machine and agents (`agent-agy` or `agent-agy`) on others. It documents what the v1.0 binaries actually support. For the security caveats that apply to any deployment beyond a trusted LAN, see the "Security" section of the [README](../../README.md#15-security).
 
 ---
 
@@ -14,10 +14,10 @@ This guide covers running the coordinator on one machine and agents (`agent-mock
         ▼                                   ▼
    COORDINATOR HOST                    AGENT HOST(S)
    ────────────────                    ─────────────
-   coordinator (TUI or headless)       agent-agy  or  agent-mock
+   coordinator (TUI or headless)       agent-agy  or  agent-agy
    PostgreSQL  :5432  (local only)       NATS_URL=nats://<coordinator-ip>:4222
    NATS        :4222  (exposed)          NATS_AUTH_TOKEN=<shared token>
-               :8222  (local only)       AGY_AGENT_API_KEY / MOCK_AGENT_API_KEY
+               :8222  (local only)       AGY_AGENT_API_KEY / AGY_AGENT_API_KEY
    optional local agents
 ```
 
@@ -80,7 +80,7 @@ Build only the agent binary (a full clone is required for the workspace):
 ```bash
 git clone https://github.com/vijaygovindBiju/AgentMesh.git
 cd AgentMesh
-cargo build --release --bin agent-agy      # or --bin agent-mock
+cargo build --release --bin agent-agy      # or --bin agent-agy
 ```
 
 Agents read **only the process environment** (they do not load `.env`).
@@ -102,11 +102,11 @@ AGY_TIMEOUT_SECS=900 \
 - Record `AGY_AGENT_ID` and `AGY_AGENT_API_KEY`: the same pair is required to re-register after a restart. A different key for a known ID is rejected.
 - Use a key of the form `am_ak_<64 hex>` if you want it stored hashed (`ApiKeyManager::generate_key` produces this format; `openssl rand -hex 32` also works: `AGY_AGENT_API_KEY="am_ak_$(openssl rand -hex 32)"`).
 
-### agent-mock
+### agent-agy
 
 ```bash
 NATS_URL="nats://192.168.1.50:4222" NATS_AUTH_TOKEN="<shared token>" \
-MOCK_AGENT_OWNER="Remote Mock" ./target/release/agent-mock
+AGY_AGENT_OWNER="Remote Agy" ./target/release/agent-agy
 ```
 
 ### Expected log lines
@@ -164,7 +164,7 @@ Git context: when a project has a Git repository, `AssignmentService` automatica
 | WireGuard / Tailscale | Yes | Use the VPN IP in `NATS_URL`. Traffic is encrypted by the VPN; NATS itself is still plain TCP + token. Recommended for anything off-LAN. |
 | SSH tunnel | Yes | `ssh -N -L 4222:localhost:4222 user@coordinator` on the agent host, then `NATS_URL=nats://localhost:4222`. |
 | Public internet, port-forwarded | Not recommended | The shipped stack has no TLS and a static shared token; registration of new agent IDs is open to anyone with the token. |
-| NATS TLS / mTLS / user-password | Library only | `NatsSecurityConfig` + `connect_secure` exist in `crates/coordinator/src/messaging/client.rs`, but `coordinator`, `agent-mock` and `agent-agy` binaries only read `NATS_URL` and `NATS_AUTH_TOKEN`. Using TLS requires code changes plus a TLS-configured NATS server. |
+| NATS TLS / mTLS / user-password | Library only | `NatsSecurityConfig` + `connect_secure` exist in `crates/coordinator/src/messaging/client.rs`, but `coordinator`, `agent-agy` and `agent-agy` binaries only read `NATS_URL` and `NATS_AUTH_TOKEN`. Using TLS requires code changes plus a TLS-configured NATS server. |
 
 ---
 

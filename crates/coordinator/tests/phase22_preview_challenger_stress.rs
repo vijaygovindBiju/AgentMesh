@@ -66,7 +66,10 @@ fn make_task(
         short_id: short_id.to_string(),
         title: title.to_string(),
         description: description.to_string(),
-        affected_resources: json!(["crates/coordinator/src/main.rs", "crates/coordinator/src/tui"]),
+        affected_resources: json!([
+            "crates/coordinator/src/main.rs",
+            "crates/coordinator/src/tui"
+        ]),
         status,
         assigned_agent_id: None,
         estimated_size: Some("M".to_string()),
@@ -256,11 +259,20 @@ fn test_harness1_zero_border_overlap_across_all_sizes() {
 
         // If terminal is at least operational (48x10), verify layout splits
         let (left_c, right_c) = if w < 90 {
-            (ratatui::layout::Constraint::Percentage(46), ratatui::layout::Constraint::Percentage(54))
+            (
+                ratatui::layout::Constraint::Percentage(46),
+                ratatui::layout::Constraint::Percentage(54),
+            )
         } else if w < 140 {
-            (ratatui::layout::Constraint::Percentage(44), ratatui::layout::Constraint::Percentage(56))
+            (
+                ratatui::layout::Constraint::Percentage(44),
+                ratatui::layout::Constraint::Percentage(56),
+            )
         } else {
-            (ratatui::layout::Constraint::Length(64), ratatui::layout::Constraint::Min(76))
+            (
+                ratatui::layout::Constraint::Length(64),
+                ratatui::layout::Constraint::Min(76),
+            )
         };
 
         let header_h = if w < 90 { 2 } else { 3 };
@@ -285,7 +297,8 @@ fn test_harness1_zero_border_overlap_across_all_sizes() {
             assert!(
                 chunks[0].x + chunks[0].width <= chunks[1].x,
                 "Horizontal chunks overlap at ({w}, {h}): left={:?}, right={:?}",
-                chunks[0], chunks[1]
+                chunks[0],
+                chunks[1]
             );
 
             // The right edge of left column must not exceed the left edge of right column
@@ -407,7 +420,9 @@ fn test_harness1_no_clipped_footer_hints_across_all_sizes() {
         } else {
             // Compact (<90 cols): verify compact hints are present
             assert!(
-                rendered.contains("[Ctrl+A]") || rendered.contains("Select All") || rendered.contains("[Y]"),
+                rendered.contains("[Ctrl+A]")
+                    || rendered.contains("Select All")
+                    || rendered.contains("[Y]"),
                 "Width {w}: Expected compact action hints in compact footer"
             );
         }
@@ -462,7 +477,9 @@ fn test_harness2_rapid_keyboard_burst_1000_keypresses_invariants() {
     // Simple deterministic LCG pseudo-random generator
     let mut seed: u64 = 0xDEADBEEF_CAFE1234;
     let lcg = |s: &mut u64| -> usize {
-        *s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        *s = s
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         (*s >> 32) as usize
     };
 
@@ -588,7 +605,9 @@ fn test_harness2_rapid_burst_on_empty_plan_zero_panics() {
 
     let mut seed: u64 = 0xFEEDFACE_11223344;
     for _ in 0..500 {
-        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let key = key_pool[(seed >> 32) as usize % key_pool.len()];
         let _ = state.handle_key(key);
     }
@@ -666,7 +685,10 @@ fn test_harness3_extreme_50_line_description_and_vertical_scrolling() {
     let proj_id = Uuid::new_v4();
     let mut desc_lines = Vec::new();
     for i in 1..=50 {
-        desc_lines.push(format!("Step {:02}: Detailed instructions for phase execution.", i));
+        desc_lines.push(format!(
+            "Step {:02}: Detailed instructions for phase execution.",
+            i
+        ));
     }
     let long_description = desc_lines.join("\n");
 
@@ -874,7 +896,6 @@ fn test_harness3_extreme_100_tasks_plan_navigation_and_selection() {
     assert_eq!(approved_count, 50);
 }
 
-
 // ============================================================================
 // HARNESS 4: Extreme Dimensions & Viewport Boundaries (Gate 2 Challenger)
 // Dimensions: 0x0, 1x1, 2x2, 10x5, 47x9, 48x10, 80x24, 89x24, 90x24,
@@ -944,17 +965,27 @@ fn test_harness4_extreme_degenerate_and_boundary_resolutions_zero_panics() {
 #[test]
 fn test_harness4_pane_alignment_across_all_breakpoints() {
     let test_widths = [
-        48u16, 60, 70, 80, 85, 89, 90, 95, 100, 119, 120, 139, 140, 160, 180, 200, 240, 250, 300, 500
+        48u16, 60, 70, 80, 85, 89, 90, 95, 100, 119, 120, 139, 140, 160, 180, 200, 240, 250, 300,
+        500,
     ];
 
     for &w in &test_widths {
         let h = 35u16;
         let (left_c, right_c) = if w < 90 {
-            (ratatui::layout::Constraint::Percentage(46), ratatui::layout::Constraint::Percentage(54))
+            (
+                ratatui::layout::Constraint::Percentage(46),
+                ratatui::layout::Constraint::Percentage(54),
+            )
         } else if w < 140 {
-            (ratatui::layout::Constraint::Percentage(44), ratatui::layout::Constraint::Percentage(56))
+            (
+                ratatui::layout::Constraint::Percentage(44),
+                ratatui::layout::Constraint::Percentage(56),
+            )
         } else {
-            (ratatui::layout::Constraint::Length(64), ratatui::layout::Constraint::Min(76))
+            (
+                ratatui::layout::Constraint::Length(64),
+                ratatui::layout::Constraint::Min(76),
+            )
         };
 
         let header_h = if w < 90 { 2 } else { 3 };
@@ -972,8 +1003,14 @@ fn test_harness4_pane_alignment_across_all_breakpoints() {
             .constraints([left_c, right_c])
             .split(body_rect);
 
-        assert_eq!(chunks[0].y, chunks[1].y, "Width {w}: Mismatched vertical alignment");
-        assert_eq!(chunks[0].height, chunks[1].height, "Width {w}: Mismatched heights");
+        assert_eq!(
+            chunks[0].y, chunks[1].y,
+            "Width {w}: Mismatched vertical alignment"
+        );
+        assert_eq!(
+            chunks[0].height, chunks[1].height,
+            "Width {w}: Mismatched heights"
+        );
         assert!(
             chunks[0].right() <= chunks[1].left(),
             "Width {w}: Left pane overlaps right pane! left_right={}, right_left={}",
@@ -1008,7 +1045,10 @@ fn test_harness4_empirical_findings_reproducers() {
             rendered_90.contains("6:Set"),
             "Remediation verification confirms Tab 6 is unclipped and visible at 90 cols"
         );
-        println!("[Remediation 1 Verified]: At 90 cols, Tab 6 is present in header:\n{}", rendered_90.lines().nth(1).unwrap_or(""));
+        println!(
+            "[Remediation 1 Verified]: At 90 cols, Tab 6 is present in header:\n{}",
+            rendered_90.lines().nth(1).unwrap_or("")
+        );
     }
 
     // ------------------------------------------------------------------------
@@ -1091,4 +1131,3 @@ fn test_harness4_empirical_findings_reproducers() {
         println!("[Remediation 4 Verified]: At 60 cols, Inspector focus title fits cleanly:\n{title_line_60}");
     }
 }
-

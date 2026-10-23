@@ -223,12 +223,11 @@ DATABASE_URL=postgres://agentmesh:agentmesh_dev@localhost:5432/agentmesh
 POSTGRES_PASSWORD=agentmesh_dev
 NATS_URL=nats://localhost:4222
 NATS_AUTH_TOKEN=agentmesh_dev_token
-AI_PROVIDER=mock
+AI_PROVIDER=agy
 AI_MODEL=claude-3-5-sonnet-20241022
 RUST_LOG=agentmesh=debug,coordinator=debug,info
-MOCK_TASK_DELAY_MS=1000
-MOCK_AGENT_OWNER=MockDev
-MOCK_AGENT_API_KEY=agentmesh_mock_key
+AGY_AGENT_OWNER=AgyDev
+AGY_AGENT_API_KEY=agentmesh_agy_key
 EOF
         success "Generated minimal .env configuration."
     fi
@@ -288,16 +287,14 @@ else
         BUILD_DIR="./target/debug"
     fi
     COORD_BIN="${BUILD_DIR}/coordinator"
-    MOCK_BIN="${BUILD_DIR}/agent-mock"
     AGY_BIN="${BUILD_DIR}/agent-agy"
 
     if [ "$INSTALL_BIN" = true ]; then
         info "Installing binaries to ${PREFIX}..."
         mkdir -p "${PREFIX}"
         install -m 0755 "${COORD_BIN}" "${PREFIX}/coordinator"
-        install -m 0755 "${MOCK_BIN}" "${PREFIX}/agent-mock"
         install -m 0755 "${AGY_BIN}" "${PREFIX}/agent-agy"
-        success "Installed coordinator, agent-mock, and agent-agy to ${PREFIX}"
+        success "Installed coordinator and agent-agy to ${PREFIX}"
     fi
 fi
 
@@ -314,24 +311,18 @@ echo -e "\n${BOLD}How to Run AgentMesh:${NC}\n"
 if [ "$INSTALL_BIN" = true ]; then
     echo -e "  ${CYAN}1. Launch the Coordinator TUI:${NC}"
     echo -e "     ${BOLD}${PREFIX}/coordinator${NC}   (or: ${BOLD}coordinator${NC} if ${PREFIX} is in PATH)\n"
-    echo -e "  ${CYAN}2. Launch a Mock Worker:${NC}"
-    echo -e "     ${BOLD}MOCK_AGENT_OWNER=\"Alice\" ${PREFIX}/agent-mock${NC}\n"
-    echo -e "  ${CYAN}3. Launch an AGY Worker (requires Antigravity CLI installed separately):${NC}"
-    echo -e "     ${BOLD}AGY_AGENT_OWNER=\"Bob\" ${PREFIX}/agent-agy${NC}\n"
+    echo -e "  ${CYAN}2. Launch an Agy Worker (requires Antigravity CLI installed separately):${NC}"
+    echo -e "     ${BOLD}AGY_AGENT_OWNER=\"Alice\" ${PREFIX}/agent-agy${NC}\n"
 elif [ "$RELEASE_MODE" = true ]; then
     echo -e "  ${CYAN}1. Launch the Coordinator TUI:${NC}"
     echo -e "     ${BOLD}./target/release/coordinator${NC}   (or: ${BOLD}cargo run --release --bin coordinator${NC})\n"
-    echo -e "  ${CYAN}2. Launch a Mock Worker:${NC}"
-    echo -e "     ${BOLD}MOCK_AGENT_OWNER=\"Alice\" ./target/release/agent-mock${NC}\n"
-    echo -e "  ${CYAN}3. Launch an AGY Worker (requires Antigravity CLI installed separately):${NC}"
-    echo -e "     ${BOLD}AGY_AGENT_OWNER=\"Bob\" ./target/release/agent-agy${NC}\n"
+    echo -e "  ${CYAN}2. Launch an Agy Worker (requires Antigravity CLI installed separately):${NC}"
+    echo -e "     ${BOLD}AGY_AGENT_OWNER=\"Alice\" ./target/release/agent-agy${NC}\n"
 else
     echo -e "  ${CYAN}1. Launch the Coordinator TUI:${NC}"
     echo -e "     ${BOLD}cargo run --bin coordinator${NC}\n"
-    echo -e "  ${CYAN}2. Launch a Mock Worker:${NC}"
-    echo -e "     ${BOLD}MOCK_AGENT_OWNER=\"Alice\" cargo run --bin agent-mock${NC}\n"
-    echo -e "  ${CYAN}3. Launch an AGY Worker (requires Antigravity CLI installed separately):${NC}"
-    echo -e "     ${BOLD}AGY_AGENT_OWNER=\"Bob\" cargo run --bin agent-agy${NC}\n"
+    echo -e "  ${CYAN}2. Launch an Agy Worker (requires Antigravity CLI installed separately):${NC}"
+    echo -e "     ${BOLD}AGY_AGENT_OWNER=\"Alice\" cargo run --bin agent-agy${NC}\n"
 fi
 
 echo -e "  ${CYAN}Backing Services Status:${NC}"

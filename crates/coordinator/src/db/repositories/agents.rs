@@ -992,9 +992,9 @@ mod tests {
         let new_agent = NewAgent {
             human_owner: "Alice".to_string(),
             api_key_hash: "hashed_key".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string(), "python".to_string()],
-            nats_subject: "agents.alice-mock.events".to_string(),
+            nats_subject: "agents.alice-agy.events".to_string(),
             profile: None,
             max_concurrency: Some(1),
             role: Some("worker".to_string()),
@@ -1007,7 +1007,7 @@ mod tests {
 
         assert_eq!(agent.human_owner, "Alice");
         assert_eq!(agent.status, AgentStatus::Offline);
-        assert_eq!(agent.adapter_type, AdapterType::Mock);
+        assert_eq!(agent.adapter_type, AdapterType::Agy);
         assert_eq!(agent.capabilities_list(), vec!["rust", "python"]);
         assert!(agent.current_task_id.is_none());
         assert_eq!(agent.health_status, HealthStatus::Healthy);

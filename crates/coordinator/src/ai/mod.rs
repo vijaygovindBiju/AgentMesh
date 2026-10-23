@@ -5,7 +5,6 @@ pub mod agy;
 pub mod anthropic;
 pub mod complexity;
 pub mod matcher;
-pub mod mock;
 pub mod prompts;
 pub mod provider;
 pub mod replan;
@@ -21,7 +20,6 @@ pub use agy::AgyProvider;
 pub use anthropic::AnthropicProvider;
 pub use complexity::{ComplexityEstimate, ComplexityEstimator};
 pub use matcher::AgentCapabilityMatcher;
-pub use mock::MockLlmProvider;
 pub use prompts::{PlanningPrompt, ReplanPrompt};
 pub use provider::LlmProvider;
 pub use replan::ReplanEngine;
@@ -36,12 +34,6 @@ pub use validator::{DetectedOverlap, PlanValidator, ValidatedPlan, ValidationErr
 /// Constructs an LLM provider by name.
 pub fn create_provider_by_name(name: &str) -> Result<Arc<dyn LlmProvider>> {
     match name.to_lowercase().as_str() {
-        "mock" => {
-            let model = std::env::var("AI_MODEL").unwrap_or_else(|_| "mock-planner-v1".to_string());
-            let mut mock = MockLlmProvider::new();
-            mock.model_name = model;
-            Ok(Arc::new(mock))
-        }
         "agy" => {
             let model =
                 std::env::var("AGY_MODEL").unwrap_or_else(|_| "gemini-3.8-flash-low".to_string());
@@ -58,7 +50,7 @@ pub fn create_provider_by_name(name: &str) -> Result<Arc<dyn LlmProvider>> {
             Ok(Arc::new(AnthropicProvider::new(api_key, model)))
         }
         other => {
-            bail!("Unsupported AI_PROVIDER '{other}'. Supported providers: 'mock', 'agy', 'anthropic'")
+            bail!("Unsupported AI_PROVIDER '{other}'. Supported providers: 'agy', 'anthropic'")
         }
     }
 }
@@ -66,10 +58,10 @@ pub fn create_provider_by_name(name: &str) -> Result<Arc<dyn LlmProvider>> {
 /// Factory function to construct the active LLM provider from runtime environment variables.
 ///
 /// Supported providers:
-/// - `AI_PROVIDER=mock` (default for tests / local development)
+/// - `AI_PROVIDER=agy` (requires the authenticated `agy` CLI)
 /// - `AI_PROVIDER=anthropic` (requires `ANTHROPIC_API_KEY`)
 pub fn create_provider_from_env() -> Result<Arc<dyn LlmProvider>> {
-    let provider_type = std::env::var("AI_PROVIDER").unwrap_or_else(|_| "mock".to_string());
+    let provider_type = std::env::var("AI_PROVIDER").unwrap_or_else(|_| "agy".to_string());
     create_provider_by_name(&provider_type)
 }
 
@@ -82,9 +74,6 @@ mod tests {
 
     #[test]
     fn test_create_provider_by_name() {
-        let provider = create_provider_by_name("mock").unwrap();
-        assert_eq!(provider.provider_name(), "mock");
-
         let agy = create_provider_by_name("agy").unwrap();
         assert_eq!(agy.provider_name(), "agy");
 
@@ -98,7 +87,7 @@ mod tests {
 
         std::env::remove_var("AI_PROVIDER");
         let provider = create_provider_from_env().unwrap();
-        assert_eq!(provider.provider_name(), "mock");
+        assert_eq!(provider.provider_name(), "agy");
 
         std::env::set_var("AI_PROVIDER", "unknown_xyz");
         let res = create_provider_from_env();

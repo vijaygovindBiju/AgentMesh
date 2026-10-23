@@ -320,7 +320,7 @@ mod tests {
             available_agents: vec![AvailableAgentContext {
                 agent_id: Uuid::from_u128(1),
                 human_owner: "Alice".to_string(),
-                adapter_type: "Mock".to_string(),
+                adapter_type: "Agy".to_string(),
                 capabilities: vec!["rust".to_string()],
             }],
             existing_tasks: vec![ExistingTaskContext {

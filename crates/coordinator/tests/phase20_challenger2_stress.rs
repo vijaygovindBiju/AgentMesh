@@ -1,21 +1,17 @@
-use std::sync::Arc;
-use std::time::Instant;
 use chrono::Utc;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use serde_json::json;
+use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use agent_protocol::{AgentMessage, AgentStatus as ProtocolAgentStatus};
-use coordinator::domain::{
-    AdapterType, Agent, AgentStatus, Task, TaskStatus,
-};
+use coordinator::domain::{AdapterType, Agent, AgentStatus, Task, TaskStatus};
 use coordinator::observability::CoordinatorEvent;
-use coordinator::tui::{
-    render, AppState, CurrentScreen, ReviewTaskState, TuiUpdateEvent,
-};
+use coordinator::tui::{render, AppState, CurrentScreen, ReviewTaskState, TuiUpdateEvent};
 
 fn create_terminal(width: u16, height: u16) -> Terminal<TestBackend> {
     let backend = TestBackend::new(width, height);
@@ -57,10 +53,10 @@ fn test_stress_burst_agent_messages_1000_sequential() {
     for i in 0..10 {
         let aid = Uuid::new_v4();
         agent_ids.push(aid);
-        state.agents.push(Agent::mock(
+        state.agents.push(Agent::new_for_test(
             aid,
             &format!("agent-{i}"),
-            AdapterType::Mock,
+            AdapterType::Agy,
             vec!["worker".to_string()],
             AgentStatus::Idle,
         ));
@@ -132,7 +128,11 @@ fn test_stress_burst_agent_messages_1000_sequential() {
     println!("Processed 1,000 rapid AgentMessages in {:?}", duration);
 
     // Assert high throughput (< 500ms for 1000 events in memory)
-    assert!(duration.as_millis() < 500, "Burst processing took too long: {:?}", duration);
+    assert!(
+        duration.as_millis() < 500,
+        "Burst processing took too long: {:?}",
+        duration
+    );
 
     // Verify recent_events capping (50 Heartbeats do not call push_recent_event,
     // 950 other messages do, so recent_events should be capped at 200)
@@ -193,10 +193,10 @@ fn test_stress_out_of_order_lifecycle() {
     let aid = Uuid::new_v4();
     let tid = Uuid::new_v4();
 
-    state.agents.push(Agent::mock(
+    state.agents.push(Agent::new_for_test(
         aid,
         "worker-alpha",
-        AdapterType::Mock,
+        AdapterType::Agy,
         vec!["compute".to_string()],
         AgentStatus::Idle,
     ));
@@ -370,7 +370,9 @@ fn test_stress_diagnostics_scroll_clamping_and_modal() {
     assert_eq!(state.recent_events.len(), 200);
 
     // 1. Initial render at top
-    terminal.draw(|f| render(f, &state)).expect("Render top of diagnostics");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render top of diagnostics");
 
     // 2. Scroll down 300 times (exceeding 200 capacity)
     for _ in 0..300 {
@@ -380,14 +382,18 @@ fn test_stress_diagnostics_scroll_clamping_and_modal() {
     assert_eq!(state.selected_event_index, 199);
 
     // Render at bottom of buffer
-    terminal.draw(|f| render(f, &state)).expect("Render bottom of diagnostics");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render bottom of diagnostics");
 
     // 3. Open payload inspection modal on item 199
     state.handle_key(make_key(KeyCode::Enter));
     assert!(state.show_event_payload_modal);
 
     // Render with payload modal active
-    terminal.draw(|f| render(f, &state)).expect("Render payload modal at bottom");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render payload modal at bottom");
 
     // 4. Close modal with Esc
     state.handle_key(make_key(KeyCode::Esc));
@@ -400,7 +406,9 @@ fn test_stress_diagnostics_scroll_clamping_and_modal() {
     // Must clamp at index 0
     assert_eq!(state.selected_event_index, 0);
 
-    terminal.draw(|f| render(f, &state)).expect("Render top after scroll back");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render top after scroll back");
 }
 
 // ============================================================================
@@ -451,13 +459,19 @@ fn test_stress_stale_selected_index_after_events_shrink() {
 
     // Empirical test: Does rendering panic when selected_event_index > recent_events.len()?
     let render_res = terminal.draw(|f| render(f, &state));
-    assert!(render_res.is_ok(), "Rendering panicked on out-of-bounds selected_event_index!");
+    assert!(
+        render_res.is_ok(),
+        "Rendering panicked on out-of-bounds selected_event_index!"
+    );
 
     // Enter modal on out-of-bounds selected_event_index
     state.handle_key(make_key(KeyCode::Enter));
     // render_event_payload_modal should return gracefully without crashing
     let modal_render_res = terminal.draw(|f| render(f, &state));
-    assert!(modal_render_res.is_ok(), "Modal rendering panicked on out-of-bounds selected_event_index!");
+    assert!(
+        modal_render_res.is_ok(),
+        "Modal rendering panicked on out-of-bounds selected_event_index!"
+    );
 }
 
 // ============================================================================
@@ -542,5 +556,7 @@ fn test_stress_headless_undrained_channel_behavior() {
         message: "Should fail".to_string(),
         payload: json!({}),
     };
-    assert!(tui_tx.send(TuiUpdateEvent::ObservabilityEvent(fail_ev)).is_err());
+    assert!(tui_tx
+        .send(TuiUpdateEvent::ObservabilityEvent(fail_ev))
+        .is_err());
 }

@@ -107,9 +107,22 @@ impl AgentInspectorWidget {
         };
 
         let (health_badge, health_style) = match agent.health_status {
-            HealthStatus::Healthy => ("[Healthy]", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            HealthStatus::Degraded => ("[Degraded]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            HealthStatus::Unhealthy => ("[Unhealthy]", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            HealthStatus::Healthy => (
+                "[Healthy]",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            HealthStatus::Degraded => (
+                "[Degraded]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            HealthStatus::Unhealthy => (
+                "[Unhealthy]",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
             HealthStatus::Offline => ("[Offline]", Style::default().fg(Color::DarkGray)),
         };
 
@@ -121,7 +134,10 @@ impl AgentInspectorWidget {
             } else {
                 Color::Green
             };
-            (format!("{lat}ms"), Style::default().fg(col).add_modifier(Modifier::BOLD))
+            (
+                format!("{lat}ms"),
+                Style::default().fg(col).add_modifier(Modifier::BOLD),
+            )
         } else {
             ("-".to_string(), Style::default().fg(Color::DarkGray))
         };
@@ -140,7 +156,9 @@ impl AgentInspectorWidget {
                 ),
                 Span::styled(
                     err,
-                    Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::LightRed)
+                        .add_modifier(Modifier::BOLD),
                 ),
             ]));
             lines.push(Line::from(""));
@@ -170,7 +188,9 @@ impl AgentInspectorWidget {
             Span::styled("  |  Adapter: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 format!("{:?}", agent.adapter_type),
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]));
 
@@ -183,7 +203,10 @@ impl AgentInspectorWidget {
         lines.push(Line::from(vec![
             Span::styled(" Last Seen: ", Style::default().fg(Color::DarkGray)),
             Span::styled(last_seen_str, Style::default().fg(Color::White)),
-            Span::styled("  |  Heartbeat Latency: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "  |  Heartbeat Latency: ",
+                Style::default().fg(Color::DarkGray),
+            ),
             Span::styled(latency_str, latency_style),
             Span::styled("  |  Failures: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
@@ -195,9 +218,15 @@ impl AgentInspectorWidget {
                 },
             ),
             Span::styled(" (Done: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(agent.tasks_completed_count.to_string(), Style::default().fg(Color::Green)),
+            Span::styled(
+                agent.tasks_completed_count.to_string(),
+                Style::default().fg(Color::Green),
+            ),
             Span::styled(", Failed: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(agent.tasks_failed_count.to_string(), Style::default().fg(Color::Red)),
+            Span::styled(
+                agent.tasks_failed_count.to_string(),
+                Style::default().fg(Color::Red),
+            ),
             Span::styled(")", Style::default().fg(Color::DarkGray)),
         ]));
 
@@ -213,14 +242,20 @@ impl AgentInspectorWidget {
         };
 
         let draining_str = if agent.is_draining { "YES" } else { "NO" };
-        let draining_color = if agent.is_draining { Color::Yellow } else { Color::Green };
+        let draining_color = if agent.is_draining {
+            Color::Yellow
+        } else {
+            Color::Green
+        };
 
         lines.push(Line::from(vec![
             Span::styled(" Active Task: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 active_task_str,
                 if agent.current_task_id.is_some() {
-                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::DarkGray)
                 },
@@ -235,11 +270,7 @@ impl AgentInspectorWidget {
         ]));
 
         // 5. Role, NATS & Security
-        let revoked_str = if agent.is_revoked {
-            "REVOKED"
-        } else {
-            "VALID"
-        };
+        let revoked_str = if agent.is_revoked { "REVOKED" } else { "VALID" };
         let revoked_color = if agent.is_revoked {
             Color::Red
         } else {
@@ -254,7 +285,12 @@ impl AgentInspectorWidget {
             Span::styled(" Role: ", Style::default().fg(Color::DarkGray)),
             Span::styled(&agent.role, Style::default().fg(Color::Yellow)),
             Span::styled("  |  Key Status: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(revoked_str, Style::default().fg(revoked_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                revoked_str,
+                Style::default()
+                    .fg(revoked_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled("  |  Key Expires: ", Style::default().fg(Color::DarkGray)),
             Span::styled(expires_str, Style::default().fg(Color::White)),
             Span::styled("  |  NATS: ", Style::default().fg(Color::DarkGray)),
@@ -270,11 +306,7 @@ impl AgentInspectorWidget {
         )]));
 
         if let Some(ref prof) = profile {
-            let agy_ver = prof
-                .runtime
-                .agy_version
-                .as_deref()
-                .unwrap_or("N/A");
+            let agy_ver = prof.runtime.agy_version.as_deref().unwrap_or("N/A");
             let mem_str = prof
                 .runtime
                 .memory_mb

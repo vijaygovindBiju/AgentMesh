@@ -2,7 +2,7 @@
 # ==============================================================================
 # AgentMesh — Production & Local Installation Script
 # ==============================================================================
-# Builds and installs AgentMesh binaries (coordinator, agent-mock, agent-agy)
+# Builds and installs AgentMesh binaries (coordinator and agent-agy)
 # into a user-specified or standard binary directory (default: ~/.local/bin).
 #
 # Usage:
@@ -97,7 +97,6 @@ AgentMesh Installer
 
 Installs the AgentMesh coordination suite:
   - coordinator  (TUI, planning engine, Git coordination, reliability loops)
-  - agent-mock   (Mock worker agent for simulated development and testing)
   - agent-agy    (Antigravity agy CLI adapter for real AI coding agents)
 
 Usage:
@@ -136,7 +135,7 @@ cd "${REPO_ROOT}"
 if [ "$UNINSTALL" = true ]; then
     info "Uninstalling AgentMesh binaries from: ${PREFIX}"
     REMOVED=0
-    for bin in coordinator agent-mock agent-agy; do
+    for bin in coordinator agent-agy; do
         target="${PREFIX}/${bin}"
         if [ -f "$target" ] || [ -L "$target" ]; then
             rm -f "$target"
@@ -238,7 +237,7 @@ mkdir -p "${PREFIX}"
 if [ "$AGENT_ONLY" = true ]; then
     BINARIES=("agent-agy")
 else
-    BINARIES=("coordinator" "agent-mock" "agent-agy")
+    BINARIES=("coordinator" "agent-agy")
 fi
 for bin in "${BINARIES[@]}"; do
     src="${BUILD_DIR}/${bin}"
@@ -303,12 +302,11 @@ else
 
     echo -e "${BOLD}Installed Executables:${NC}"
     echo -e "  • ${BOLD}coordinator${NC}  — Terminal UI and orchestration engine"
-    echo -e "  • ${BOLD}agent-mock${NC}   — Simulated test agent"
     echo -e "  • ${BOLD}agent-agy${NC}    — Antigravity agy CLI adapter\n"
 
     echo -e "${BOLD}Next Steps:${NC}"
     echo -e "  1. Start backing services:   ${CYAN}docker compose up -d${NC}"
     echo -e "  2. Start the coordinator:    ${CYAN}${PREFIX}/coordinator${NC} (or 'coordinator' if in PATH)"
-    echo -e "  3. Start an agent:           ${CYAN}${PREFIX}/agent-mock${NC} or ${CYAN}${PREFIX}/agent-agy${NC}\n"
+    echo -e "  3. Start an agent:           ${CYAN}${PREFIX}/agent-agy${NC}\n"
     echo -e "To uninstall anytime:        ${CYAN}./scripts/install.sh --uninstall --prefix ${PREFIX}${NC}\n"
 fi

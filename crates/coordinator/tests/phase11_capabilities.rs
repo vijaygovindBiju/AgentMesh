@@ -292,8 +292,8 @@ async fn test_phase11_5_availability_state_and_concurrency_gating() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -308,7 +308,7 @@ async fn test_phase11_5_availability_state_and_concurrency_gating() {
         &NewAgent {
             human_owner: "DrainTester".to_string(),
             api_key_hash: "hash".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{agent_id}.events"),
             max_concurrency: Some(1),
@@ -403,8 +403,8 @@ async fn test_phase11_6_agent_health_metrics_and_unhealthy_gating() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -419,7 +419,7 @@ async fn test_phase11_6_agent_health_metrics_and_unhealthy_gating() {
         &NewAgent {
             human_owner: "HealthTester".to_string(),
             api_key_hash: "hash_h".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{agent_id}.events"),
             ..Default::default()

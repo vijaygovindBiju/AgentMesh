@@ -62,8 +62,8 @@ async fn test_overlap_detection_creates_warning_in_db() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "Decompose payment system".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -202,8 +202,8 @@ async fn test_warning_visible_in_plan_review_and_blocks_approval_until_acknowled
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "Architecture review".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -265,7 +265,7 @@ async fn test_warning_visible_in_plan_review_and_blocks_approval_until_acknowled
     );
 
     // Initialize TUI AppState
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.active_project = Some(project.clone());
     let mut review_tasks = vec![
         ReviewTaskState::new(task1.clone()),
@@ -319,10 +319,10 @@ async fn test_warning_visible_in_plan_review_and_blocks_approval_until_acknowled
 /// - Unacknowledged warnings are highlighted and can be acknowledged from dashboard
 #[tokio::test]
 async fn test_warning_visible_in_dashboard_for_unacknowledged_overlaps() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
-    // with_mock_data includes 1 active unacknowledged critical overlap
+    // Test state includes one active unacknowledged critical overlap.
     assert_eq!(state.active_overlaps.len(), 1);
     let warn = &state.active_overlaps[0];
     assert_eq!(warn.severity, OverlapSeverity::Critical);
@@ -371,7 +371,7 @@ async fn test_dashboard_updates_live_from_agent_events_channel() {
         updated_at: Utc::now(),
     });
 
-    state.agents = vec![coordinator::domain::Agent::mock(
+    state.agents = vec![coordinator::domain::Agent::new_for_test(
         agent_id,
         "agent-backend (Alice)",
         AdapterType::Agy,
@@ -538,7 +538,7 @@ async fn test_nats_subscriber_ingestion_and_channel_forwarding() {
         &NewAgent {
             human_owner: "NatsTestOwner".to_string(),
             api_key_hash: "hash".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{agent_id}.events"),
             ..Default::default()

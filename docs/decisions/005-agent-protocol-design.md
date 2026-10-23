@@ -14,7 +14,7 @@ AgentMesh must communicate with multiple agent runtimes: currently `agy` (Antigr
 - Define a stable message vocabulary that agents implement
 - Not require the coordinator to know how an agent internally works
 
-The first concrete integration is `agy`, which is driven via CLI subprocess and stdout parsing. A mock agent is also required for automated testing.
+The first concrete integration is `agy`, which is driven via CLI subprocess and stdout parsing. A agy agent is also required for automated testing.
 
 ---
 
@@ -29,7 +29,7 @@ The first concrete integration is `agy`, which is driven via CLI subprocess and 
 ### `agent-protocol` crate (shared)
 - Contains only: `AgentMessage` enum, `CoordinatorMessage` enum, `TaskSpec` struct, `AgentStatus` enum, `DeliveryAck` type.
 - Has **no dependency** on async-nats, tokio, HTTP, or any I/O library.
-- Is imported by: coordinator, agent-mock, agent-agy (and all future adapters).
+- Is imported by: coordinator, agent-agy, agent-agy (and all future adapters).
 
 ### Transport boundary
 Each agent binary is responsible for connecting to NATS and serializing/deserializing `agent-protocol` types. The protocol is JSON-encoded for human readability and debuggability.
@@ -64,12 +64,12 @@ The exact stdout parsing rules will be defined in a separate ADR once the agy in
 
 ---
 
-## Mock Agent Requirements
+## Agy Agent Requirements
 
-The mock agent (`agent-mock`) is **not** a coordinator-internal fake. It is:
+The agy agent (`agent-agy`) is **not** a coordinator-internal fake. It is:
 - A separate binary that connects to NATS the same way `agent-agy` would
 - Implements the same message contract (same `agent-protocol` types)
-- Simulates work with configurable delays (`MOCK_TASK_DELAY_MS`)
+- Executes tasks through the authenticated CLI (`AGY_TIMEOUT_SECS`)
 - Reports a complete lifecycle: `TaskStarted` → `ProgressUpdate` × N → `Blocked` (optional) → `Completed` or `Failed`
 - Can be used in integration tests and live demos without real LLM or agy
 
@@ -78,5 +78,5 @@ The mock agent (`agent-mock`) is **not** a coordinator-internal fake. It is:
 ## Consequences
 
 - `agent-protocol` must be versioned carefully — breaking changes require all adapters to update.
-- The adapter boundary means the coordinator can be tested without real agents by using `MockAgentAdapter` (an in-process test double distinct from the `agent-mock` binary).
+- The adapter boundary means the coordinator can be tested without real agents by using `AgyAgentAdapter` (an in-process test double distinct from the `agent-agy` binary).
 - Protocol stability is a constraint: once agents are in production, the message format must evolve backwards-compatibly.

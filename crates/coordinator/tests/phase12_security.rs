@@ -51,7 +51,7 @@ async fn test_phase12_1_agent_authentication_and_api_key_hashing() {
     let reg_msg = AgentMessage::Register {
         agent_id,
         human_owner: "AliceSecurity".to_string(),
-        adapter_type: "Mock".to_string(),
+        adapter_type: "Agy".to_string(),
         capabilities: vec!["rust".to_string()],
         profile: None,
         api_key: raw_key.clone(),
@@ -79,7 +79,7 @@ async fn test_phase12_1_agent_authentication_and_api_key_hashing() {
     let bad_reg_msg = AgentMessage::Register {
         agent_id,
         human_owner: "AliceSecurity".to_string(),
-        adapter_type: "Mock".to_string(),
+        adapter_type: "Agy".to_string(),
         capabilities: vec!["rust".to_string()],
         profile: None,
         api_key: "am_ak_invalid_tampered_key".to_string(),
@@ -160,7 +160,7 @@ async fn test_phase12_3_agent_revocation_and_expiration() {
     let reg_msg = AgentMessage::Register {
         agent_id,
         human_owner: "RevokeTester".to_string(),
-        adapter_type: "Mock".to_string(),
+        adapter_type: "Agy".to_string(),
         capabilities: vec!["rust".to_string()],
         profile: None,
         api_key: raw_key.clone(),
@@ -195,7 +195,7 @@ async fn test_phase12_3_agent_revocation_and_expiration() {
     let reg_revoked = AgentMessage::Register {
         agent_id,
         human_owner: "RevokeTester".to_string(),
-        adapter_type: "Mock".to_string(),
+        adapter_type: "Agy".to_string(),
         capabilities: vec!["rust".to_string()],
         profile: None,
         api_key: raw_key.clone(),
@@ -326,7 +326,7 @@ async fn test_phase12_5_task_impersonation_prevention() {
         &NewAgent {
             human_owner: "AgentA".to_string(),
             api_key_hash: "hash_a".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{agent_a_id}.events"),
             profile: None,
@@ -345,7 +345,7 @@ async fn test_phase12_5_task_impersonation_prevention() {
         &NewAgent {
             human_owner: "AgentB".to_string(),
             api_key_hash: "hash_b".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{agent_b_id}.events"),
             profile: None,

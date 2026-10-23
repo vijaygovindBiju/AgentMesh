@@ -56,8 +56,8 @@ async fn test_approval_gating_unapproved_task_cannot_be_assigned() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -70,7 +70,7 @@ async fn test_approval_gating_unapproved_task_cannot_be_assigned() {
         &NewAgent {
             human_owner: "Alice".to_string(),
             api_key_hash: "hash".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: "agents.alice.events".to_string(),
             ..Default::default()
@@ -167,8 +167,8 @@ async fn test_dependency_tracking_b_waits_for_a_completed() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -181,7 +181,7 @@ async fn test_dependency_tracking_b_waits_for_a_completed() {
         &NewAgent {
             human_owner: "Bob".to_string(),
             api_key_hash: "hash".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec![],
             nats_subject: "agents.bob.events".to_string(),
             ..Default::default()
@@ -323,8 +323,8 @@ async fn test_critical_overlap_blocks_approval_until_acknowledged() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -442,8 +442,8 @@ async fn test_human_override_reassign_task() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -456,7 +456,7 @@ async fn test_human_override_reassign_task() {
         &NewAgent {
             human_owner: "Agent A".to_string(),
             api_key_hash: "hash_a".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec![],
             nats_subject: "agents.a.events".to_string(),
             ..Default::default()
@@ -470,7 +470,7 @@ async fn test_human_override_reassign_task() {
         &NewAgent {
             human_owner: "Agent B".to_string(),
             api_key_hash: "hash_b".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec![],
             nats_subject: "agents.b.events".to_string(),
             ..Default::default()
@@ -538,8 +538,8 @@ async fn test_concurrency_locking_prevents_double_assignment() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -552,7 +552,7 @@ async fn test_concurrency_locking_prevents_double_assignment() {
         &NewAgent {
             human_owner: "Solo Agent".to_string(),
             api_key_hash: "hash_solo".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec![],
             nats_subject: "agents.solo.events".to_string(),
             ..Default::default()
@@ -648,8 +648,8 @@ async fn test_coordinator_core_engine_lifecycle_and_blocked_event() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -662,7 +662,7 @@ async fn test_coordinator_core_engine_lifecycle_and_blocked_event() {
         &NewAgent {
             human_owner: "Agent Charlie".to_string(),
             api_key_hash: "hash_c".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec![],
             nats_subject: "agents.charlie.events".to_string(),
             ..Default::default()

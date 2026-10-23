@@ -388,7 +388,7 @@ impl AppState {
 
             pg_connected: false,
             nats_connected: false,
-            
+
             project_name_input: String::new(),
             project_desc_input: String::new(),
             project_input_cursor: 0,
@@ -437,9 +437,7 @@ impl AppState {
 
             show_help_modal: false,
 
-            status_message: Some(
-                "Ready. Press [Tab] to switch screens.".to_string(),
-            ),
+            status_message: Some("Ready. Press [Tab] to switch screens.".to_string()),
             should_quit: false,
             viewport_size: AtomicU32::new(0),
         }
@@ -464,12 +462,14 @@ impl AppState {
     pub fn plan_task_scroll_offset(&self, visible_cards: usize) -> usize {
         let half_visible = visible_cards / 2;
         let max_offset = self.review_tasks.len().saturating_sub(visible_cards);
-        self.selected_task_index.saturating_sub(half_visible).min(max_offset)
+        self.selected_task_index
+            .saturating_sub(half_visible)
+            .min(max_offset)
     }
 
-    /// Test fixture helper to seed mock data for UI unit/integration testing.
+    /// Test-only state builder for UI unit and integration testing.
     #[doc(hidden)]
-    pub fn with_mock_data(mut self) -> Self {
+    pub fn with_test_data(mut self) -> Self {
         let proj_id = Uuid::new_v4();
         let agent1_id = Uuid::new_v4();
         let agent2_id = Uuid::new_v4();
@@ -484,7 +484,7 @@ impl AppState {
             updated_at: chrono::Utc::now(),
         });
 
-        let mut agent1 = Agent::mock(
+        let mut agent1 = Agent::new_for_test(
             agent1_id,
             "agent-backend (Alice)",
             crate::domain::AdapterType::Agy,
@@ -493,20 +493,20 @@ impl AppState {
         );
         agent1.capability_profile = Some(
             serde_json::to_value(agent_protocol::AgentCapabilities {
-            runtime: agent_protocol::RuntimeCapability {
-                os: "linux".to_string(),
-                arch: "x86_64".to_string(),
-                adapter_type: "Agy".to_string(),
-                agy_version: Some("0.4.2".to_string()),
-                cpu_count: 8,
-                memory_mb: Some(16384),
-            },
+                runtime: agent_protocol::RuntimeCapability {
+                    os: "linux".to_string(),
+                    arch: "x86_64".to_string(),
+                    adapter_type: "Agy".to_string(),
+                    agy_version: Some("0.4.2".to_string()),
+                    cpu_count: 8,
+                    memory_mb: Some(16384),
+                },
                 languages: vec![agent_protocol::LanguageCapability::new(
                     "rust",
                     Some("1.80.0".to_string()),
                     vec!["tokio".to_string(), "axum".to_string(), "sqlx".to_string()],
                 )],
-            tools: vec![
+                tools: vec![
                     agent_protocol::ToolCapability::new(
                         "cargo",
                         Some("1.80.0".to_string()),
@@ -517,7 +517,7 @@ impl AppState {
                         Some("2.43.0".to_string()),
                         Some("/usr/bin/git".to_string()),
                     ),
-            ],
+                ],
                 tags: vec![
                     "backend".to_string(),
                     "systems".to_string(),
@@ -527,10 +527,10 @@ impl AppState {
             .unwrap(),
         );
 
-        let mut agent2 = Agent::mock(
+        let mut agent2 = Agent::new_for_test(
             agent2_id,
             "agent-infra (Bob)",
-            crate::domain::AdapterType::Mock,
+            crate::domain::AdapterType::Agy,
             vec![
                 "infra".to_string(),
                 "nats".to_string(),
@@ -540,20 +540,20 @@ impl AppState {
         );
         agent2.capability_profile = Some(
             serde_json::to_value(agent_protocol::AgentCapabilities {
-            runtime: agent_protocol::RuntimeCapability {
-                os: "linux".to_string(),
-                arch: "x86_64".to_string(),
-                adapter_type: "Mock".to_string(),
-                agy_version: None,
-                cpu_count: 4,
-                memory_mb: Some(8192),
-            },
+                runtime: agent_protocol::RuntimeCapability {
+                    os: "linux".to_string(),
+                    arch: "x86_64".to_string(),
+                    adapter_type: "Agy".to_string(),
+                    agy_version: None,
+                    cpu_count: 4,
+                    memory_mb: Some(8192),
+                },
                 languages: vec![agent_protocol::LanguageCapability::new(
                     "python",
                     Some("3.11.4".to_string()),
                     vec!["nats-py".to_string(), "pytest".to_string()],
                 )],
-            tools: vec![
+                tools: vec![
                     agent_protocol::ToolCapability::new(
                         "docker",
                         Some("24.0.5".to_string()),
@@ -569,7 +569,7 @@ impl AppState {
                     "infra".to_string(),
                     "nats".to_string(),
                     "docker".to_string(),
-            ],
+                ],
             })
             .unwrap(),
         );
@@ -912,7 +912,8 @@ impl AppState {
                     let list_top = header_height + 1;
                     let list_inner_height = body_height.saturating_sub(2);
 
-                    if mouse.column < list_width && mouse.row >= list_top
+                    if mouse.column < list_width
+                        && mouse.row >= list_top
                         && mouse.row < header_height + body_height - 1
                         && !self.review_tasks.is_empty()
                     {
@@ -1042,7 +1043,8 @@ impl AppState {
                                     }
                                 }
                                 self.selected_task_indices.clear();
-                                self.status_message = Some(format!("Approved selected {count} task(s)."));
+                                self.status_message =
+                                    Some(format!("Approved selected {count} task(s)."));
                             } else {
                                 for item in &mut self.review_tasks {
                                     if item.task.status == TaskStatus::HumanReview
@@ -1365,60 +1367,60 @@ impl AppState {
             _ => match self.current_screen {
                 CurrentScreen::PlanReview => self.handle_plan_review_key(key),
                 CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => match key.code {
-                        KeyCode::Up | KeyCode::Char('k') => {
-                            if self.selected_project_index > 0 {
-                                self.selected_project_index -= 1;
-                            }
-                            None
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if self.selected_project_index > 0 {
+                            self.selected_project_index -= 1;
                         }
-                        KeyCode::Down | KeyCode::Char('j') => {
-                            if !self.available_projects.is_empty()
-                                && self.selected_project_index + 1 < self.available_projects.len()
-                            {
-                                self.selected_project_index += 1;
-                            }
-                            None
+                        None
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if !self.available_projects.is_empty()
+                            && self.selected_project_index + 1 < self.available_projects.len()
+                        {
+                            self.selected_project_index += 1;
                         }
-                        KeyCode::Enter => {
-                            if !self.available_projects.is_empty() {
-                                let proj = &self.available_projects[self.selected_project_index];
-                                let project_id = proj.id;
-                                self.active_project = Some(proj.clone());
-                                self.status_message =
-                                    Some(format!("Loading project '{}'...", proj.name));
-                                Some(TuiAction::LoadProject { project_id })
-                            } else {
-                                self.input_mode = InputMode::EnteringProject;
-                                self.status_message = Some(
+                        None
+                    }
+                    KeyCode::Enter => {
+                        if !self.available_projects.is_empty() {
+                            let proj = &self.available_projects[self.selected_project_index];
+                            let project_id = proj.id;
+                            self.active_project = Some(proj.clone());
+                            self.status_message =
+                                Some(format!("Loading project '{}'...", proj.name));
+                            Some(TuiAction::LoadProject { project_id })
+                        } else {
+                            self.input_mode = InputMode::EnteringProject;
+                            self.status_message = Some(
                                     "Entering project details. [Tab] switch field, [Enter] submit, [Esc] cancel."
                                         .to_string(),
                                 );
-                                None
-                            }
+                            None
                         }
-                        KeyCode::Char('l') | KeyCode::Char('L') => {
-                            if !self.available_projects.is_empty() {
-                                let proj = &self.available_projects[self.selected_project_index];
-                                let project_id = proj.id;
-                                self.active_project = Some(proj.clone());
-                                self.status_message =
-                                    Some(format!("Loading project '{}'...", proj.name));
-                                Some(TuiAction::LoadProject { project_id })
-                            } else {
-                                None
-                            }
+                    }
+                    KeyCode::Char('l') | KeyCode::Char('L') => {
+                        if !self.available_projects.is_empty() {
+                            let proj = &self.available_projects[self.selected_project_index];
+                            let project_id = proj.id;
+                            self.active_project = Some(proj.clone());
+                            self.status_message =
+                                Some(format!("Loading project '{}'...", proj.name));
+                            Some(TuiAction::LoadProject { project_id })
+                        } else {
+                            None
                         }
-                        KeyCode::Char('n')
-                        | KeyCode::Char('N')
-                        | KeyCode::Char('i')
-                        | KeyCode::Char('I') => {
-                            self.input_mode = InputMode::EnteringProject;
-                            self.status_message = Some(
+                    }
+                    KeyCode::Char('n')
+                    | KeyCode::Char('N')
+                    | KeyCode::Char('i')
+                    | KeyCode::Char('I') => {
+                        self.input_mode = InputMode::EnteringProject;
+                        self.status_message = Some(
                                 "Entering project details. [Tab] switch field, [Enter] submit, [Esc] cancel."
                                     .to_string(),
                             );
-                            None
-                        }
+                        None
+                    }
                     KeyCode::Char('c') | KeyCode::Char('C') => {
                         let project = self
                             .available_projects
@@ -1438,10 +1440,10 @@ impl AppState {
                         None
                     }
                     KeyCode::Char('d') | KeyCode::Char('D') => Some(TuiAction::SubmitProject {
-                                name: DEMO_PROJECT_NAME.to_string(),
-                                description: DEMO_PROJECT_DESCRIPTION.to_string(),
+                        name: DEMO_PROJECT_NAME.to_string(),
+                        description: DEMO_PROJECT_DESCRIPTION.to_string(),
                     }),
-                        _ => None,
+                    _ => None,
                 },
                 CurrentScreen::Dashboard => self.handle_dashboard_key(key),
                 CurrentScreen::FleetInspector => self.handle_fleet_inspector_key(key),
@@ -1768,7 +1770,10 @@ impl AppState {
                 if !self.selected_task_indices.insert(self.selected_task_index) {
                     self.selected_task_indices.remove(&self.selected_task_index);
                 }
-                self.status_message = Some(format!("Selected {} task(s).", self.selected_task_indices.len()));
+                self.status_message = Some(format!(
+                    "Selected {} task(s).",
+                    self.selected_task_indices.len()
+                ));
                 None
             }
             KeyCode::Esc if !self.selected_task_indices.is_empty() => {
@@ -2090,7 +2095,8 @@ impl AppState {
                 .iter()
                 .filter_map(|&idx| self.review_tasks.get(idx))
                 .filter(|t| {
-                    t.task.status == TaskStatus::HumanReview || t.task.status == TaskStatus::Proposed
+                    t.task.status == TaskStatus::HumanReview
+                        || t.task.status == TaskStatus::Proposed
                 })
                 .count();
             if count == 0 {
@@ -2103,7 +2109,8 @@ impl AppState {
                 .review_tasks
                 .iter()
                 .filter(|t| {
-                    t.task.status == TaskStatus::HumanReview || t.task.status == TaskStatus::Proposed
+                    t.task.status == TaskStatus::HumanReview
+                        || t.task.status == TaskStatus::Proposed
                 })
                 .count();
             if count == 0 {
@@ -2793,7 +2800,7 @@ mod tests {
 
     #[test]
     fn test_plan_review_navigation() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         assert_eq!(state.selected_task_index, 0);
 
         // Navigate Down
@@ -2823,14 +2830,16 @@ mod tests {
 
     #[test]
     fn test_ctrl_a_selects_all_tasks_and_space_toggles_without_approval() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         let ctrl_a = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL);
         state.handle_key(ctrl_a);
         assert_eq!(state.selected_task_indices.len(), state.review_tasks.len());
         assert!(state.pending_confirmation.is_none());
 
         state.handle_key(make_key(KeyCode::Char(' ')));
-        assert!(!state.selected_task_indices.contains(&state.selected_task_index));
+        assert!(!state
+            .selected_task_indices
+            .contains(&state.selected_task_index));
         assert!(state.pending_confirmation.is_none());
 
         state.handle_key(make_key(KeyCode::Char('A')));
@@ -2839,7 +2848,7 @@ mod tests {
 
     #[test]
     fn test_mouse_click_selects_visible_plan_task_card() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         state.current_screen = CurrentScreen::PlanReview;
         state.selected_task_index = 0;
         let click_second_card = MouseEvent {
@@ -2856,7 +2865,7 @@ mod tests {
 
     #[test]
     fn test_task_approval_emits_action_and_updates_local_status() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         let task0_id = state.review_tasks[0].task.id;
 
         let action = state.handle_key(make_key(KeyCode::Char('y')));
@@ -2872,7 +2881,7 @@ mod tests {
 
     #[test]
     fn test_task_rejection_emits_action_and_updates_local_status() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         let task0_id = state.review_tasks[0].task.id;
 
         let action = state.handle_key(make_key(KeyCode::Char('n')));
@@ -2887,7 +2896,7 @@ mod tests {
 
     #[test]
     fn test_task_edit_workflow_and_approval_confirmation() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         let task0_id = state.review_tasks[0].task.id;
         let original_desc = state.review_tasks[0].task.description.clone();
 
@@ -2925,7 +2934,7 @@ mod tests {
 
     #[test]
     fn test_task_edit_cancel_with_escape() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         let original_desc = state.review_tasks[0].task.description.clone();
 
         state.handle_key(make_key(KeyCode::Char('e')));
@@ -2975,7 +2984,7 @@ mod tests {
 
     #[test]
     fn test_copy_project_prefills_creation_form_and_preserves_source() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         state.current_screen = CurrentScreen::ProjectManagement;
         let source = state.available_projects[state.selected_project_index].clone();
 
@@ -3007,7 +3016,7 @@ mod tests {
 
     #[test]
     fn test_plan_review_overlap_acknowledgment() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         assert_eq!(state.current_screen, CurrentScreen::PlanReview);
         assert_eq!(state.selected_task_index, 0);
         assert_eq!(state.review_tasks[0].overlap_warnings.len(), 1);
@@ -3030,7 +3039,7 @@ mod tests {
 
     #[test]
     fn test_dashboard_overlap_acknowledgment() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         state.current_screen = CurrentScreen::Dashboard;
         assert_eq!(state.active_overlaps.len(), 1);
 
@@ -3049,7 +3058,7 @@ mod tests {
 
     #[test]
     fn test_live_agent_message_projection() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         let agent_id = state.agents[0].id;
         let task_id = state.review_tasks[0].task.id;
 
@@ -3132,19 +3141,19 @@ mod tests {
 
     #[test]
     fn test_phase21_active_agent_count_and_pending_approvals() {
-        let state = AppState::new().with_mock_data();
-        // Mock data has 2 agents: 1 Idle, 1 Busy
+        let state = AppState::new().with_test_data();
+        // Agy data has 2 agents: 1 Idle, 1 Busy
         let (active, total) = state.active_agent_count();
         assert_eq!(total, 2);
         assert_eq!(active, 2);
 
-        // Mock data has 3 tasks in HumanReview with no human_decision
+        // Agy data has 3 tasks in HumanReview with no human_decision
         assert_eq!(state.pending_approvals_count(), 3);
     }
 
     #[test]
     fn test_phase21_clamp_all_indices_helper() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         state.selected_task_index = 999;
         state.selected_dashboard_task_index = 999;
         state.selected_agent_index = 999;
@@ -3236,8 +3245,8 @@ mod tests {
 
     #[test]
     fn test_phase21_dag_jump_blocker_and_dependent() {
-        let mut state = AppState::new().with_mock_data();
-        // In mock data:
+        let mut state = AppState::new().with_test_data();
+        // In agy data:
         // task 0: Schema Migration (no deps)
         // task 1: User Service (depends on task 0)
         // task 2: Order Service (depends on task 0 and task 1)
@@ -3293,7 +3302,7 @@ mod tests {
 
     #[test]
     fn test_phase21_plan_review_retry_shortcut() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         state.current_screen = CurrentScreen::PlanReview;
         let task_id = state.review_tasks[0].task.id;
 
@@ -3314,7 +3323,7 @@ mod tests {
 
     #[test]
     fn test_phase21_confirmation_dialog_cancel_and_confirm_in_handle_key() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         let task_id = state.review_tasks[0].task.id;
 
         // Prompt cancel confirmation
@@ -3338,7 +3347,7 @@ mod tests {
 
     #[test]
     fn test_phase21_topological_tiers_computation() {
-        let state = AppState::new().with_mock_data();
+        let state = AppState::new().with_test_data();
         let tiers = crate::tui::widgets::DagViewWidget::compute_topological_tiers(&state);
 
         // Root tier must contain task 0 (PLAN-1)
@@ -3348,7 +3357,7 @@ mod tests {
 
     #[test]
     fn test_phase22_plan_review_focus_and_inspector_scroll() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         state.current_screen = CurrentScreen::PlanReview;
         assert_eq!(state.plan_review_focus, PlanReviewFocus::TaskList);
         assert_eq!(state.inspector_scroll_offset, 0);
@@ -3408,7 +3417,7 @@ mod tests {
 
     #[test]
     fn test_phase22_mouse_scroll_plan_review_inspector_and_cards() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         state.current_screen = CurrentScreen::PlanReview;
         state.show_details_pane = true;
         assert_eq!(state.selected_task_index, 0);
@@ -3450,10 +3459,10 @@ mod tests {
 
     #[test]
     fn test_phase22_selective_bulk_approval() {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         state.current_screen = CurrentScreen::PlanReview;
 
-        // Select task 0 and task 2 (out of 3 mock tasks)
+        // Select task 0 and task 2 (out of 3 agy tasks)
         state.selected_task_indices.insert(0);
         state.selected_task_indices.insert(2);
 
@@ -3472,9 +3481,15 @@ mod tests {
 
         // Task 0 and Task 2 are approved
         assert_eq!(state.review_tasks[0].task.status, TaskStatus::Approved);
-        assert_eq!(state.review_tasks[0].human_decision, Some(ApprovalStatus::Approved));
+        assert_eq!(
+            state.review_tasks[0].human_decision,
+            Some(ApprovalStatus::Approved)
+        );
         assert_eq!(state.review_tasks[2].task.status, TaskStatus::Approved);
-        assert_eq!(state.review_tasks[2].human_decision, Some(ApprovalStatus::Approved));
+        assert_eq!(
+            state.review_tasks[2].human_decision,
+            Some(ApprovalStatus::Approved)
+        );
 
         // Task 1 was NOT selected and remains in its initial status
         assert_eq!(state.review_tasks[1].task.status, TaskStatus::HumanReview);
@@ -3491,6 +3506,9 @@ mod tests {
         // When all tasks are approved, prompt shows no pending tasks
         state.prompt_approve_all_tasks();
         assert!(state.pending_confirmation.is_none());
-        assert_eq!(state.status_message.as_deref(), Some("No pending tasks to approve."));
+        assert_eq!(
+            state.status_message.as_deref(),
+            Some("No pending tasks to approve.")
+        );
     }
 }

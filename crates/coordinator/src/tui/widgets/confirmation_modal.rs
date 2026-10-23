@@ -27,8 +27,12 @@ impl ConfirmationModalWidget {
         frame.render_widget(Clear, modal_area);
 
         let (action_badge, border_color) = match &dialog.action {
-            DestructiveAction::CancelTask { short_id, .. } => (format!("Cancel [{short_id}]"), Color::Red),
-            DestructiveAction::RejectTask { short_id, .. } => (format!("Reject [{short_id}]"), Color::Red),
+            DestructiveAction::CancelTask { short_id, .. } => {
+                (format!("Cancel [{short_id}]"), Color::Red)
+            }
+            DestructiveAction::RejectTask { short_id, .. } => {
+                (format!("Reject [{short_id}]"), Color::Red)
+            }
             DestructiveAction::ApproveAllTasks => ("Approve All".to_string(), Color::Green),
         };
 
@@ -37,7 +41,9 @@ impl ConfirmationModalWidget {
             .border_type(BorderType::Rounded)
             .title(Span::styled(
                 format!(" ⚠ {} — {} ", dialog.title, action_badge),
-                Style::default().fg(border_color).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(border_color)
+                    .add_modifier(Modifier::BOLD),
             ))
             .border_style(Style::default().fg(border_color));
         frame.render_widget(block, modal_area);
@@ -48,20 +54,18 @@ impl ConfirmationModalWidget {
             .constraints([Constraint::Min(2), Constraint::Length(1)])
             .split(modal_area);
 
-        let msg = Paragraph::new(dialog.message.as_str())
-            .style(Style::default().fg(Color::White));
+        let msg = Paragraph::new(dialog.message.as_str()).style(Style::default().fg(Color::White));
         frame.render_widget(msg, inner[0]);
 
         let buttons = Line::from(vec![
             Span::styled(
                 " [Y/Enter] Confirm ",
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::raw("    "),
-            Span::styled(
-                " [N/Esc] Cancel ",
-                Style::default().fg(Color::DarkGray),
-            ),
+            Span::styled(" [N/Esc] Cancel ", Style::default().fg(Color::DarkGray)),
         ]);
         frame.render_widget(Paragraph::new(buttons), inner[1]);
     }

@@ -41,7 +41,9 @@ impl HeaderWidget {
         let pending_pill = Span::styled(
             format!("[Pending: {pending_count}]"),
             if pending_count > 0 {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::DarkGray)
             },
@@ -96,7 +98,10 @@ impl HeaderWidget {
                     if max_proj_space >= 8 {
                         let max_inner = max_proj_space.saturating_sub(3);
                         let display_proj = if proj_name.chars().count() > max_inner {
-                            let truncated: String = proj_name.chars().take(max_inner.saturating_sub(1)).collect();
+                            let truncated: String = proj_name
+                                .chars()
+                                .take(max_inner.saturating_sub(1))
+                                .collect();
                             format!("{truncated}…")
                         } else {
                             proj_name.to_string()
@@ -182,13 +187,19 @@ impl HeaderWidget {
             ]);
             let brand_p = Paragraph::new(brand_line).block(
                 Block::default()
-                    .borders(if area.height >= 3 { Borders::ALL } else { Borders::NONE })
+                    .borders(if area.height >= 3 {
+                        Borders::ALL
+                    } else {
+                        Borders::NONE
+                    })
                     .border_style(Style::default().fg(Color::DarkGray)),
             );
             frame.render_widget(brand_p, chunks[0]);
 
             // Chunk 1: Active project name & status pills
-            let inner_width = chunks[1].width.saturating_sub(if area.height >= 3 { 2 } else { 0 });
+            let inner_width = chunks[1]
+                .width
+                .saturating_sub(if area.height >= 3 { 2 } else { 0 });
             let status_lines = if inner_width >= 80 {
                 vec![Line::from(vec![
                     Span::styled("Project: ", Style::default().fg(Color::DarkGray)),
@@ -268,7 +279,9 @@ impl HeaderWidget {
                 let pending_pill_concise = Span::styled(
                     format!("[P: {pending_count}]"),
                     if pending_count > 0 {
-                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(Color::DarkGray)
                     },
@@ -296,7 +309,11 @@ impl HeaderWidget {
 
             let proj_p = Paragraph::new(status_lines).block(
                 Block::default()
-                    .borders(if area.height >= 3 { Borders::ALL } else { Borders::NONE })
+                    .borders(if area.height >= 3 {
+                        Borders::ALL
+                    } else {
+                        Borders::NONE
+                    })
                     .border_style(Style::default().fg(Color::DarkGray)),
             );
             frame.render_widget(proj_p, chunks[1]);
@@ -306,7 +323,11 @@ impl HeaderWidget {
                 .divider(Span::raw("│"))
                 .block(
                     Block::default()
-                        .borders(if area.height >= 3 { Borders::ALL } else { Borders::NONE })
+                        .borders(if area.height >= 3 {
+                            Borders::ALL
+                        } else {
+                            Borders::NONE
+                        })
                         .border_style(Style::default().fg(Color::DarkGray)),
                 )
                 .select(selected_idx)
@@ -325,9 +346,9 @@ impl HeaderWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::Project;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-    use crate::domain::Project;
     use uuid::Uuid;
 
     #[test]
@@ -388,9 +409,17 @@ mod tests {
         let mut state = AppState::new();
         state.current_screen = CurrentScreen::Settings;
 
-        terminal.draw(|f| HeaderWidget::render(f, f.area(), &state)).unwrap();
+        terminal
+            .draw(|f| HeaderWidget::render(f, f.area(), &state))
+            .unwrap();
 
-        let rendered: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
         assert!(rendered.contains("6:Set"));
     }
 
@@ -427,4 +456,3 @@ mod tests {
         assert!(rend_min.contains("AgentMesh"));
     }
 }
-

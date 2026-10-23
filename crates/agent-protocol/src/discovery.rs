@@ -267,16 +267,16 @@ mod tests {
 
     #[test]
     fn test_detect_runtime() {
-        let runtime = CapabilityDetector::detect_runtime("Mock");
+        let runtime = CapabilityDetector::detect_runtime("Agy");
         assert!(!runtime.os.is_empty());
         assert!(!runtime.arch.is_empty());
-        assert_eq!(runtime.adapter_type, "Mock");
+        assert_eq!(runtime.adapter_type, "Agy");
         assert!(runtime.cpu_count >= 1);
     }
 
     #[test]
     fn test_detect_all() {
-        let caps = CapabilityDetector::detect_all("Mock", &["test_tag".to_string()]);
+        let caps = CapabilityDetector::detect_all("Agy", &["test_tag".to_string()]);
         assert!(caps.has_tag("test_tag"));
         // cargo / rust should be detected on this host
         assert!(caps.has_language("rust") || caps.has_tool("cargo") || caps.has_tool("git"));

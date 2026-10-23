@@ -182,7 +182,7 @@ async fn test_phase15_3_human_review_approval_and_overlap_detection() {
         &pool,
         &NewProposal {
             project_id: proj.id,
-            ai_provider: "mock".to_string(),
+            ai_provider: "agy".to_string(),
             ai_model: "v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
@@ -286,7 +286,7 @@ async fn test_phase15_4_multi_agent_registration_and_secure_fleet() {
     let msg_b = AgentMessage::Register {
         agent_id: agent_b_id,
         human_owner: "Bob (Machine 2 / Infra Specialist)".to_string(),
-        adapter_type: "Mock".to_string(),
+        adapter_type: "Agy".to_string(),
         capabilities: vec![
             "infra".to_string(),
             "nats".to_string(),
@@ -341,7 +341,7 @@ async fn test_phase15_5_parallel_task_execution_and_worktree_isolation() {
         &pool,
         &NewProposal {
             project_id: proj.id,
-            ai_provider: "mock".to_string(),
+            ai_provider: "agy".to_string(),
             ai_model: "v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
@@ -355,7 +355,7 @@ async fn test_phase15_5_parallel_task_execution_and_worktree_isolation() {
         &NewAgent {
             human_owner: "Worker1".to_string(),
             api_key_hash: format!("hash_{}", Uuid::new_v4()),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{}.events", Uuid::new_v4()),
             ..Default::default()
@@ -369,7 +369,7 @@ async fn test_phase15_5_parallel_task_execution_and_worktree_isolation() {
         &NewAgent {
             human_owner: "Worker2".to_string(),
             api_key_hash: format!("hash_{}", Uuid::new_v4()),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{}.events", Uuid::new_v4()),
             ..Default::default()
@@ -489,7 +489,7 @@ async fn test_phase15_6_dependency_enforcement_order() {
         &pool,
         &NewProposal {
             project_id: proj.id,
-            ai_provider: "mock".to_string(),
+            ai_provider: "agy".to_string(),
             ai_model: "v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
@@ -503,7 +503,7 @@ async fn test_phase15_6_dependency_enforcement_order() {
         &NewAgent {
             human_owner: "DepWorker".to_string(),
             api_key_hash: format!("hash_{}", Uuid::new_v4()),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{}.events", Uuid::new_v4()),
             ..Default::default()
@@ -629,7 +629,7 @@ async fn test_phase15_7_agent_crash_recovery_and_reassignment() {
         &pool,
         &NewProposal {
             project_id: proj.id,
-            ai_provider: "mock".to_string(),
+            ai_provider: "agy".to_string(),
             ai_model: "v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
@@ -643,7 +643,7 @@ async fn test_phase15_7_agent_crash_recovery_and_reassignment() {
         &NewAgent {
             human_owner: "CrashedWorker".to_string(),
             api_key_hash: format!("hash_{}", Uuid::new_v4()),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{}.events", Uuid::new_v4()),
             ..Default::default()
@@ -657,7 +657,7 @@ async fn test_phase15_7_agent_crash_recovery_and_reassignment() {
         &NewAgent {
             human_owner: "BackupWorker".to_string(),
             api_key_hash: format!("hash_{}", Uuid::new_v4()),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{}.events", Uuid::new_v4()),
             ..Default::default()
@@ -756,7 +756,7 @@ async fn test_phase15_8_cross_agent_git_conflict_and_failure_diagnostics() {
         &pool,
         &NewProposal {
             project_id: proj.id,
-            ai_provider: "mock".to_string(),
+            ai_provider: "agy".to_string(),
             ai_model: "v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
@@ -923,7 +923,7 @@ async fn test_phase15_10_complete_project_lifecycle_execution() {
         &NewAgent {
             human_owner: "Worker 2".to_string(),
             api_key_hash: format!("hash_{}", Uuid::new_v4()),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string(), "backend".to_string()],
             nats_subject: format!("agents.{}.events", Uuid::new_v4()),
             ..Default::default()

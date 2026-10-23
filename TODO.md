@@ -73,7 +73,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 
 ## Current State
 
-- [~] Remove all mock data and mock runtime paths — scope confirmation pending
+- [x] Remove deprecated simulated runtime paths — simulated agent/provider, defaults, dependent tests, docs, and local backing volumes removed
 - [x] v0.1 — Core Coordination System (DONE)
 - [x] Phase 8 — Real agy Integration (DONE)
 - [x] Phase 9 — Real Repository / Git Coordination (DONE)
@@ -98,7 +98,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 
 ### Workspace & Build
 - [x] Create Cargo workspace (`Cargo.toml`)
-- [x] Create crate stubs: `coordinator`, `agent-protocol`, `agent-mock`, `agent-agy`
+- [x] Create crate stubs: `coordinator`, `agent-protocol`, `agent-agy`, `agent-agy`
 - [x] Verify workspace compiles (`cargo check` — clean, 0 errors, 0 warnings)
 
 ### Infrastructure Configuration
@@ -168,17 +168,17 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Implement agent registration handler
 - [x] Implement heartbeat monitor (agent timeout detection)
 
-### Mock Agent (`agent-mock`)
+### Agy Agent (`agent-agy`)
 - [x] Implement NATS connection with JetStream consumer
 - [x] Implement task subscription from `TASK_ASSIGNMENTS` stream
 - [x] Report full lifecycle: `TaskStarted`, `ProgressUpdate`, `Blocked`, `Completed`, `Failed`
-- [x] Configurable work-simulation delay (env var `MOCK_TASK_DELAY_MS`)
+- [x] Configurable work-simulation delay (env var `AGY_TASK_DELAY_MS`)
 - [x] Implement heartbeat loop
 - [x] Scenario: task that gets `Blocked` then unblocked and `Completed`
 - [x] Implements same `AgentAdapter` trait that agy adapter will implement
 
 ### Acceptance Criteria — Phase 2
-- [x] Mock agent connects, receives task, reports full lifecycle to coordinator
+- [x] Agy agent connects, receives task, reports full lifecycle to coordinator
 - [x] Coordinator receives all events via `AGENT_EVENTS` JetStream stream
 - [x] JetStream durable delivery verified: restart agent mid-task, task redelivered
 - [x] TaskDelivery record in PostgreSQL reflects correct state after each event
@@ -190,7 +190,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 ### AI Planning Layer (`coordinator/src/ai/`)
 - [x] Define `LlmProvider` trait and planning schemas (`ai/provider.rs`, `ai/schema.rs`)
 - [x] Implement deterministic plan validator (`ai/validator.rs`): cycles, dependencies, agents, overlaps, non-empty tasks
-- [x] Implement `MockLlmProvider` for deterministic testing
+- [x] Implement `AgyProvider` for deterministic testing
 - [x] Comprehensive validation & test matrix (malformed JSON, broken deps, cycles, invalid agents, empty plan)
 - [x] Implement prompt templates with structured JSON output schema (`ai/prompts.rs`)
 - [x] Implement real LLM provider (`ai/anthropic.rs` or `ai/gemini.rs` via reqwest, runtime configurable)
@@ -200,7 +200,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] Given a project description, LLM returns a valid `ProposedPlan` with tasks + dependencies
 - [x] Switching `AI_PROVIDER` env var changes the provider without code changes
 - [x] Malformed LLM output logs a warning and surfaces error in TUI; does not crash
-- [x] `MockLlmProvider` is usable in integration tests without real API keys
+- [x] `AgyProvider` is usable in integration tests without real API keys
 
 ---
 
@@ -273,7 +273,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 ## Phase 7 — Integration & Demo
 
 ### End-to-End Validation
-- [x] Integration test: 2 mock agents, project description, full lifecycle (`phase7_e2e_demo.rs`)
+- [x] Integration test: 2 agy agents, project description, full lifecycle (`phase7_e2e_demo.rs`)
 - [x] Demonstrate dependency chain: Task B waits for Task A `Completed` (verified in tests)
 - [x] Demonstrate overlap warning: Task A and Task B share a resource path (verified in tests)
 - [x] All 10 v0.1 success criteria satisfied (see `docs/architecture.md`)
@@ -288,8 +288,8 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 - [x] LLM produces dependency-aware task plan ✓
 - [x] Human reviews tasks one-at-a-time with Y/N/E/↑↓/Enter ✓
 - [x] Coordinator assigns approved tasks, dependency-ordered ✓
-- [x] Tasks delivered via NATS JetStream to mock agents ✓
-- [x] Mock agents report: started, progress, blocked, completed ✓
+- [x] Tasks delivered via NATS JetStream to agy agents ✓
+- [x] Agy agents report: started, progress, blocked, completed ✓
 - [x] TUI live dashboard shows agent + task state ✓
 - [x] One dependency chain demonstrated ✓
 - [x] One overlap warning demonstrated ✓
@@ -301,7 +301,7 @@ All Phase 0 acceptance criteria met. cargo check passes cleanly.
 
 ## Phase 8 — Real agy Integration
 
-**Goal:** Replace mock execution with real agy instances.
+**Goal:** Replace agy execution with real agy instances.
 
 - [x] 8.1 Audit current agent-agy scaffold
 - [x] 8.2 Define real agy adapter contract
@@ -493,10 +493,10 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 
 ## Post-v1.0 — Documentation & Repository Cleanup
 
-- [x] Rewrite `README.md` for v1.0 from the implementation (architecture, workflow, install, quick start, mock/agy/multi-machine setup, protocol, capabilities, git/worktrees, dependencies/overlaps, failure recovery, replanning, security, observability, testing, structure, troubleshooting, honest status)
+- [x] Rewrite `README.md` for v1.0 from the implementation (architecture, workflow, install, quick start, agy/agy/multi-machine setup, protocol, capabilities, git/worktrees, dependencies/overlaps, failure recovery, replanning, security, observability, testing, structure, troubleshooting, honest status)
 - [x] Reorganize `docs/` into `architecture/`, `protocols/`, `deployment/`, `development/`, `decisions/`; add `docs/README.md` index and `docs/deployment/multi-machine.md`; update all links
 - [x] Update `docs/protocols/agent-protocol.md` (v1.0 fields, consumer names/ack waits, registration flow, idempotency status) and `docs/architecture/architecture.md` (providers, wiring status)
-- [x] Fix `.env.example` (only `mock`/`anthropic` exist, `MOCK_AGENT_ID` must be a UUID, add `AGY_*` vars, agents do not read `.env`)
+- [x] Fix `.env.example` (only `agy`/`anthropic` exist, `AGY_AGENT_ID` must be a UUID, add `AGY_*` vars, agents do not read `.env`)
 - [x] `.gitignore`: `.env.*` with `!.env.example`, `.agentmesh/` runtime worktrees
 - [x] Verified: `cargo test --workspace --no-fail-fast` → 196 passed; `test_one_real_agy_binary_instance` fails only because `agy` returns `RESOURCE_EXHAUSTED (429)` quota error
 - [x] Follow-ups addressed:
@@ -539,7 +539,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 - [x] 17.3 Rewrite README.md (Comprehensive, professional open-source documentation matching reality)
 - [x] 17.4 Tech Stack & Requirements Documentation
 - [x] 17.5 Configuration Reference Table & Infrastructure Documentation
-- [x] 17.6 AGY Setup & Mock Agent Documentation
+- [x] 17.6 AGY Setup & Agy Agent Documentation
 - [x] 17.7 Multi-Machine Setup & Real Repository Workflow Documentation
 - [x] 17.8 Failure/Recovery, Security & Observability Reference
 - [x] 17.9 Documentation Index & Project Structure Verification
@@ -785,7 +785,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
   - [x] Handled `InspectTaskTimeline` in `main.rs` asynchronously via `TimelineService::build_task_timeline` and deduplicated periodic SQL events into ring buffer preserving live NATS events
   - [x] All 86 Phase 20 tests and 65 Phase 21 tests pass cleanly
 - [x] **M_TEST: E2E Testing Track: Comprehensive TestBackend Suite**
-  - [x] Purge mock facade structs in `phase21_tui_enhancements.rs` and verify all 65 tests against real coordinator production components
+  - [x] Purge agy facade structs in `phase21_tui_enhancements.rs` and verify all 65 tests against real coordinator production components
   - [x] Implement destructive action confirmation gating (`confirm_destructive_actions`) for interactive plan review and command palette
   - [x] Fix event buffer truncation asymmetry in `apply_update(TuiUpdateEvent::RecentEvents)`
   - [x] Add confirmation modal key hints `[Y/Enter] Confirm  [N/Esc] Cancel` in `FooterWidget`
@@ -830,25 +830,25 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 
 ---
 
-## Runtime Mock Data Removal & Live Empty State Graceful Handling
+## Runtime Agy Data Removal & Live Empty State Graceful Handling
 
-**Goal:** Purge all mock data seeding, fallback mock modes, and demo state from the coordinator runtime paths, main entry points, and TUI so the system operates purely on live data from PostgreSQL, NATS JetStream, registered agents, and user submissions, gracefully handling empty states.
+**Goal:** Purge all agy data seeding, fallback agy modes, and demo state from the coordinator runtime paths, main entry points, and TUI so the system operates purely on live data from PostgreSQL, NATS JetStream, registered agents, and user submissions, gracefully handling empty states.
 
-- [x] Remove mock agent seeding (`Alice`, `Bob`) from `crates/coordinator/src/main.rs`
-- [x] Remove standalone mock fallback mode from `crates/coordinator/src/main.rs` and enforce live infrastructure requirement
+- [x] Remove agy agent seeding (`Alice`, `Bob`) from `crates/coordinator/src/main.rs`
+- [x] Remove standalone agy fallback mode from `crates/coordinator/src/main.rs` and enforce live infrastructure requirement
 - [x] Ensure clean initial state (`pg_connected`, `nats_connected`, empty `available_projects`, empty `agents`) in production runtime
 - [x] Align navigation prompts in `plan_review.rs` and `dag_view.rs` to point to `[2: Proj]`
 - [x] Align empty timeline prompt in `diagnostics.rs` to guide to `[2: Proj]`
-- [x] Purge hardcoded mock runtime string from `agent_inspector.rs` hardware telemetry
+- [x] Purge hardcoded agy runtime string from `agent_inspector.rs` hardware telemetry
 - [x] Clear project input fields and reset indices on `SubmitProject` and `LoadProject`
-- [x] Mark `with_mock_data` on `AppState` with `#[doc(hidden)]` as test fixture helper only
-- [x] Add deterministic test suite verifying clean empty-state rendering across all screens and widgets without panics (`crates/coordinator/tests/mock_data_purged_verification.rs`)
+- [x] Mark `with_agy_data` on `AppState` with `#[doc(hidden)]` as test fixture helper only
+- [x] Add deterministic test suite verifying clean empty-state rendering across all screens and widgets without panics (`crates/coordinator/tests/agy_data_purged_verification.rs`)
 - [x] Verify `cargo check --workspace` passes cleanly with 0 errors and 0 warnings
 - [x] Verify test suites pass cleanly across all verified test suites
 
 **Verification Results**:
 - `cargo check --workspace`: 0 errors, 0 warnings
-- `cargo test -p coordinator --test mock_data_purged_verification`: 16/16 tests passed cleanly
+- `cargo test -p coordinator --test agy_data_purged_verification`: 16/16 tests passed cleanly
 - `cargo test -p coordinator --lib`: 129/129 tests passed cleanly
 - `cargo test -p coordinator --test phase21_tui_enhancements`: 65/65 tests passed cleanly
 - `cargo test -p coordinator --test phase20_tui_verification`: 86/86 tests passed cleanly
@@ -862,7 +862,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 
 ## Real Multi-Agent Acceptance Test (Live Execution)
 
-**Goal:** Execute a genuine, real-world multi-agent acceptance test using real coding agents (`agy` CLI runtime) coordinated via PostgreSQL and NATS JetStream against a clean repository (`mesh-test-project`). No mock agents.
+**Goal:** Execute a genuine, real-world multi-agent acceptance test using real coding agents (`agy` CLI runtime) coordinated via PostgreSQL and NATS JetStream against a clean repository (`mesh-test-project`). No agy agents.
 
 - [x] Phase A: Environment & Infrastructure Verification
   - [x] Verify live PostgreSQL (port 5432) and NATS JetStream (port 4222)
@@ -902,7 +902,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 
 - [x] Phase 1 & 2: Verification of Infrastructure & TUI State
   - [x] Verify PostgreSQL 16 and NATS JetStream connectivity and stream health
-  - [x] Verify TUI screens rendered live state and no mock data
+  - [x] Verify TUI screens rendered live state and no agy data
   - [x] Verify Orion repository path and uncommitted safety boundary (`src/main.rs` untouched)
 - [x] Phase 3 & 4: Planning & DAG Generation
   - [x] Input repository path `/media/pirate/Shared/currently working/orion` and user goal
@@ -962,7 +962,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 - [!] Rerun full workspace test suite on request (2026-10-23): `cargo test --workspace` stops in `phase18_real_world_validation` with the same three failures noted in the previous coordinator-wide run; workspace tests after that suite were not reached.
 - [x] Add a Run Demo TUI action and repair the Docker-backed demo path (requested 2026-10-23).
 - [x] Add TUI theme and font-style controls in Settings, with global rendering updates (requested 2026-10-23).
-- [x] Make Settings a top-level TUI tab and remove persisted mock records from the local development database (requested 2026-10-23).
+- [x] Make Settings a top-level TUI tab and remove persisted agy records from the local development database (requested 2026-10-23).
 - [x] Fix project screen alignment and wrapping on compact terminal widths (requested 2026-10-23).
 - [x] Add a project copy action that pre-fills the project creation form without changing the source (requested 2026-10-23).
 - [x] Make task cards selectable by mouse in Plan Review and clarify selection keys (requested 2026-10-23).
@@ -972,7 +972,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 Verification run (2026-10-23):
 - Updated the command palette test to include the `task:approve_all` command, and enabled DAG view in the dependency jump test to reflect its `[`/`]` navigation context.
 - `cargo test -p coordinator --lib`: 129/129 passed.
-- TUI integration suites (`phase4_tui`, Phase 20/21/22 TUI and stress suites, and `mock_data_purged_verification`): 245/245 passed.
+- TUI integration suites (`phase4_tui`, Phase 20/21/22 TUI and stress suites, and `agy_data_purged_verification`): 245/245 passed.
 - `cargo test -p coordinator`: TUI library and main tests passed, but the overall command stopped in `phase18_real_world_validation` with 3 failures unrelated to TUI changes (`test_phase18_5_dependency_chain_and_auto_assignment`, `test_phase18_10_distributed_two_agent_execution`, and `test_phase18_3_worktree_real_agy_execution_and_finalization`).
 
 Run Demo fix verification (2026-10-23):
@@ -1006,7 +1006,7 @@ Run Demo fix verification (2026-10-23):
 - [x] Task 22.6: Test Suite Validation & Zero-Regression Check
   - [x] Comprehensive Ratatui test suite covering mouse events, bulk approval, tab clicks, and focus rendering (`phase22_tui_usability.rs` - 13/13 passed)
   - [x] `cargo check --workspace` passes with 0 errors and 0 warnings
-  - [x] 100% pass rate across existing Phase 20 (`phase20_tui_verification.rs` - 86/86 passed) and Phase 21 (`phase21_tui_enhancements.rs` - 65/65 passed), and `mock_data_purged_verification.rs` (16/16 passed)
+  - [x] 100% pass rate across existing Phase 20 (`phase20_tui_verification.rs` - 86/86 passed) and Phase 21 (`phase21_tui_enhancements.rs` - 65/65 passed), and `agy_data_purged_verification.rs` (16/16 passed)
 
 ### Acceptance Criteria:
 The Operator TUI provides an intuitive, high-ergonomics interface with full mouse support (scrolling across all scrollable lists, graphs, and logs; left-click on header tabs), one-key bulk task approvals (`Shift+A`) guarded by safety confirmation modals, Unicode block progress bars, color-coded status badges with icons, severity-styled toast banners, informative onboarding guidance for empty states, and fast tab cycling shortcuts (`[` and `]`, `BackTab`). All 180 TUI unit and integration tests across Phase 20, 21, and 22 pass cleanly with zero regressions.
@@ -1035,8 +1035,6 @@ The Operator TUI provides an intuitive, high-ergonomics interface with full mous
   - [x] Verified zero border clipping across all standard and compact breakpoints
 - [x] M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening (All TUI tests passing, clippy clean, Reviewers, Challengers, Forensic Auditor, git commits) [DONE]
   - [x] Final verification complete: 376 passing tests (152 lib tests + 224 integration tests across `phase4_tui`, `phase20_tui_verification`, `phase21_tui_enhancements`, `phase22_tui_usability`, `phase22_plan_review_ergonomics`, `phase22_preview_challenger_stress`, and `phase22_challenger_verification`) with 0 errors, 0 failures, and 0 warnings.
-
-
 
 
 

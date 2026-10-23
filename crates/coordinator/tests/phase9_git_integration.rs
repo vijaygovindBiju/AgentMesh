@@ -80,8 +80,8 @@ async fn test_phase9_parallel_agents_worktree_isolation_no_overwriting() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "phase 9".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -301,8 +301,8 @@ async fn test_phase9_unexpected_resource_modification_detection() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "phase 9 unexpected".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -420,8 +420,8 @@ async fn test_phase9_cross_agent_git_conflict_detection_and_recording() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "phase 9 conflict".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -618,8 +618,8 @@ async fn test_phase9_two_agents_parallel_git_workflow_over_jetstream() {
         &pool,
         &NewProposal {
             project_id: project.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "e2e".to_string(),
             raw_response: "{}".to_string(),
         },

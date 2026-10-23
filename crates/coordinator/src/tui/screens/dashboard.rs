@@ -179,7 +179,11 @@ impl DashboardScreen {
                     };
 
                     let is_selected = idx == state.selected_agent_index;
-                    let prefix = if is_selected && is_focused { "▶ " } else { "  " };
+                    let prefix = if is_selected && is_focused {
+                        "▶ "
+                    } else {
+                        "  "
+                    };
                     let display_name = format!("{prefix}{name}");
 
                     let mut row_style = Style::default().fg(color);
@@ -212,7 +216,15 @@ impl DashboardScreen {
             ],
         )
         .header(
-            Row::new(vec!["Agent Name", "Human Owner", "Health", "Latency", "Current Task", "Status"]).style(
+            Row::new(vec![
+                "Agent Name",
+                "Human Owner",
+                "Health",
+                "Latency",
+                "Current Task",
+                "Status",
+            ])
+            .style(
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
@@ -306,7 +318,11 @@ impl DashboardScreen {
                     };
 
                     let is_selected = idx == state.selected_dashboard_task_index;
-                    let prefix = if is_selected && is_focused { "▶ " } else { "  " };
+                    let prefix = if is_selected && is_focused {
+                        "▶ "
+                    } else {
+                        "  "
+                    };
                     let short_id_display = format!("{prefix}{}", task.short_id);
 
                     let mut row_style = Style::default().fg(status_color);
@@ -337,7 +353,14 @@ impl DashboardScreen {
             ],
         )
         .header(
-            Row::new(vec!["Short ID", "Title", "Status", "Progress", "Assigned Agent"]).style(
+            Row::new(vec![
+                "Short ID",
+                "Title",
+                "Status",
+                "Progress",
+                "Assigned Agent",
+            ])
+            .style(
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),

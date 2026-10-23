@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-/// Interface that all agent adapters (Mock, Agy, and future runtimes) must implement.
+/// Interface that all agent adapters (Agy and future runtimes) must implement.
 /// Keeps the agent protocol transport/runtime independent.
 pub trait AgentAdapter: Send + Sync {
     /// Unique identifier for this agent instance.
@@ -12,7 +12,7 @@ pub trait AgentAdapter: Send + Sync {
     /// Supported capability tags (e.g., ["rust", "postgres"]).
     fn capabilities(&self) -> &[String];
 
-    /// Adapter type string (e.g., "Mock", "Agy").
+    /// Adapter type string (e.g., "Agy").
     fn adapter_type(&self) -> &str;
 
     /// Raw API key for registration authentication.

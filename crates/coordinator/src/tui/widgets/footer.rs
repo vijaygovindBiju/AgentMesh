@@ -40,44 +40,82 @@ impl FooterWidget {
         // Keybinding hints based on modals, input mode, screen, and focused pane
         let spans = if state.pending_confirmation.is_some() {
             vec![
-                Span::styled(" [Y/Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Y/Enter] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Confirm  "),
-                Span::styled(" [N/Esc] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [N/Esc] ",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Cancel"),
             ]
         } else if state.show_command_palette {
             vec![
-                Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [↑/↓] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Navigate  "),
-                Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Enter] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Execute  "),
                 Span::styled(" [Esc] ", Style::default().fg(Color::Yellow)),
                 Span::raw("Close"),
             ]
         } else if state.show_help_modal {
             vec![
-                Span::styled(" [?] / [Esc] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [?] / [Esc] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Close Help Reference  "),
                 Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
                 Span::raw("Quit"),
             ]
         } else if state.show_agent_inspector {
             vec![
-                Span::styled(" [Esc] / [C] / [Enter] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Esc] / [C] / [Enter] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Close Capability Inspector  "),
                 Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
                 Span::raw("Quit"),
             ]
         } else if state.show_event_payload_modal {
             vec![
-                Span::styled(" [Esc] / [Enter] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Esc] / [Enter] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Close Payload Viewer  "),
                 Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
                 Span::raw("Quit"),
             ]
         } else if state.show_timeline_modal {
             vec![
-                Span::styled(" [Esc] / [Enter] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Esc] / [Enter] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Close Lifecycle Timeline  "),
                 Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
                 Span::raw("Quit"),
@@ -143,11 +181,18 @@ impl FooterWidget {
                             CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement
                         ) {
                             vec![
-                                Span::styled(" [C] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                                Span::styled(
+                                    " [C] ",
+                                    Style::default()
+                                        .fg(Color::Yellow)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
                                 Span::raw("Copy "),
                                 Span::styled(
                                     " [D] ",
-                                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                                    Style::default()
+                                        .fg(Color::Green)
+                                        .add_modifier(Modifier::BOLD),
                                 ),
                                 Span::raw("Run Demo "),
                                 Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
@@ -160,20 +205,45 @@ impl FooterWidget {
                         } else if state.current_screen == CurrentScreen::PlanReview {
                             if has_selected_task {
                                 vec![
-                                    Span::styled(" [Ctrl+A] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                                    Span::styled(
+                                        " [Ctrl+A] ",
+                                        Style::default()
+                                            .fg(Color::Cyan)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
                                     Span::raw("Select All  "),
                                     Span::styled(" [Space] ", Style::default().fg(Color::Cyan)),
                                     Span::raw("Tog  "),
-                                    Span::styled(" [Y] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                                    Span::styled(
+                                        " [Y] ",
+                                        Style::default()
+                                            .fg(Color::Green)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
                                     Span::raw("Appr  "),
-                                    Span::styled(" [N] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                                    Span::styled(
+                                        " [N] ",
+                                        Style::default()
+                                            .fg(Color::Red)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
                                     Span::raw("Rej  "),
-                                    Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                                    Span::styled(
+                                        " [E] ",
+                                        Style::default()
+                                            .fg(Color::Yellow)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
                                     Span::raw("Edit"),
                                 ]
                             } else {
                                 vec![
-                                    Span::styled(" [Ctrl+A] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                                    Span::styled(
+                                        " [Ctrl+A] ",
+                                        Style::default()
+                                            .fg(Color::Cyan)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
                                     Span::raw("All "),
                                     Span::styled(" [Space] ", Style::default().fg(Color::Cyan)),
                                     Span::raw("Tog "),
@@ -189,7 +259,12 @@ impl FooterWidget {
                                 Span::raw("Cmd "),
                                 Span::styled(" [Tab] ", Style::default().fg(Color::Cyan)),
                                 Span::raw("Nav "),
-                                Span::styled(" [A] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                                Span::styled(
+                                    " [A] ",
+                                    Style::default()
+                                        .fg(Color::Yellow)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
                                 Span::raw("Ack "),
                                 Span::styled(" [Esc] ", Style::default().fg(Color::DarkGray)),
                                 Span::raw("Back"),
@@ -225,13 +300,31 @@ impl FooterWidget {
                                     let mut hints = Vec::new();
                                     if has_selected_task {
                                         hints.extend([
-                                            Span::styled(" [Y] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                                            Span::styled(
+                                                " [Y] ",
+                                                Style::default()
+                                                    .fg(Color::Green)
+                                                    .add_modifier(Modifier::BOLD),
+                                            ),
                                             Span::raw("Appr "),
-                                            Span::styled(" [Shift+A] ", Style::default().fg(Color::Green)),
+                                            Span::styled(
+                                                " [Shift+A] ",
+                                                Style::default().fg(Color::Green),
+                                            ),
                                             Span::raw("All "),
-                                            Span::styled(" [N] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                                            Span::styled(
+                                                " [N] ",
+                                                Style::default()
+                                                    .fg(Color::Red)
+                                                    .add_modifier(Modifier::BOLD),
+                                            ),
                                             Span::raw("Rej "),
-                                            Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                                            Span::styled(
+                                                " [E] ",
+                                                Style::default()
+                                                    .fg(Color::Yellow)
+                                                    .add_modifier(Modifier::BOLD),
+                                            ),
                                             Span::raw("Edit "),
                                             Span::styled(" [C] ", Style::default().fg(Color::Red)),
                                             Span::raw("Canc "),
@@ -247,7 +340,10 @@ impl FooterWidget {
                                     ]);
                                     if has_overlaps {
                                         hints.extend([
-                                            Span::styled(" [A] ", Style::default().fg(Color::Yellow)),
+                                            Span::styled(
+                                                " [A] ",
+                                                Style::default().fg(Color::Yellow),
+                                            ),
                                             Span::raw("Ack "),
                                         ]);
                                     }
@@ -260,35 +356,65 @@ impl FooterWidget {
                                     hints
                                 } else {
                                     // Expanded text hints for wide terminals (>=150 cols)
-                                    let dag_label = if state.show_dag_view { "Cards" } else { "DAG" };
-                                    let mut hints = vec![
-                                        Span::styled(
-                                            format!(" [G: {dag_label}] "),
-                                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                                        ),
-                                    ];
+                                    let dag_label =
+                                        if state.show_dag_view { "Cards" } else { "DAG" };
+                                    let mut hints = vec![Span::styled(
+                                        format!(" [G: {dag_label}] "),
+                                        Style::default()
+                                            .fg(Color::Yellow)
+                                            .add_modifier(Modifier::BOLD),
+                                    )];
                                     if has_selected_task {
                                         hints.extend([
-                                            Span::styled(" [Y] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                                            Span::styled(
+                                                " [Y] ",
+                                                Style::default()
+                                                    .fg(Color::Green)
+                                                    .add_modifier(Modifier::BOLD),
+                                            ),
                                             Span::raw("Approve "),
-                                            Span::styled(" [Shift+A] ", Style::default().fg(Color::Green)),
+                                            Span::styled(
+                                                " [Shift+A] ",
+                                                Style::default().fg(Color::Green),
+                                            ),
                                             Span::raw("All "),
-                                            Span::styled(" [N] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                                            Span::styled(
+                                                " [N] ",
+                                                Style::default()
+                                                    .fg(Color::Red)
+                                                    .add_modifier(Modifier::BOLD),
+                                            ),
                                             Span::raw("Reject "),
-                                            Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                                            Span::styled(
+                                                " [E] ",
+                                                Style::default()
+                                                    .fg(Color::Yellow)
+                                                    .add_modifier(Modifier::BOLD),
+                                            ),
                                             Span::raw("Edit "),
                                             Span::styled(" [C] ", Style::default().fg(Color::Red)),
                                             Span::raw("Cancel "),
-                                            Span::styled(" [R] ", Style::default().fg(Color::Green)),
+                                            Span::styled(
+                                                " [R] ",
+                                                Style::default().fg(Color::Green),
+                                            ),
                                             Span::raw("Retry "),
-                                            Span::styled(" [Esc] ", Style::default().fg(Color::Yellow)),
+                                            Span::styled(
+                                                " [Esc] ",
+                                                Style::default().fg(Color::Yellow),
+                                            ),
                                             Span::raw("Deselect "),
                                         ]);
                                     }
                                     hints.extend([
                                         Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
                                         Span::raw("Nav "),
-                                        Span::styled(" [Ctrl+A] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                                        Span::styled(
+                                            " [Ctrl+A] ",
+                                            Style::default()
+                                                .fg(Color::Cyan)
+                                                .add_modifier(Modifier::BOLD),
+                                        ),
                                         Span::raw("Select All "),
                                         Span::styled(" [Space] ", Style::default().fg(Color::Cyan)),
                                         Span::raw("Toggle "),
@@ -297,7 +423,10 @@ impl FooterWidget {
                                     ]);
                                     if has_overlaps {
                                         hints.extend([
-                                            Span::styled(" [A] ", Style::default().fg(Color::Yellow)),
+                                            Span::styled(
+                                                " [A] ",
+                                                Style::default().fg(Color::Yellow),
+                                            ),
                                             Span::raw("Ack "),
                                         ]);
                                     }
@@ -313,11 +442,18 @@ impl FooterWidget {
                                 }
                             }
                             CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => vec![
-                                Span::styled(" [C] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                                Span::styled(
+                                    " [C] ",
+                                    Style::default()
+                                        .fg(Color::Yellow)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
                                 Span::raw("Copy Project  "),
                                 Span::styled(
                                     " [D] ",
-                                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                                    Style::default()
+                                        .fg(Color::Green)
+                                        .add_modifier(Modifier::BOLD),
                                 ),
                                 Span::raw("Run Demo  "),
                                 Span::styled(
@@ -336,110 +472,134 @@ impl FooterWidget {
                                 Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
                                 Span::raw("Quit"),
                             ],
-                            CurrentScreen::Dashboard | CurrentScreen::FleetInspector => {
-                                match state.dashboard_focus {
-                                    crate::tui::state::DashboardFocus::AgentsTable => {
-                                        let mut hints = vec![
-                                            Span::styled(" [←/→] ", Style::default().fg(Color::Cyan)),
-                                            Span::raw("Focus  "),
-                                            Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
-                                            Span::raw("Select Agent  "),
-                                            Span::styled(" [C/Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                                            Span::raw("Inspect  "),
-                                        ];
-                                        if has_overlaps {
-                                            hints.extend([
-                                                Span::styled(" [A] ", Style::default().fg(Color::Yellow)),
-                                                Span::raw("Ack Overlap  "),
-                                            ]);
-                                        }
-                                        hints.extend([
-                                            Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
-                                            Span::raw("Cmd  "),
-                                            Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
-                                            Span::raw("Help  "),
-                                            Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
-                                            Span::raw("Quit"),
-                                        ]);
-                                        hints
-                                    }
-                                    crate::tui::state::DashboardFocus::TasksTable => {
-                                        let mut hints = vec![
-                                            Span::styled(" [←/→] ", Style::default().fg(Color::Cyan)),
-                                            Span::raw("Focus  "),
-                                            Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
-                                            Span::raw("Select Task  "),
-                                            Span::styled(" [Enter] ", Style::default().fg(Color::Cyan)),
-                                            Span::raw("Inspect  "),
-                                        ];
-                                        if has_overlaps {
-                                            hints.extend([
-                                                Span::styled(" [A] ", Style::default().fg(Color::Yellow)),
-                                                Span::raw("Ack Overlap  "),
-                                            ]);
-                                        }
-                                        hints.extend([
-                                            Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
-                                            Span::raw("Cmd  "),
-                                            Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
-                                            Span::raw("Help  "),
-                                            Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
-                                            Span::raw("Quit"),
-                                        ]);
-                                        hints
-                                    }
-                                    crate::tui::state::DashboardFocus::OverlapsTable => vec![
+                            CurrentScreen::Dashboard | CurrentScreen::FleetInspector => match state
+                                .dashboard_focus
+                            {
+                                crate::tui::state::DashboardFocus::AgentsTable => {
+                                    let mut hints = vec![
                                         Span::styled(" [←/→] ", Style::default().fg(Color::Cyan)),
                                         Span::raw("Focus  "),
                                         Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
-                                        Span::raw("Select Overlap  "),
-                                        Span::styled(" [A/Enter] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                                        Span::raw("Acknowledge  "),
+                                        Span::raw("Select Agent  "),
+                                        Span::styled(
+                                            " [C/Enter] ",
+                                            Style::default()
+                                                .fg(Color::Green)
+                                                .add_modifier(Modifier::BOLD),
+                                        ),
+                                        Span::raw("Inspect  "),
+                                    ];
+                                    if has_overlaps {
+                                        hints.extend([
+                                            Span::styled(
+                                                " [A] ",
+                                                Style::default().fg(Color::Yellow),
+                                            ),
+                                            Span::raw("Ack Overlap  "),
+                                        ]);
+                                    }
+                                    hints.extend([
                                         Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
                                         Span::raw("Cmd  "),
                                         Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
                                         Span::raw("Help  "),
                                         Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
                                         Span::raw("Quit"),
-                                    ],
+                                    ]);
+                                    hints
                                 }
-                            }
-                            CurrentScreen::Diagnostics => {
-                                match state.diagnostics_focus {
-                                    crate::tui::state::DiagnosticsFocus::EventsStream => vec![
-                                        Span::styled(" [←/→] ", Style::default().fg(Color::Cyan)),
-                                        Span::raw("Focus  "),
-                                        Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
-                                        Span::raw("Scroll Log  "),
-                                        Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                                        Span::raw("Payload  "),
-                                        Span::styled(" [R] ", Style::default().fg(Color::Green)),
-                                        Span::raw("Refresh  "),
-                                        Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
-                                        Span::raw("Cmd  "),
-                                        Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
-                                        Span::raw("Help  "),
-                                        Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
-                                        Span::raw("Quit"),
-                                    ],
-                                    crate::tui::state::DiagnosticsFocus::Timeline => vec![
+                                crate::tui::state::DashboardFocus::TasksTable => {
+                                    let mut hints = vec![
                                         Span::styled(" [←/→] ", Style::default().fg(Color::Cyan)),
                                         Span::raw("Focus  "),
                                         Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
                                         Span::raw("Select Task  "),
-                                        Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                                        Span::raw("Full Stages  "),
-                                        Span::styled(" [R] ", Style::default().fg(Color::Green)),
-                                        Span::raw("Refresh  "),
+                                        Span::styled(" [Enter] ", Style::default().fg(Color::Cyan)),
+                                        Span::raw("Inspect  "),
+                                    ];
+                                    if has_overlaps {
+                                        hints.extend([
+                                            Span::styled(
+                                                " [A] ",
+                                                Style::default().fg(Color::Yellow),
+                                            ),
+                                            Span::raw("Ack Overlap  "),
+                                        ]);
+                                    }
+                                    hints.extend([
                                         Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
                                         Span::raw("Cmd  "),
                                         Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
                                         Span::raw("Help  "),
                                         Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
                                         Span::raw("Quit"),
-                                    ],
+                                    ]);
+                                    hints
                                 }
-                            }
+                                crate::tui::state::DashboardFocus::OverlapsTable => vec![
+                                    Span::styled(" [←/→] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Focus  "),
+                                    Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Select Overlap  "),
+                                    Span::styled(
+                                        " [A/Enter] ",
+                                        Style::default()
+                                            .fg(Color::Yellow)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
+                                    Span::raw("Acknowledge  "),
+                                    Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Cmd  "),
+                                    Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
+                                    Span::raw("Help  "),
+                                    Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
+                                    Span::raw("Quit"),
+                                ],
+                            },
+                            CurrentScreen::Diagnostics => match state.diagnostics_focus {
+                                crate::tui::state::DiagnosticsFocus::EventsStream => vec![
+                                    Span::styled(" [←/→] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Focus  "),
+                                    Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Scroll Log  "),
+                                    Span::styled(
+                                        " [Enter] ",
+                                        Style::default()
+                                            .fg(Color::Green)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
+                                    Span::raw("Payload  "),
+                                    Span::styled(" [R] ", Style::default().fg(Color::Green)),
+                                    Span::raw("Refresh  "),
+                                    Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Cmd  "),
+                                    Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
+                                    Span::raw("Help  "),
+                                    Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
+                                    Span::raw("Quit"),
+                                ],
+                                crate::tui::state::DiagnosticsFocus::Timeline => vec![
+                                    Span::styled(" [←/→] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Focus  "),
+                                    Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Select Task  "),
+                                    Span::styled(
+                                        " [Enter] ",
+                                        Style::default()
+                                            .fg(Color::Green)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
+                                    Span::raw("Full Stages  "),
+                                    Span::styled(" [R] ", Style::default().fg(Color::Green)),
+                                    Span::raw("Refresh  "),
+                                    Span::styled(" [:] ", Style::default().fg(Color::Cyan)),
+                                    Span::raw("Cmd  "),
+                                    Span::styled(" [?] ", Style::default().fg(Color::Yellow)),
+                                    Span::raw("Help  "),
+                                    Span::styled(" [Q] ", Style::default().fg(Color::DarkGray)),
+                                    Span::raw("Quit"),
+                                ],
+                            },
                         }
                     }
                 }
@@ -448,7 +608,11 @@ impl FooterWidget {
 
         let hints_p = Paragraph::new(Line::from(spans)).block(
             Block::default()
-                .borders(if area.height >= 3 { Borders::ALL } else { Borders::NONE })
+                .borders(if area.height >= 3 {
+                    Borders::ALL
+                } else {
+                    Borders::NONE
+                })
                 .border_style(Style::default().fg(Color::DarkGray)),
         );
         frame.render_widget(hints_p, chunks[0]);
@@ -487,12 +651,19 @@ impl FooterWidget {
 
             let status_p = Paragraph::new(Line::from(vec![
                 Span::styled(" Status: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(icon, Style::default().fg(icon_color).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    icon,
+                    Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(status_text, Style::default().fg(text_color)),
             ]))
             .block(
                 Block::default()
-                    .borders(if area.height >= 3 { Borders::ALL } else { Borders::NONE })
+                    .borders(if area.height >= 3 {
+                        Borders::ALL
+                    } else {
+                        Borders::NONE
+                    })
                     .border_style(Style::default().fg(Color::DarkGray)),
             );
             frame.render_widget(status_p, chunks[1]);
@@ -503,9 +674,9 @@ impl FooterWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::{OverlapSeverity, OverlapWarning};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-    use crate::domain::{OverlapSeverity, OverlapWarning};
     use uuid::Uuid;
 
     #[test]
@@ -538,9 +709,17 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         let state = AppState::new();
 
-        terminal.draw(|f| FooterWidget::render(f, f.area(), &state)).unwrap();
+        terminal
+            .draw(|f| FooterWidget::render(f, f.area(), &state))
+            .unwrap();
 
-        let rendered: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
         assert!(rendered.contains("Quit"));
         assert!(rendered.contains("switch screens"));
     }
@@ -639,4 +818,3 @@ mod tests {
         assert!(rend.contains("Cancel"));
     }
 }
-

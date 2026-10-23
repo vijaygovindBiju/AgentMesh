@@ -493,7 +493,9 @@ impl CommandHandler {
                 || del.status == DeliveryStatus::Delivered
                 || del.status == DeliveryStatus::Acknowledged
             {
-                let _ = TaskDeliveryRepository::mark_terminal(pool, del.id, "Task retried by operator").await;
+                let _ =
+                    TaskDeliveryRepository::mark_terminal(pool, del.id, "Task retried by operator")
+                        .await;
             }
         }
 

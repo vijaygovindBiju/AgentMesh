@@ -119,7 +119,7 @@ mod tests {
             AgentMessage::Register {
                 agent_id,
                 human_owner: "Alice".to_string(),
-                adapter_type: "Mock".to_string(),
+                adapter_type: "Agy".to_string(),
                 capabilities: vec!["rust".to_string()],
                 profile: None,
                 api_key: "secret".to_string(),

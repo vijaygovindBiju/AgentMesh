@@ -20,9 +20,7 @@ use ratatui::Terminal;
 use serde_json::json;
 use uuid::Uuid;
 
-use coordinator::domain::{
-    DependencyKind, Task, TaskDependency, TaskStatus,
-};
+use coordinator::domain::{DependencyKind, Task, TaskDependency, TaskStatus};
 use coordinator::tui::{
     render, widgets::DagViewWidget, AppState, CurrentScreen, ReviewTaskState, TuiAction,
 };
@@ -96,45 +94,100 @@ fn test_challenge1_deep_linear_chain_depth_6_all_nodes_rendered() {
     let id_f = Uuid::new_v4();
 
     // Deep linear chain: A -> B -> C -> D -> E -> F
-    let task_a = make_task(id_a, proj_id, "TASK-A", "Init Schema", TaskStatus::Completed);
-    let task_b = make_task(id_b, proj_id, "TASK-B", "Setup Migrations", TaskStatus::Approved);
-    let task_c = make_task(id_c, proj_id, "TASK-C", "Build Repository", TaskStatus::HumanReview);
-    let task_d = make_task(id_d, proj_id, "TASK-D", "Implement Service", TaskStatus::Proposed);
-    let task_e = make_task(id_e, proj_id, "TASK-E", "Add Integration Tests", TaskStatus::Proposed);
-    let task_f = make_task(id_f, proj_id, "TASK-F", "Deployment Smoke", TaskStatus::Proposed);
+    let task_a = make_task(
+        id_a,
+        proj_id,
+        "TASK-A",
+        "Init Schema",
+        TaskStatus::Completed,
+    );
+    let task_b = make_task(
+        id_b,
+        proj_id,
+        "TASK-B",
+        "Setup Migrations",
+        TaskStatus::Approved,
+    );
+    let task_c = make_task(
+        id_c,
+        proj_id,
+        "TASK-C",
+        "Build Repository",
+        TaskStatus::HumanReview,
+    );
+    let task_d = make_task(
+        id_d,
+        proj_id,
+        "TASK-D",
+        "Implement Service",
+        TaskStatus::Proposed,
+    );
+    let task_e = make_task(
+        id_e,
+        proj_id,
+        "TASK-E",
+        "Add Integration Tests",
+        TaskStatus::Proposed,
+    );
+    let task_f = make_task(
+        id_f,
+        proj_id,
+        "TASK-F",
+        "Deployment Smoke",
+        TaskStatus::Proposed,
+    );
 
     state.review_tasks = vec![
         make_review_task(task_a, vec![]),
-        make_review_task(task_b, vec![TaskDependency {
-            dependent_id: id_b,
-            depends_on_id: id_a,
-            kind: DependencyKind::Blocks,
-        }]),
-        make_review_task(task_c, vec![TaskDependency {
-            dependent_id: id_c,
-            depends_on_id: id_b,
-            kind: DependencyKind::Blocks,
-        }]),
-        make_review_task(task_d, vec![TaskDependency {
-            dependent_id: id_d,
-            depends_on_id: id_c,
-            kind: DependencyKind::Blocks,
-        }]),
-        make_review_task(task_e, vec![TaskDependency {
-            dependent_id: id_e,
-            depends_on_id: id_d,
-            kind: DependencyKind::Blocks,
-        }]),
-        make_review_task(task_f, vec![TaskDependency {
-            dependent_id: id_f,
-            depends_on_id: id_e,
-            kind: DependencyKind::Blocks,
-        }]),
+        make_review_task(
+            task_b,
+            vec![TaskDependency {
+                dependent_id: id_b,
+                depends_on_id: id_a,
+                kind: DependencyKind::Blocks,
+            }],
+        ),
+        make_review_task(
+            task_c,
+            vec![TaskDependency {
+                dependent_id: id_c,
+                depends_on_id: id_b,
+                kind: DependencyKind::Blocks,
+            }],
+        ),
+        make_review_task(
+            task_d,
+            vec![TaskDependency {
+                dependent_id: id_d,
+                depends_on_id: id_c,
+                kind: DependencyKind::Blocks,
+            }],
+        ),
+        make_review_task(
+            task_e,
+            vec![TaskDependency {
+                dependent_id: id_e,
+                depends_on_id: id_d,
+                kind: DependencyKind::Blocks,
+            }],
+        ),
+        make_review_task(
+            task_f,
+            vec![TaskDependency {
+                dependent_id: id_f,
+                depends_on_id: id_e,
+                kind: DependencyKind::Blocks,
+            }],
+        ),
     ];
 
     // Compute topological tiers
     let tiers = DagViewWidget::compute_topological_tiers(&state);
-    assert_eq!(tiers.len(), 6, "Expected 6 tiers in linear chain of depth 6");
+    assert_eq!(
+        tiers.len(),
+        6,
+        "Expected 6 tiers in linear chain of depth 6"
+    );
     assert_eq!(tiers[0], vec![id_a]);
     assert_eq!(tiers[1], vec![id_b]);
     assert_eq!(tiers[2], vec![id_c]);
@@ -180,34 +233,43 @@ fn test_challenge1_diamond_dependency_graph() {
 
     state.review_tasks = vec![
         make_review_task(task_a, vec![]),
-        make_review_task(task_b, vec![TaskDependency {
-            dependent_id: id_b,
-            depends_on_id: id_a,
-            kind: DependencyKind::Blocks,
-        }]),
-        make_review_task(task_c, vec![TaskDependency {
-            dependent_id: id_c,
-            depends_on_id: id_a,
-            kind: DependencyKind::Blocks,
-        }]),
-        make_review_task(task_d, vec![
-            TaskDependency {
-                dependent_id: id_d,
-                depends_on_id: id_b,
+        make_review_task(
+            task_b,
+            vec![TaskDependency {
+                dependent_id: id_b,
+                depends_on_id: id_a,
                 kind: DependencyKind::Blocks,
-            },
-            TaskDependency {
-                dependent_id: id_d,
-                depends_on_id: id_c,
+            }],
+        ),
+        make_review_task(
+            task_c,
+            vec![TaskDependency {
+                dependent_id: id_c,
+                depends_on_id: id_a,
                 kind: DependencyKind::Blocks,
-            },
-        ]),
+            }],
+        ),
+        make_review_task(
+            task_d,
+            vec![
+                TaskDependency {
+                    dependent_id: id_d,
+                    depends_on_id: id_b,
+                    kind: DependencyKind::Blocks,
+                },
+                TaskDependency {
+                    dependent_id: id_d,
+                    depends_on_id: id_c,
+                    kind: DependencyKind::Blocks,
+                },
+            ],
+        ),
     ];
 
     let tiers = DagViewWidget::compute_topological_tiers(&state);
     assert_eq!(tiers.len(), 3, "Diamond must have 3 execution tiers");
     assert_eq!(tiers[0], vec![id_a]); // Tier 0
-    assert_eq!(tiers[1].len(), 2);    // Tier 1: B and C
+    assert_eq!(tiers[1].len(), 2); // Tier 1: B and C
     assert!(tiers[1].contains(&id_b));
     assert!(tiers[1].contains(&id_c));
     assert_eq!(tiers[2], vec![id_d]); // Tier 2: D waits on both B and C
@@ -239,11 +301,23 @@ fn test_challenge1_multi_root_parallel_graph() {
     // 3 parallel root trees: R1 -> C1, R2 -> C2, R3 -> C3
     state.review_tasks = vec![
         make_review_task(
-            make_task(id_r1, proj_id, "ROOT-1", "Backend Root", TaskStatus::Approved),
+            make_task(
+                id_r1,
+                proj_id,
+                "ROOT-1",
+                "Backend Root",
+                TaskStatus::Approved,
+            ),
             vec![],
         ),
         make_review_task(
-            make_task(id_c1, proj_id, "CHILD-1", "Backend Child", TaskStatus::Proposed),
+            make_task(
+                id_c1,
+                proj_id,
+                "CHILD-1",
+                "Backend Child",
+                TaskStatus::Proposed,
+            ),
             vec![TaskDependency {
                 dependent_id: id_c1,
                 depends_on_id: id_r1,
@@ -251,11 +325,23 @@ fn test_challenge1_multi_root_parallel_graph() {
             }],
         ),
         make_review_task(
-            make_task(id_r2, proj_id, "ROOT-2", "Frontend Root", TaskStatus::Approved),
+            make_task(
+                id_r2,
+                proj_id,
+                "ROOT-2",
+                "Frontend Root",
+                TaskStatus::Approved,
+            ),
             vec![],
         ),
         make_review_task(
-            make_task(id_c2, proj_id, "CHILD-2", "Frontend Child", TaskStatus::Proposed),
+            make_task(
+                id_c2,
+                proj_id,
+                "CHILD-2",
+                "Frontend Child",
+                TaskStatus::Proposed,
+            ),
             vec![TaskDependency {
                 dependent_id: id_c2,
                 depends_on_id: id_r2,
@@ -263,11 +349,23 @@ fn test_challenge1_multi_root_parallel_graph() {
             }],
         ),
         make_review_task(
-            make_task(id_r3, proj_id, "ROOT-3", "DevOps Root", TaskStatus::Approved),
+            make_task(
+                id_r3,
+                proj_id,
+                "ROOT-3",
+                "DevOps Root",
+                TaskStatus::Approved,
+            ),
             vec![],
         ),
         make_review_task(
-            make_task(id_c3, proj_id, "CHILD-3", "DevOps Child", TaskStatus::Proposed),
+            make_task(
+                id_c3,
+                proj_id,
+                "CHILD-3",
+                "DevOps Child",
+                TaskStatus::Proposed,
+            ),
             vec![TaskDependency {
                 dependent_id: id_c3,
                 depends_on_id: id_r3,
@@ -314,7 +412,13 @@ fn test_challenge1_cycle_resistance_circular_dependency() {
     // Circular dependency: A -> B and B -> A
     state.review_tasks = vec![
         make_review_task(
-            make_task(id_a, proj_id, "CYCLE-A", "Cycle Node A", TaskStatus::HumanReview),
+            make_task(
+                id_a,
+                proj_id,
+                "CYCLE-A",
+                "Cycle Node A",
+                TaskStatus::HumanReview,
+            ),
             vec![TaskDependency {
                 dependent_id: id_a,
                 depends_on_id: id_b,
@@ -322,7 +426,13 @@ fn test_challenge1_cycle_resistance_circular_dependency() {
             }],
         ),
         make_review_task(
-            make_task(id_b, proj_id, "CYCLE-B", "Cycle Node B", TaskStatus::HumanReview),
+            make_task(
+                id_b,
+                proj_id,
+                "CYCLE-B",
+                "Cycle Node B",
+                TaskStatus::HumanReview,
+            ),
             vec![TaskDependency {
                 dependent_id: id_b,
                 depends_on_id: id_a,
@@ -333,7 +443,10 @@ fn test_challenge1_cycle_resistance_circular_dependency() {
 
     // Must terminate safely without infinite loop or stack overflow
     let tiers = DagViewWidget::compute_topological_tiers(&state);
-    assert!(!tiers.is_empty(), "Circular dependency must still produce partitioned tiers");
+    assert!(
+        !tiers.is_empty(),
+        "Circular dependency must still produce partitioned tiers"
+    );
     assert_eq!(tiers.iter().map(|t| t.len()).sum::<usize>(), 2);
 
     // Terminal render must not stack overflow
@@ -363,7 +476,13 @@ fn test_challenge1_cycle_below_root_resistance() {
             vec![],
         ),
         make_review_task(
-            make_task(id_a, proj_id, "CYCLE-A", "Cycle Node A", TaskStatus::Proposed),
+            make_task(
+                id_a,
+                proj_id,
+                "CYCLE-A",
+                "Cycle Node A",
+                TaskStatus::Proposed,
+            ),
             vec![
                 TaskDependency {
                     dependent_id: id_a,
@@ -378,7 +497,13 @@ fn test_challenge1_cycle_below_root_resistance() {
             ],
         ),
         make_review_task(
-            make_task(id_b, proj_id, "CYCLE-B", "Cycle Node B", TaskStatus::Proposed),
+            make_task(
+                id_b,
+                proj_id,
+                "CYCLE-B",
+                "Cycle Node B",
+                TaskStatus::Proposed,
+            ),
             vec![TaskDependency {
                 dependent_id: id_b,
                 depends_on_id: id_a,
@@ -408,7 +533,13 @@ fn test_challenge1_blocker_and_dependent_navigation() {
     // A (idx 0) -> B (idx 1) -> C (idx 2)
     state.review_tasks = vec![
         make_review_task(
-            make_task(id_a, proj_id, "PLAN-A", "Prerequisite A", TaskStatus::Approved),
+            make_task(
+                id_a,
+                proj_id,
+                "PLAN-A",
+                "Prerequisite A",
+                TaskStatus::Approved,
+            ),
             vec![],
         ),
         make_review_task(
@@ -435,32 +566,50 @@ fn test_challenge1_blocker_and_dependent_navigation() {
     // Press '[' to jump to prerequisite B (index 1)
     let action1 = state.handle_key(press_char('['));
     assert_eq!(action1, None);
-    assert_eq!(state.selected_task_index, 1, "Expected jump from C (2) to prerequisite B (1)");
+    assert_eq!(
+        state.selected_task_index, 1,
+        "Expected jump from C (2) to prerequisite B (1)"
+    );
 
     // Press '[' again to jump to prerequisite A (index 0)
     let action2 = state.handle_key(press_char('['));
     assert_eq!(action2, None);
-    assert_eq!(state.selected_task_index, 0, "Expected jump from B (1) to prerequisite A (0)");
+    assert_eq!(
+        state.selected_task_index, 0,
+        "Expected jump from B (1) to prerequisite A (0)"
+    );
 
     // Press '[' on root A -> no blocker, should be safe no-op
     let action3 = state.handle_key(press_char('['));
     assert_eq!(action3, None);
-    assert_eq!(state.selected_task_index, 0, "Root task has no blockers, must remain at 0");
+    assert_eq!(
+        state.selected_task_index, 0,
+        "Root task has no blockers, must remain at 0"
+    );
 
     // Press ']' to jump to downstream dependent B (index 1)
     let action4 = state.handle_key(press_char(']'));
     assert_eq!(action4, None);
-    assert_eq!(state.selected_task_index, 1, "Expected jump from A (0) to downstream dependent B (1)");
+    assert_eq!(
+        state.selected_task_index, 1,
+        "Expected jump from A (0) to downstream dependent B (1)"
+    );
 
     // Press ']' again to jump to downstream dependent C (index 2)
     let action5 = state.handle_key(press_char(']'));
     assert_eq!(action5, None);
-    assert_eq!(state.selected_task_index, 2, "Expected jump from B (1) to downstream dependent C (2)");
+    assert_eq!(
+        state.selected_task_index, 2,
+        "Expected jump from B (1) to downstream dependent C (2)"
+    );
 
     // Press ']' on leaf C -> no downstream dependents, safe no-op
     let action6 = state.handle_key(press_char(']'));
     assert_eq!(action6, None);
-    assert_eq!(state.selected_task_index, 2, "Leaf task has no downstream dependents, must remain at 2");
+    assert_eq!(
+        state.selected_task_index, 2,
+        "Leaf task has no downstream dependents, must remain at 2"
+    );
 }
 
 // ============================================================================
@@ -479,7 +628,13 @@ fn test_challenge2_keystroke_c_canceltask_modal_flow() {
     let proj_id = Uuid::new_v4();
     let id_a = Uuid::new_v4();
     state.review_tasks = vec![make_review_task(
-        make_task(id_a, proj_id, "TASK-1", "Sample Task", TaskStatus::Executing),
+        make_task(
+            id_a,
+            proj_id,
+            "TASK-1",
+            "Sample Task",
+            TaskStatus::Executing,
+        ),
         vec![],
     )];
     state.selected_task_index = 0;
@@ -495,7 +650,10 @@ fn test_challenge2_keystroke_c_canceltask_modal_flow() {
     //   - pending_confirmation is None
     //   - action_on_c is Some(TuiAction::CancelTask) immediately!
     println!("[EMPIRICAL] Action returned on 'c': {:?}", action_on_c);
-    println!("[EMPIRICAL] pending_confirmation on 'c': {:?}", state.pending_confirmation);
+    println!(
+        "[EMPIRICAL] pending_confirmation on 'c': {:?}",
+        state.pending_confirmation
+    );
 
     let modal_opened = state.pending_confirmation.is_some();
     let action_deferred = action_on_c.is_none();
@@ -521,7 +679,13 @@ fn test_challenge2_keystroke_n_rejecttask_modal_flow() {
     let proj_id = Uuid::new_v4();
     let id_a = Uuid::new_v4();
     state.review_tasks = vec![make_review_task(
-        make_task(id_a, proj_id, "TASK-1", "Sample Task", TaskStatus::HumanReview),
+        make_task(
+            id_a,
+            proj_id,
+            "TASK-1",
+            "Sample Task",
+            TaskStatus::HumanReview,
+        ),
         vec![],
     )];
     state.selected_task_index = 0;
@@ -530,7 +694,10 @@ fn test_challenge2_keystroke_n_rejecttask_modal_flow() {
     let action_on_n = state.handle_key(press_char('n'));
 
     println!("[EMPIRICAL] Action returned on 'n': {:?}", action_on_n);
-    println!("[EMPIRICAL] pending_confirmation on 'n': {:?}", state.pending_confirmation);
+    println!(
+        "[EMPIRICAL] pending_confirmation on 'n': {:?}",
+        state.pending_confirmation
+    );
 
     let modal_opened = state.pending_confirmation.is_some();
     let action_deferred = action_on_n.is_none();
@@ -552,26 +719,41 @@ fn test_challenge2_explicit_prompt_cancel_flow_abort_with_n_and_esc() {
     let proj_id = Uuid::new_v4();
     let task_id = Uuid::new_v4();
     state.review_tasks = vec![make_review_task(
-        make_task(task_id, proj_id, "TASK-1", "Sample Task", TaskStatus::Executing),
+        make_task(
+            task_id,
+            proj_id,
+            "TASK-1",
+            "Sample Task",
+            TaskStatus::Executing,
+        ),
         vec![],
     )];
     state.selected_task_index = 0;
 
     // Trigger confirmation modal
     state.prompt_cancel_task(task_id);
-    assert!(state.pending_confirmation.is_some(), "Confirmation modal must be open");
+    assert!(
+        state.pending_confirmation.is_some(),
+        "Confirmation modal must be open"
+    );
 
     // Press 'n': aborts action
     let action = state.handle_key(press_char('n'));
     assert_eq!(action, None, "Aborting with 'n' must NOT emit action");
-    assert!(state.pending_confirmation.is_none(), "Modal must be closed after 'n'");
+    assert!(
+        state.pending_confirmation.is_none(),
+        "Modal must be closed after 'n'"
+    );
 
     // Trigger again and abort with 'Esc'
     state.prompt_cancel_task(task_id);
     assert!(state.pending_confirmation.is_some());
     let action_esc = state.handle_key(press_key(KeyCode::Esc));
     assert_eq!(action_esc, None, "Aborting with 'Esc' must NOT emit action");
-    assert!(state.pending_confirmation.is_none(), "Modal must be closed after 'Esc'");
+    assert!(
+        state.pending_confirmation.is_none(),
+        "Modal must be closed after 'Esc'"
+    );
 }
 
 #[test]
@@ -580,7 +762,13 @@ fn test_challenge2_explicit_prompt_cancel_flow_confirm_with_y_and_enter() {
     let proj_id = Uuid::new_v4();
     let task_id = Uuid::new_v4();
     state.review_tasks = vec![make_review_task(
-        make_task(task_id, proj_id, "TASK-1", "Sample Task", TaskStatus::Executing),
+        make_task(
+            task_id,
+            proj_id,
+            "TASK-1",
+            "Sample Task",
+            TaskStatus::Executing,
+        ),
         vec![],
     )];
     state.selected_task_index = 0;
@@ -593,7 +781,10 @@ fn test_challenge2_explicit_prompt_cancel_flow_confirm_with_y_and_enter() {
         Some(TuiAction::CancelTask { task_id }),
         "Confirming with 'y' must emit CancelTask action"
     );
-    assert!(state.pending_confirmation.is_none(), "Modal must close on confirmation");
+    assert!(
+        state.pending_confirmation.is_none(),
+        "Modal must close on confirmation"
+    );
 
     // Reset task status and confirm with Enter
     state.review_tasks[0].task.status = TaskStatus::Executing;
@@ -604,7 +795,10 @@ fn test_challenge2_explicit_prompt_cancel_flow_confirm_with_y_and_enter() {
         Some(TuiAction::CancelTask { task_id }),
         "Confirming with Enter must emit CancelTask action"
     );
-    assert!(state.pending_confirmation.is_none(), "Modal must close on confirmation");
+    assert!(
+        state.pending_confirmation.is_none(),
+        "Modal must close on confirmation"
+    );
 }
 
 #[test]
@@ -613,7 +807,13 @@ fn test_challenge2_explicit_prompt_reject_flow_abort_and_confirm() {
     let proj_id = Uuid::new_v4();
     let task_id = Uuid::new_v4();
     state.review_tasks = vec![make_review_task(
-        make_task(task_id, proj_id, "TASK-1", "Sample Task", TaskStatus::HumanReview),
+        make_task(
+            task_id,
+            proj_id,
+            "TASK-1",
+            "Sample Task",
+            TaskStatus::HumanReview,
+        ),
         vec![],
     )];
     state.selected_task_index = 0;
@@ -670,10 +870,28 @@ fn test_challenge3_task_status_retry_invariants_for_cancelled() {
     );
 
     // Exhaustive check of all other target states from Cancelled
-    assert!(!Cancelled.can_transition_to(Proposed), "Cancelled -> Proposed must be false");
-    assert!(!Cancelled.can_transition_to(Rejected), "Cancelled -> Rejected must be false");
-    assert!(!Cancelled.can_transition_to(Assigned), "Cancelled -> Assigned must be false");
-    assert!(!Cancelled.can_transition_to(Blocked), "Cancelled -> Blocked must be false");
-    assert!(!Cancelled.can_transition_to(Failed), "Cancelled -> Failed must be false");
-    assert!(!Cancelled.can_transition_to(Cancelled), "Cancelled -> Cancelled must be false");
+    assert!(
+        !Cancelled.can_transition_to(Proposed),
+        "Cancelled -> Proposed must be false"
+    );
+    assert!(
+        !Cancelled.can_transition_to(Rejected),
+        "Cancelled -> Rejected must be false"
+    );
+    assert!(
+        !Cancelled.can_transition_to(Assigned),
+        "Cancelled -> Assigned must be false"
+    );
+    assert!(
+        !Cancelled.can_transition_to(Blocked),
+        "Cancelled -> Blocked must be false"
+    );
+    assert!(
+        !Cancelled.can_transition_to(Failed),
+        "Cancelled -> Failed must be false"
+    );
+    assert!(
+        !Cancelled.can_transition_to(Cancelled),
+        "Cancelled -> Cancelled must be false"
+    );
 }

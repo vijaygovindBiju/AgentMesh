@@ -57,6 +57,4 @@ hex = "0.4"
 subtle = "2.5"
 
 [dev-dependencies]
-agent-mock = { path = "../agent-mock" }
 agent-agy = { path = "../agent-agy" }
-

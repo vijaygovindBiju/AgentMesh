@@ -73,7 +73,10 @@ fn sample_task(
         short_id: short_id.to_string(),
         title: title.to_string(),
         description: format!("Description for {short_id}"),
-        affected_resources: json!(["crates/coordinator/src/main.rs", "crates/coordinator/src/tui"]),
+        affected_resources: json!([
+            "crates/coordinator/src/main.rs",
+            "crates/coordinator/src/tui"
+        ]),
         status,
         assigned_agent_id: None,
         estimated_size: Some("M".to_string()),
@@ -435,10 +438,7 @@ fn test_tier2_empty_plan_renders_quick_start_guide() {
             })
             .unwrap_or_else(|_| panic!("Failed to render empty plan at {w}x{h}"));
 
-        assert_buffer_contains(
-            &terminal,
-            "No tasks proposed yet.",
-        );
+        assert_buffer_contains(&terminal, "No tasks proposed yet.");
         assert_buffer_contains(&terminal, "Quick Start Guide:");
         assert_buffer_contains(&terminal, "[2]");
         assert_buffer_contains(&terminal, "[I]");
@@ -560,13 +560,7 @@ fn test_tier2_long_title_truncation_or_wrapping() {
     let mut terminal = create_terminal(80, 24);
     terminal
         .draw(|frame| {
-            TaskCardWidget::render(
-                frame,
-                frame.area(),
-                &state.review_tasks[0],
-                true,
-                false,
-            );
+            TaskCardWidget::render(frame, frame.area(), &state.review_tasks[0], true, false);
         })
         .expect("TaskCardWidget failed on long title");
 
@@ -764,8 +758,20 @@ fn test_tier3_inspector_scroll_offset_reset_on_task_navigation() {
     let t1_id = Uuid::new_v4();
     let t2_id = Uuid::new_v4();
 
-    let t1 = sample_review_task(t1_id, proj_id, "RESET-1", "First Task", TaskStatus::HumanReview);
-    let mut t2 = sample_review_task(t2_id, proj_id, "RESET-2", "Second Task", TaskStatus::HumanReview);
+    let t1 = sample_review_task(
+        t1_id,
+        proj_id,
+        "RESET-1",
+        "First Task",
+        TaskStatus::HumanReview,
+    );
+    let mut t2 = sample_review_task(
+        t2_id,
+        proj_id,
+        "RESET-2",
+        "Second Task",
+        TaskStatus::HumanReview,
+    );
 
     // t2 depends on t1
     t2.dependencies.push(TaskDependency {
@@ -868,10 +874,34 @@ fn test_tier3_selective_shift_a_bulk_approval_with_multi_selection() {
     let t3_id = Uuid::new_v4();
     let t4_id = Uuid::new_v4();
 
-    state.review_tasks.push(sample_review_task(t1_id, proj_id, "SEL-1", "Task 1", TaskStatus::HumanReview));
-    state.review_tasks.push(sample_review_task(t2_id, proj_id, "SEL-2", "Task 2", TaskStatus::HumanReview));
-    state.review_tasks.push(sample_review_task(t3_id, proj_id, "SEL-3", "Task 3", TaskStatus::HumanReview));
-    state.review_tasks.push(sample_review_task(t4_id, proj_id, "SEL-4", "Task 4", TaskStatus::HumanReview));
+    state.review_tasks.push(sample_review_task(
+        t1_id,
+        proj_id,
+        "SEL-1",
+        "Task 1",
+        TaskStatus::HumanReview,
+    ));
+    state.review_tasks.push(sample_review_task(
+        t2_id,
+        proj_id,
+        "SEL-2",
+        "Task 2",
+        TaskStatus::HumanReview,
+    ));
+    state.review_tasks.push(sample_review_task(
+        t3_id,
+        proj_id,
+        "SEL-3",
+        "Task 3",
+        TaskStatus::HumanReview,
+    ));
+    state.review_tasks.push(sample_review_task(
+        t4_id,
+        proj_id,
+        "SEL-4",
+        "Task 4",
+        TaskStatus::HumanReview,
+    ));
 
     // Multi-select tasks 0 and 2 only
     state.selected_task_indices.insert(0);
@@ -891,13 +921,19 @@ fn test_tier3_selective_shift_a_bulk_approval_with_multi_selection() {
 
     // ONLY tasks 0 and 2 must be approved
     assert_eq!(state.review_tasks[0].task.status, TaskStatus::Approved);
-    assert_eq!(state.review_tasks[0].human_decision, Some(ApprovalStatus::Approved));
+    assert_eq!(
+        state.review_tasks[0].human_decision,
+        Some(ApprovalStatus::Approved)
+    );
 
     assert_eq!(state.review_tasks[1].task.status, TaskStatus::HumanReview);
     assert_eq!(state.review_tasks[1].human_decision, None);
 
     assert_eq!(state.review_tasks[2].task.status, TaskStatus::Approved);
-    assert_eq!(state.review_tasks[2].human_decision, Some(ApprovalStatus::Approved));
+    assert_eq!(
+        state.review_tasks[2].human_decision,
+        Some(ApprovalStatus::Approved)
+    );
 
     assert_eq!(state.review_tasks[3].task.status, TaskStatus::HumanReview);
     assert_eq!(state.review_tasks[3].human_decision, None);
@@ -997,7 +1033,10 @@ fn test_tier3_overlap_warning_acknowledgement_and_approval_flow() {
 
     // Press 'y' to approve task
     let approve_action = state.handle_key(press(KeyCode::Char('y')));
-    assert_eq!(approve_action, Some(TuiAction::ApproveTask { task_id: t1_id }));
+    assert_eq!(
+        approve_action,
+        Some(TuiAction::ApproveTask { task_id: t1_id })
+    );
     assert_eq!(state.review_tasks[0].task.status, TaskStatus::Approved);
     assert_eq!(
         state.review_tasks[0].human_decision,
@@ -1041,7 +1080,8 @@ fn test_tier3_inline_description_edit_flow() {
         action,
         Some(TuiAction::EditTaskDescription {
             task_id,
-            new_description: "Original specification. Augmented with security constraints.".to_string(),
+            new_description: "Original specification. Augmented with security constraints."
+                .to_string(),
         })
     );
 
@@ -1165,7 +1205,9 @@ fn test_tier4_complete_operator_review_workflow() {
         acknowledged: false,
         created_at: Utc::now(),
     });
-    state.active_overlaps.push(state.review_tasks[1].overlap_warnings[0].clone());
+    state
+        .active_overlaps
+        .push(state.review_tasks[1].overlap_warnings[0].clone());
 
     // 1. Initial render at compact 80x24
     let mut terminal = create_terminal(80, 24);
@@ -1192,7 +1234,10 @@ fn test_tier4_complete_operator_review_workflow() {
     }
     state.handle_key(press(KeyCode::Enter));
     assert_eq!(state.review_tasks[2].task.status, TaskStatus::Approved);
-    assert!(state.review_tasks[2].task.description.contains("(Reviewed)"));
+    assert!(state.review_tasks[2]
+        .task
+        .description
+        .contains("(Reviewed)"));
 
     // 5. Navigate to Task 3 and Reject (with safety confirmation dialog)
     state.handle_key(press(KeyCode::Down));

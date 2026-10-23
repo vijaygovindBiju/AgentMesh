@@ -89,34 +89,69 @@ impl PlanReviewScreen {
             let empty_lines = vec![
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled("  ℹ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "  ℹ ",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::styled(
                         "No tasks proposed yet. Go to [2: Proj] to submit a project.",
-                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
                     ),
                 ]),
                 Line::from(""),
-                Line::from(vec![
-                    Span::styled("  Quick Start Guide:", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                ]),
+                Line::from(vec![Span::styled(
+                    "  Quick Start Guide:",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )]),
                 Line::from(vec![
                     Span::styled("  1. Press ", Style::default().fg(Color::DarkGray)),
-                    Span::styled("[2]", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                    Span::styled(" to open Project Management.", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        "[2]",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        " to open Project Management.",
+                        Style::default().fg(Color::DarkGray),
+                    ),
                 ]),
                 Line::from(vec![
                     Span::styled("  2. Press ", Style::default().fg(Color::DarkGray)),
-                    Span::styled("[I]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                    Span::styled(" to enter a new repository path and development goal.", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        "[I]",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        " to enter a new repository path and development goal.",
+                        Style::default().fg(Color::DarkGray),
+                    ),
                 ]),
                 Line::from(vec![
                     Span::styled("  3. Press ", Style::default().fg(Color::DarkGray)),
-                    Span::styled("[Enter]", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                    Span::styled(" to submit. Intelligent Planner will decompose it into a DAG.", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        "[Enter]",
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        " to submit. Intelligent Planner will decompose it into a DAG.",
+                        Style::default().fg(Color::DarkGray),
+                    ),
                 ]),
-                Line::from(vec![
-                    Span::styled("  4. Return here to review, inspect, edit, or approve tasks [Y] / [Shift+A].", Style::default().fg(Color::DarkGray)),
-                ]),
+                Line::from(vec![Span::styled(
+                    "  4. Return here to review, inspect, edit, or approve tasks [Y] / [Shift+A].",
+                    Style::default().fg(Color::DarkGray),
+                )]),
             ];
             let empty = Paragraph::new(empty_lines);
             frame.render_widget(empty, inner_area);
@@ -164,13 +199,13 @@ impl PlanReviewScreen {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::{Task, TaskStatus};
+    use crate::tui::state::ReviewTaskState;
     use chrono::Utc;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use serde_json::json;
     use uuid::Uuid;
-    use crate::domain::{Task, TaskStatus};
-    use crate::tui::state::ReviewTaskState;
 
     fn make_test_task(short_id: &str, title: &str) -> ReviewTaskState {
         ReviewTaskState {
@@ -203,17 +238,35 @@ mod tests {
 
         let mut state = AppState::new();
         state.review_tasks.push(make_test_task("T-1", "First Task"));
-        state.review_tasks.push(make_test_task("T-2", "Second Task"));
+        state
+            .review_tasks
+            .push(make_test_task("T-2", "Second Task"));
         state.plan_review_focus = PlanReviewFocus::TaskList;
 
-        terminal.draw(|f| PlanReviewScreen::render(f, f.area(), &state)).unwrap();
-        let rendered: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        terminal
+            .draw(|f| PlanReviewScreen::render(f, f.area(), &state))
+            .unwrap();
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
         assert!(rendered.contains("Proposed Tasks (Review) [▶ FOCUSED]"));
 
         // Switch focus away from TaskList to TaskInspector
         state.plan_review_focus = PlanReviewFocus::TaskInspector;
-        terminal.draw(|f| PlanReviewScreen::render(f, f.area(), &state)).unwrap();
-        let rendered2: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        terminal
+            .draw(|f| PlanReviewScreen::render(f, f.area(), &state))
+            .unwrap();
+        let rendered2: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
         assert!(rendered2.contains(" Proposed Tasks (Review) "));
         assert!(!rendered2.contains("Proposed Tasks (Review) [▶ FOCUSED]"));
         assert!(rendered2.contains("[▶ FOCUSED] Task Details & Inspector"));
@@ -222,8 +275,16 @@ mod tests {
         let backend_wide = TestBackend::new(180, 25);
         let mut term_wide = Terminal::new(backend_wide).unwrap();
         state.plan_review_focus = PlanReviewFocus::TaskList;
-        term_wide.draw(|f| PlanReviewScreen::render(f, f.area(), &state)).unwrap();
-        let rendered_wide: String = term_wide.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        term_wide
+            .draw(|f| PlanReviewScreen::render(f, f.area(), &state))
+            .unwrap();
+        let rendered_wide: String = term_wide
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
         assert!(rendered_wide.contains("Proposed Task Decomposition (Human Review)"));
         assert!(rendered_wide.contains("[▶ FOCUSED]"));
     }
@@ -234,16 +295,34 @@ mod tests {
         let backend_compact = TestBackend::new(80, 24);
         let mut term_compact = Terminal::new(backend_compact).unwrap();
         let mut state = AppState::new();
-        state.review_tasks.push(make_test_task("T-1", "Compact Task"));
-        term_compact.draw(|f| PlanReviewScreen::render(f, f.area(), &state)).unwrap();
-        let rend_compact: String = term_compact.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        state
+            .review_tasks
+            .push(make_test_task("T-1", "Compact Task"));
+        term_compact
+            .draw(|f| PlanReviewScreen::render(f, f.area(), &state))
+            .unwrap();
+        let rend_compact: String = term_compact
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
         assert!(rend_compact.contains("Tasks"));
 
         // Wide (>=140 cols)
         let backend_wide = TestBackend::new(180, 40);
         let mut term_wide = Terminal::new(backend_wide).unwrap();
-        term_wide.draw(|f| PlanReviewScreen::render(f, f.area(), &state)).unwrap();
-        let rend_wide: String = term_wide.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        term_wide
+            .draw(|f| PlanReviewScreen::render(f, f.area(), &state))
+            .unwrap();
+        let rend_wide: String = term_wide
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
         assert!(rend_wide.contains("Proposed Task Decomposition (Human Review)"));
     }
 
@@ -254,19 +333,37 @@ mod tests {
 
         let mut state = AppState::new();
         for i in 1..=10 {
-            state.review_tasks.push(make_test_task(&format!("T-{i}"), &format!("Task {i}")));
+            state
+                .review_tasks
+                .push(make_test_task(&format!("T-{i}"), &format!("Task {i}")));
         }
 
         // Navigate downwards to task 8
         state.selected_task_index = 8;
-        terminal.draw(|f| PlanReviewScreen::render(f, f.area(), &state)).unwrap();
-        let rend_down: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        terminal
+            .draw(|f| PlanReviewScreen::render(f, f.area(), &state))
+            .unwrap();
+        let rend_down: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
         assert!(rend_down.contains("[T-8]"));
 
         // Navigate upwards to task 5
         state.selected_task_index = 5;
-        terminal.draw(|f| PlanReviewScreen::render(f, f.area(), &state)).unwrap();
-        let rend_up: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        terminal
+            .draw(|f| PlanReviewScreen::render(f, f.area(), &state))
+            .unwrap();
+        let rend_up: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
         assert!(rend_up.contains("[T-5]"));
     }
 }

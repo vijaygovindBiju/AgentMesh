@@ -31,8 +31,6 @@ pub enum AgentStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "adapter_type", rename_all = "snake_case")]
 pub enum AdapterType {
-    /// `agent-mock` binary — real protocol, simulated work.
-    Mock,
     /// `agent-agy` binary — Antigravity CLI subprocess adapter.
     Agy,
 }
@@ -210,8 +208,8 @@ impl Agent {
         }
     }
 
-    /// Creates a mock or sample Agent for testing / UI initialization.
-    pub fn mock(
+    /// Creates an Agent for testing and UI initialization.
+    pub fn new_for_test(
         id: Uuid,
         human_owner: &str,
         adapter_type: AdapterType,
@@ -221,7 +219,7 @@ impl Agent {
         Self {
             id,
             human_owner: human_owner.to_string(),
-            api_key_hash: "mock_key".to_string(),
+            api_key_hash: "test_key".to_string(),
             adapter_type,
             capabilities: serde_json::json!(capabilities),
             nats_subject: format!("agents.{id}.events"),
@@ -328,7 +326,7 @@ impl Default for NewAgent {
         Self {
             human_owner: String::new(),
             api_key_hash: String::new(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: Vec::new(),
             nats_subject: String::new(),
             profile: None,
@@ -363,7 +361,7 @@ mod tests {
 
     #[test]
     fn adapter_type_serde_round_trip() {
-        for t in [AdapterType::Mock, AdapterType::Agy] {
+        for t in [AdapterType::Agy] {
             let json = serde_json::to_string(&t).unwrap();
             let recovered: AdapterType = serde_json::from_str(&json).unwrap();
             assert_eq!(t, recovered);

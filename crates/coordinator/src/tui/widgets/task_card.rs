@@ -255,10 +255,7 @@ impl TaskCardWidget {
 
         if is_compact_width {
             // Line 2: Status: <badge>  Progress: <bar>
-            let mut line2_spans = vec![
-                Span::raw(format!("{indent}Status: ")),
-                status_badge_span,
-            ];
+            let mut line2_spans = vec![Span::raw(format!("{indent}Status: ")), status_badge_span];
             if let Some(ref progress) = progress_bar_span {
                 line2_spans.push(Span::raw("  Progress: "));
                 line2_spans.push(progress.clone());
@@ -309,10 +306,7 @@ impl TaskCardWidget {
                 } else {
                     // inner_area.height >= 5
                     if let Some(ref warning) = overlap_warning_span {
-                        lines.push(Line::from(vec![
-                            Span::raw(indent),
-                            warning.clone(),
-                        ]));
+                        lines.push(Line::from(vec![Span::raw(indent), warning.clone()]));
                     }
                     lines.push(Line::from(vec![
                         Span::raw(format!("{indent}Deps: ")),
@@ -352,10 +346,7 @@ impl TaskCardWidget {
             } else {
                 // inner_area.height >= 4: Overlap on Line 3, Deps on Line 4
                 if let Some(ref warning) = overlap_warning_span {
-                    lines.push(Line::from(vec![
-                        Span::raw(indent),
-                        warning.clone(),
-                    ]));
+                    lines.push(Line::from(vec![Span::raw(indent), warning.clone()]));
                 }
                 lines.push(Line::from(vec![
                     Span::raw(format!("{indent}Deps: ")),
@@ -487,7 +478,10 @@ mod tests {
 
         // 4. Neither
         let out_neither = render_to_string(80, 5, &item, false, false);
-        assert!(!out_neither.contains("▶"), "Must not contain '▶' when neither");
+        assert!(
+            !out_neither.contains("▶"),
+            "Must not contain '▶' when neither"
+        );
         assert!(
             !out_neither.contains("[✓]"),
             "Must not contain '[✓]' when neither"
@@ -506,7 +500,10 @@ mod tests {
 
         // Compact width (35 cols total -> inner width 33 cols)
         let out_compact = render_to_string(35, 5, &item, true, false);
-        assert!(out_compact.contains("[PLAN-LONG]"), "Short ID must be preserved");
+        assert!(
+            out_compact.contains("[PLAN-LONG]"),
+            "Short ID must be preserved"
+        );
         assert!(
             out_compact.contains("..."),
             "Long title must end with ellipsis '...'"
@@ -534,7 +531,10 @@ mod tests {
         // Line 2 has Status and Progress
         assert!(out.contains("Status:"), "Line 2 must include Status: label");
         assert!(out.contains("EXECUTING"), "Status badge must be visible");
-        assert!(out.contains("Progress:"), "Line 2 must include Progress: label");
+        assert!(
+            out.contains("Progress:"),
+            "Line 2 must include Progress: label"
+        );
         assert!(out.contains("65%"), "Progress percentage must be visible");
         // Line 3 has Agent
         assert!(out.contains("Agent:"), "Line 3 must include Agent: label");

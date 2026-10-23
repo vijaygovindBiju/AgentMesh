@@ -12,7 +12,7 @@ pub struct RuntimeCapability {
     pub os: String,
     /// Host CPU architecture (e.g. "x86_64", "aarch64").
     pub arch: String,
-    /// Adapter runtime type (e.g. "Mock", "Agy").
+    /// Adapter runtime type (e.g. "Agy").
     pub adapter_type: String,
     /// Installed Antigravity CLI version, if detected.
     pub agy_version: Option<String>,
@@ -27,7 +27,7 @@ impl Default for RuntimeCapability {
         Self {
             os: std::env::consts::OS.to_string(),
             arch: std::env::consts::ARCH.to_string(),
-            adapter_type: "Mock".to_string(),
+            adapter_type: "Agy".to_string(),
             agy_version: None,
             cpu_count: 1,
             memory_mb: None,

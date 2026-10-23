@@ -51,8 +51,8 @@ async fn create_test_project_and_task(pool: &PgPool) -> (Uuid, Uuid) {
         pool,
         &NewProposal {
             project_id: proj.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -85,7 +85,7 @@ async fn create_test_agent(pool: &PgPool, name: &str) -> Uuid {
         &NewAgent {
             human_owner: name.to_string(),
             api_key_hash: format!("hash_{}", &Uuid::new_v4().to_string()[..8]),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{agent_id}.events"),
             role: Some(AgentRole::Worker.to_string()),

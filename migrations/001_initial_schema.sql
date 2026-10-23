@@ -32,7 +32,6 @@ CREATE TYPE agent_status AS ENUM (
 );
 
 CREATE TYPE adapter_type AS ENUM (
-    'mock',
     'agy'
 );
 

@@ -275,7 +275,8 @@ async fn main() -> Result<()> {
                                                     Some(&sub_js),
                                                 )
                                                 .await;
-                                                let _ = sub_tx.send(TuiUpdateEvent::AgentMessage(agent_msg));
+                                                let _ = sub_tx
+                                                    .send(TuiUpdateEvent::AgentMessage(agent_msg));
                                             }
                                             Err(e) => {
                                                 warn!(error = %e, "Failed to parse AgentMessage from JetStream");
@@ -346,7 +347,9 @@ async fn main() -> Result<()> {
                     let mut interval = tokio::time::interval(Duration::from_secs(2));
                     loop {
                         interval.tick().await;
-                        let projects = ProjectRepository::list(&auto_pool).await.unwrap_or_default();
+                        let projects = ProjectRepository::list(&auto_pool)
+                            .await
+                            .unwrap_or_default();
                         for proj in projects {
                             if let Ok(tasks) = TaskRepository::list_by_status(
                                 &auto_pool,
@@ -418,7 +421,8 @@ async fn main() -> Result<()> {
             app.run_with_channel(&mut app_state, tui_rx, |action, state| {
                 tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(async {
-                        handle_tui_action(&loop_pool, &mut loop_coord, action, state, &action_tx).await;
+                        handle_tui_action(&loop_pool, &mut loop_coord, action, state, &action_tx)
+                            .await;
                     });
                 });
             })?;
@@ -490,7 +494,10 @@ async fn print_system_status(pool: &sqlx::PgPool) -> Result<()> {
     }
     println!("Delivery & Reliability:");
     println!("  Total Deliveries:     {}", metrics.total_deliveries);
-    println!("  Success Rate:         {:.1}%", metrics.delivery_success_rate_percent);
+    println!(
+        "  Success Rate:         {:.1}%",
+        metrics.delivery_success_rate_percent
+    );
     println!("  Resource Conflicts:   {}", metrics.total_conflicts);
     println!("  Audit Alerts:         {}", metrics.total_audit_alerts);
     println!("========================================================================");
@@ -534,7 +541,9 @@ async fn handle_tui_action(
 ) {
     match action {
         TuiAction::SubmitProject { name, description } => {
-            state.status_message = Some(format!("Decomposing project '{name}' with AI planner in background..."));
+            state.status_message = Some(format!(
+                "Decomposing project '{name}' with AI planner in background..."
+            ));
             state.current_screen = CurrentScreen::PlanReview;
 
             let pool = pool.clone();
@@ -567,14 +576,14 @@ async fn handle_tui_action(
             };
 
             tokio::spawn(async move {
-
                 // Discover repository Git identity: check if a target repository was provided in description or default to current_dir
                 let current_repo = description
                     .lines()
                     .chain(description.split(['\n', ';', ',']))
                     .find_map(|line| {
                         let trimmed = line.trim();
-                        let candidate = if let Some(stripped) = trimmed.strip_prefix("Repository:") {
+                        let candidate = if let Some(stripped) = trimmed.strip_prefix("Repository:")
+                        {
                             stripped.trim()
                         } else if let Some(stripped) = trimmed.strip_prefix("repo:") {
                             stripped.trim()
@@ -589,7 +598,9 @@ async fn handle_tui_action(
                         }
                     })
                     .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-                if let Ok(git_id) = coordinator::git::RepositoryIdentity::discover(&current_repo).await {
+                if let Ok(git_id) =
+                    coordinator::git::RepositoryIdentity::discover(&current_repo).await
+                {
                     let _ = ProjectRepository::update_git_identity(
                         &pool,
                         project.id,
@@ -658,7 +669,9 @@ async fn handle_tui_action(
                         }
                     }
                     Err(e) => {
-                        let _ = action_tx.send(TuiUpdateEvent::StatusMessage(format!("AI Planning error: {e}")));
+                        let _ = action_tx.send(TuiUpdateEvent::StatusMessage(format!(
+                            "AI Planning error: {e}"
+                        )));
                     }
                 }
             });
@@ -719,7 +732,8 @@ async fn handle_tui_action(
                 .collect();
             let mut approved_count = 0;
             for tid in pending_ids {
-                if let Ok(task) = CommandHandler::execute_approve_task(pool, tid, "Operator").await {
+                if let Ok(task) = CommandHandler::execute_approve_task(pool, tid, "Operator").await
+                {
                     if let Some(rt) = state.review_tasks.iter_mut().find(|rt| rt.task.id == tid) {
                         rt.task.status = task.status;
                         rt.human_decision = Some(coordinator::domain::ApprovalStatus::Approved);
@@ -910,7 +924,13 @@ async fn handle_tui_action(
             let query_pool = pool.clone();
             let query_tx = action_tx.clone();
             tokio::spawn(async move {
-                if let Ok(timeline) = coordinator::observability::TimelineService::build_task_timeline(&query_pool, task_id).await {
+                if let Ok(timeline) =
+                    coordinator::observability::TimelineService::build_task_timeline(
+                        &query_pool,
+                        task_id,
+                    )
+                    .await
+                {
                     let _ = query_tx.send(TuiUpdateEvent::Timeline(timeline));
                 }
             });

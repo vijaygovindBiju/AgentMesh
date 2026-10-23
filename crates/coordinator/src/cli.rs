@@ -88,7 +88,9 @@ impl CliArgs {
                     cli.show_version = true;
                 }
                 unknown if unknown.starts_with('-') => {
-                    return Err(format!("Unrecognized option '{unknown}'. Use --help for usage."));
+                    return Err(format!(
+                        "Unrecognized option '{unknown}'. Use --help for usage."
+                    ));
                 }
                 positional => {
                     return Err(format!(
@@ -184,7 +186,9 @@ mod tests {
     fn test_headless_and_tui_conflict() {
         let res = CliArgs::from_args(vec!["coordinator", "--headless", "--tui"]);
         assert!(res.is_err());
-        assert!(res.unwrap_err().contains("Cannot specify both --headless and --tui"));
+        assert!(res
+            .unwrap_err()
+            .contains("Cannot specify both --headless and --tui"));
 
         let res_short = CliArgs::from_args(vec!["coordinator", "-d", "--tui"]);
         assert!(res_short.is_err());
@@ -216,7 +220,9 @@ mod tests {
 
         let res_flag_next = CliArgs::from_args(vec!["coordinator", "--project", "--tui"]);
         assert!(res_flag_next.is_err());
-        assert!(res_flag_next.unwrap_err().contains("requires a project ID or name"));
+        assert!(res_flag_next
+            .unwrap_err()
+            .contains("requires a project ID or name"));
     }
 
     #[test]
@@ -260,7 +266,9 @@ mod tests {
     fn test_positional_arg_rejected() {
         let res = CliArgs::from_args(vec!["coordinator", "extra_arg"]);
         assert!(res.is_err());
-        assert!(res.unwrap_err().contains("Unexpected positional argument 'extra_arg'"));
+        assert!(res
+            .unwrap_err()
+            .contains("Unexpected positional argument 'extra_arg'"));
     }
 
     #[test]

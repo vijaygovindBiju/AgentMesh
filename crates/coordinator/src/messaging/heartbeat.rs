@@ -125,7 +125,7 @@ mod tests {
             &NewAgent {
                 human_owner: "TimeoutTester".to_string(),
                 api_key_hash: "hash".to_string(),
-                adapter_type: AdapterType::Mock,
+                adapter_type: AdapterType::Agy,
                 capabilities: vec![],
                 nats_subject: "agents.timeout.events".to_string(),
                 ..Default::default()

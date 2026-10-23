@@ -95,7 +95,7 @@ kind:           Blocks | RelatesTo
 id:             UUID (PK)
 human_owner:    String          display name (e.g. "Alice")
 api_key_hash:   String          bcrypt hash; raw key shown once at registration
-adapter_type:   Mock | Agy
+adapter_type:   Agy | Agy
 capabilities:   JSONB           Vec<String>
 nats_subject:   String          e.g. "agents.abc123.events"
 status:         Offline | Idle | Busy | Blocked | Error

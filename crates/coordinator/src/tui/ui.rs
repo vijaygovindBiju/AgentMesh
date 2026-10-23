@@ -124,7 +124,7 @@ mod tests {
         // Terminal width < 48
         let backend = TestBackend::new(40, 20);
         let mut terminal = Terminal::new(backend).unwrap();
-        let state = AppState::new().with_mock_data();
+        let state = AppState::new().with_test_data();
 
         terminal.draw(|f| render(f, &state)).unwrap();
         let buf = terminal.backend().buffer();
@@ -146,7 +146,7 @@ mod tests {
     fn test_render_with_command_palette_overlay() {
         let backend = TestBackend::new(100, 30);
         let mut terminal = Terminal::new(backend).unwrap();
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         state.show_command_palette = true;
 
         terminal.draw(|f| render(f, &state)).unwrap();
@@ -162,7 +162,7 @@ mod tests {
 
         let backend = TestBackend::new(100, 30);
         let mut terminal = Terminal::new(backend).unwrap();
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         let task_id = Uuid::new_v4();
         state.pending_confirmation = Some(ConfirmationModalState {
             title: "Confirm Task Cancellation".to_string(),
@@ -185,7 +185,7 @@ mod tests {
         for (w, h) in [(60, 18), (70, 20), (80, 24), (100, 30), (160, 50)] {
             let backend = TestBackend::new(w, h);
             let mut terminal = Terminal::new(backend).unwrap();
-            let state = AppState::new().with_mock_data();
+            let state = AppState::new().with_test_data();
             terminal
                 .draw(|f| render(f, &state))
                 .expect("Render should not panic");

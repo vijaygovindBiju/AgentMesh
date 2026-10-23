@@ -1,6 +1,6 @@
 # AgentMesh Documentation
 
-Start with the top-level [README](../README.md) — it covers installation, quick start, mock and `agy` agents, multi-machine setup, testing, troubleshooting and the honest v1.0 status. The documents below go deeper on specific areas.
+Start with the top-level [README](../README.md) — it covers installation, quick start, agy and `agy` agents, multi-machine setup, testing, troubleshooting and the honest v1.0 status. The documents below go deeper on specific areas.
 
 | Directory | Contents |
 | :--- | :--- |

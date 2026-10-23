@@ -43,8 +43,8 @@ async fn create_test_project_and_task(pool: &PgPool) -> (Uuid, Uuid) {
         pool,
         &NewProposal {
             project_id: proj.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "prompt".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -77,7 +77,7 @@ async fn create_test_agent(pool: &PgPool, name: &str) -> Uuid {
         &NewAgent {
             human_owner: name.to_string(),
             api_key_hash: format!("hash_{}", &Uuid::new_v4().to_string()[..8]),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{agent_id}.events"),
             ..Default::default()
@@ -169,8 +169,8 @@ async fn test_phase13_2_task_execution_timeline_generation() {
         &pool,
         &NewProposal {
             project_id: proj.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "prompt".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -184,7 +184,7 @@ async fn test_phase13_2_task_execution_timeline_generation() {
         &NewAgent {
             human_owner: "TimelineAgent".to_string(),
             api_key_hash: "hash_timeline".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["backend".to_string()],
             nats_subject: format!("agents.{agent_id}.events"),
             ..Default::default()
@@ -429,8 +429,8 @@ async fn test_phase13_5_failure_diagnostics_and_remediation_guidance() {
         &pool,
         &NewProposal {
             project_id: proj.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -444,7 +444,7 @@ async fn test_phase13_5_failure_diagnostics_and_remediation_guidance() {
         &NewAgent {
             human_owner: "FailingAgent".to_string(),
             api_key_hash: "hash_fail".to_string(),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["c++".to_string()],
             nats_subject: format!("agents.{agent_id}.events"),
             ..Default::default()

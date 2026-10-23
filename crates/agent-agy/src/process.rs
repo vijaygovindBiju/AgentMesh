@@ -229,7 +229,7 @@ mod tests {
 
     impl TempScript {
         fn new(content: &str) -> Self {
-            let path = std::env::temp_dir().join(format!("mock_agy_test_{}.sh", Uuid::new_v4()));
+            let path = std::env::temp_dir().join(format!("agy_agy_test_{}.sh", Uuid::new_v4()));
             let mut file = std::fs::File::create(&path).unwrap();
             file.write_all(content.as_bytes()).unwrap();
             file.sync_all().unwrap();

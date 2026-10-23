@@ -1,6 +1,6 @@
 # AgentMesh — Machine B (Worker) Setup
 
-This guide details how to set up a secondary machine (**Machine B**) to act as a remote worker in an AgentMesh fleet. Machine B runs `agent-agy` (or `agent-mock`) and connects to the coordinator running on Machine A over the network.
+This guide details how to set up a secondary machine (**Machine B**) to act as a remote worker in an AgentMesh fleet. Machine B runs `agent-agy` and connects to the coordinator running on Machine A over the network.
 
 ---
 

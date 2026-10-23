@@ -38,7 +38,6 @@ impl RegistrationHandler {
         info!(%agent_id, %human_owner, %adapter_type, "Processing agent registration request");
 
         let adapter = match adapter_type.to_lowercase().as_str() {
-            "mock" => AdapterType::Mock,
             "agy" => AdapterType::Agy,
             other => {
                 warn!(adapter = %other, "Unknown adapter type in registration");
@@ -266,7 +265,7 @@ mod tests {
         let reg_msg = AgentMessage::Register {
             agent_id,
             human_owner: "RegTestOwner".to_string(),
-            adapter_type: "Mock".to_string(),
+            adapter_type: "Agy".to_string(),
             capabilities: vec!["rust".to_string()],
             profile: None,
             api_key: "my_api_key_123".to_string(),

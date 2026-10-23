@@ -162,13 +162,11 @@ impl StaleTaskSweeper {
             let _ = TaskRepository::assign_agent(pool, del.task_id, None).await;
             let _ = TaskRepository::update_status(pool, del.task_id, TaskStatus::Approved).await;
 
-            let proj_id = sqlx::query_scalar!(
-                r#"SELECT project_id FROM tasks WHERE id = $1"#,
-                del.task_id
-            )
-            .fetch_optional(pool)
-            .await
-            .unwrap_or_default();
+            let proj_id =
+                sqlx::query_scalar!(r#"SELECT project_id FROM tasks WHERE id = $1"#, del.task_id)
+                    .fetch_optional(pool)
+                    .await
+                    .unwrap_or_default();
 
             let _ = CoordinatorEventRepository::record(
                 pool,

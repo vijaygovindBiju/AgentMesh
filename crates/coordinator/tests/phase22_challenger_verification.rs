@@ -7,17 +7,15 @@
 //! 4. High-Contrast Indicator (▶[✓] and dual-highlight when focused and selected simultaneously)
 
 use chrono::Utc;
-use coordinator::domain::{
-    ApprovalStatus, Task, TaskStatus,
-};
+use coordinator::domain::{ApprovalStatus, Task, TaskStatus};
 use coordinator::tui::screens::PlanReviewScreen;
 use coordinator::tui::state::{
     AppState, CurrentScreen, DestructiveAction, ReviewTaskState, TuiAction,
 };
 use coordinator::tui::widgets::DetailsPaneWidget;
 use crossterm::event::{
-    KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers,
-    MouseButton, MouseEvent, MouseEventKind,
+    KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers, MouseButton, MouseEvent,
+    MouseEventKind,
 };
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -77,7 +75,13 @@ fn make_mouse_click(column: u16, row: u16, modifiers: KeyModifiers) -> MouseEven
     }
 }
 
-fn sample_task(id: Uuid, project_id: Uuid, short_id: &str, title: &str, status: TaskStatus) -> Task {
+fn sample_task(
+    id: Uuid,
+    project_id: Uuid,
+    short_id: &str,
+    title: &str,
+    status: TaskStatus,
+) -> Task {
     Task {
         id,
         project_id,
@@ -216,25 +220,43 @@ fn test_mouse_click_task_cards_left_column() {
 
     // Click Card 1 at row 9, col 10
     state.handle_mouse(make_mouse_click(10, 9, KeyModifiers::NONE));
-    assert_eq!(state.selected_task_index, 1, "Clicking row 9 should select card 1");
-    assert!(state.selected_task_indices.is_empty(), "Normal click clears multi-selection");
+    assert_eq!(
+        state.selected_task_index, 1,
+        "Clicking row 9 should select card 1"
+    );
+    assert!(
+        state.selected_task_indices.is_empty(),
+        "Normal click clears multi-selection"
+    );
 
     // Click Card 0 at row 4, col 5 (while window is at offset 0)
     state.handle_mouse(make_mouse_click(5, 4, KeyModifiers::NONE));
-    assert_eq!(state.selected_task_index, 0, "Clicking row 4 should select card 0");
+    assert_eq!(
+        state.selected_task_index, 0,
+        "Clicking row 4 should select card 0"
+    );
 
     // Click Card 2 at row 14, col 20 (while window is at offset 0)
     state.handle_mouse(make_mouse_click(20, 14, KeyModifiers::NONE));
-    assert_eq!(state.selected_task_index, 2, "Clicking row 14 should select card 2");
+    assert_eq!(
+        state.selected_task_index, 2,
+        "Clicking row 14 should select card 2"
+    );
 
     // When card 2 is selected, sliding window shifts by 1, placing Card 1 at row 3..7
     // Clicking row 4 now selects Card 1:
     state.handle_mouse(make_mouse_click(5, 4, KeyModifiers::NONE));
-    assert_eq!(state.selected_task_index, 1, "Clicking row 4 selects Card 1 due to sliding window");
+    assert_eq!(
+        state.selected_task_index, 1,
+        "Clicking row 4 selects Card 1 due to sliding window"
+    );
 
     // Clicking row 4 again selects Card 0 once window has returned to offset 0:
     state.handle_mouse(make_mouse_click(5, 4, KeyModifiers::NONE));
-    assert_eq!(state.selected_task_index, 0, "Clicking row 4 selects Card 0 once window is at top");
+    assert_eq!(
+        state.selected_task_index, 0,
+        "Clicking row 4 selects Card 0 once window is at top"
+    );
 
     // Ctrl+Click Card 1 to toggle multi-selection
     state.handle_mouse(make_mouse_click(10, 9, KeyModifiers::CONTROL));
@@ -249,7 +271,10 @@ fn test_mouse_click_task_cards_left_column() {
 
     // Clicking right column (Inspector, e.g. col 50, row 10) must NOT change task selection
     state.handle_mouse(make_mouse_click(50, 10, KeyModifiers::NONE));
-    assert_eq!(state.selected_task_index, 2, "Clicking right column should not change selection");
+    assert_eq!(
+        state.selected_task_index, 2,
+        "Clicking right column should not change selection"
+    );
 }
 
 #[test]
@@ -271,9 +296,11 @@ fn test_mouse_click_coordinate_mapping_when_scrolled() {
 
     // Let's render using full top-level ui::render and inspect what card is rendered at row 3..7
     let mut terminal = create_terminal(80, 24);
-    terminal.draw(|frame| {
-        coordinator::tui::ui::render(frame, &state);
-    }).unwrap();
+    terminal
+        .draw(|frame| {
+            coordinator::tui::ui::render(frame, &state);
+        })
+        .unwrap();
 
     let lines = buffer_to_lines(&terminal);
     println!("Rendered line at row 3: {}", lines[3]);
@@ -286,7 +313,10 @@ fn test_mouse_click_coordinate_mapping_when_scrolled() {
 
     // Now click row 4
     state.handle_mouse(make_mouse_click(10, 4, KeyModifiers::NONE));
-    println!("After clicking row 4, selected_task_index is: {}", state.selected_task_index);
+    println!(
+        "After clicking row 4, selected_task_index is: {}",
+        state.selected_task_index
+    );
 
     // Verified fix:
     // When the user clicks the card visually rendered at row 4 (Task 4),
@@ -309,9 +339,11 @@ fn test_mouse_scroll_wide_terminal_desynchronization() {
     // The Inspector occupies columns 64..179.
     // Therefore, column 50 is visually inside the Task List!
     let mut terminal = create_terminal(180, 50);
-    terminal.draw(|frame| {
-        coordinator::tui::ui::render(frame, &state);
-    }).unwrap();
+    terminal
+        .draw(|frame| {
+            coordinator::tui::ui::render(frame, &state);
+        })
+        .unwrap();
 
     // Hover mouse over column 50 (inside Task List) and scroll down
     state.handle_mouse(make_mouse_scroll(50, 10, MouseEventKind::ScrollDown));
@@ -492,13 +524,24 @@ telemetry guarantees real-time observability across all connected daemon process
             }
             if in_desc {
                 // If we reach the next block (Dependencies / Prerequisites / Affected Resources)
-                if line.contains("Dependencies") || line.contains("Prerequisites") || line.contains("Affected Resources") {
+                if line.contains("Dependencies")
+                    || line.contains("Prerequisites")
+                    || line.contains("Affected Resources")
+                {
                     break;
                 }
                 // Strip the vertical borders ('│' or '║' or ' ')
                 let trimmed = line.trim();
                 let inner = trimmed.trim_matches(|c: char| {
-                    c == '│' || c == '║' || c == '┌' || c == '┐' || c == '└' || c == '┘' || c == '─' || c == '━' || c == '┃'
+                    c == '│'
+                        || c == '║'
+                        || c == '┌'
+                        || c == '┐'
+                        || c == '└'
+                        || c == '┘'
+                        || c == '─'
+                        || c == '━'
+                        || c == '┃'
                 });
                 if !inner.trim().is_empty() {
                     desc_lines.push(inner.to_string());
@@ -646,7 +689,11 @@ fn test_exhaustive_mouse_click_matrix_across_all_scroll_positions_and_screen_siz
                             let mut click_state = setup_plan_state(task_count);
                             click_state.set_viewport_size(width, height);
                             click_state.selected_task_index = initial_selected;
-                            click_state.handle_mouse(make_mouse_click(10, row_idx as u16, KeyModifiers::NONE));
+                            click_state.handle_mouse(make_mouse_click(
+                                10,
+                                row_idx as u16,
+                                KeyModifiers::NONE,
+                            ));
                             assert_eq!(
                                 click_state.selected_task_index, task_num,
                                 "Failed at ({width}x{height}), initial_selected={initial_selected}: clicked row {row_idx} rendering [T-{task_num}], but selected {}",
@@ -773,5 +820,3 @@ fn test_mouse_click_edge_cases_and_adversarial_inputs() {
     assert_eq!(state.selected_task_index, 0);
     assert!(state.selected_task_indices.is_empty());
 }
-
-

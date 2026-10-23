@@ -177,7 +177,7 @@ mod tests {
             &NewAgent {
                 human_owner: "Dave".to_string(),
                 api_key_hash: "hash_dave".to_string(),
-                adapter_type: AdapterType::Mock,
+                adapter_type: AdapterType::Agy,
                 capabilities: vec!["rust".to_string()],
                 nats_subject: "agents.dave.events".to_string(),
                 ..Default::default()

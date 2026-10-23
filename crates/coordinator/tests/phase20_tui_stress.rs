@@ -9,9 +9,7 @@ use coordinator::domain::{
     ApprovalStatus, DependencyKind, Project, ProjectStatus, Task, TaskDependency, TaskStatus,
 };
 use coordinator::tui::state::{DashboardFocus, DiagnosticsFocus};
-use coordinator::tui::{
-    render, AppState, CurrentScreen, InputMode, ReviewTaskState, TuiAction,
-};
+use coordinator::tui::{render, AppState, CurrentScreen, InputMode, ReviewTaskState, TuiAction};
 
 fn press(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -57,7 +55,7 @@ fn make_task(id: Uuid, proj_id: Uuid, short_id: &str, title: &str, status: TaskS
 
 #[test]
 fn test_stress_rapid_key_flood_no_panics() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let mut terminal = create_terminal(100, 30);
 
     // Flood with 5,000 diverse rapid key events across all modes
@@ -100,26 +98,34 @@ fn test_stress_rapid_key_flood_no_panics() {
 
         // Intermittently render every 100 keystrokes to ensure view rendering doesn't crash
         if i % 100 == 0 {
-            terminal.draw(|f| render(f, &state)).expect("Render failed during key flood");
+            terminal
+                .draw(|f| render(f, &state))
+                .expect("Render failed during key flood");
         }
     }
 }
 
 #[test]
 fn test_stress_deep_screen_cycling() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
 
     // 2,000 Tab screen switches
     for _ in 0..2000 {
         let prev = state.current_screen;
         state.handle_key(press(KeyCode::Tab));
         match prev {
-            CurrentScreen::Dashboard => assert_eq!(state.current_screen, CurrentScreen::ProjectManagement),
+            CurrentScreen::Dashboard => {
+                assert_eq!(state.current_screen, CurrentScreen::ProjectManagement)
+            }
             CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => {
                 assert_eq!(state.current_screen, CurrentScreen::PlanReview)
             }
-            CurrentScreen::PlanReview => assert_eq!(state.current_screen, CurrentScreen::FleetInspector),
-            CurrentScreen::FleetInspector => assert_eq!(state.current_screen, CurrentScreen::Diagnostics),
+            CurrentScreen::PlanReview => {
+                assert_eq!(state.current_screen, CurrentScreen::FleetInspector)
+            }
+            CurrentScreen::FleetInspector => {
+                assert_eq!(state.current_screen, CurrentScreen::Diagnostics)
+            }
             CurrentScreen::Diagnostics => assert_eq!(state.current_screen, CurrentScreen::Settings),
             CurrentScreen::Settings => assert_eq!(state.current_screen, CurrentScreen::Dashboard),
         }
@@ -144,7 +150,7 @@ fn test_stress_deep_screen_cycling() {
 
 #[test]
 fn test_stress_modal_thrashing() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let mut terminal = create_terminal(100, 30);
 
     // Rapidly toggle Help Modal (? then Esc) 500 times
@@ -195,7 +201,7 @@ fn test_stress_modal_thrashing() {
 
 #[test]
 fn test_stress_plan_review_navigation_bounds() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
 
     let task_count = state.review_tasks.len();
@@ -222,7 +228,7 @@ fn test_stress_plan_review_navigation_bounds() {
 
 #[test]
 fn test_stress_dashboard_pane_switching_and_acknowledgment() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
     // Rapidly switch focus left/right 1,000 times
@@ -249,7 +255,7 @@ fn test_stress_dashboard_pane_switching_and_acknowledgment() {
 
 #[test]
 fn test_stress_shrink_tasks_list_triggers_direct_index_panic_on_approve() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
 
     // Navigate to task index 2
@@ -276,7 +282,7 @@ fn test_stress_shrink_tasks_list_triggers_direct_index_panic_on_approve() {
 
 #[test]
 fn test_stress_large_task_count_100_tasks_navigation_and_review() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
 
     state.active_project = Some(Project {
@@ -294,7 +300,13 @@ fn test_stress_large_task_count_100_tasks_navigation_and_review() {
         let tid = Uuid::new_v4();
         let short_id = format!("PLAN-{}", i + 1);
         let title = format!("Task {} automated migration unit", i + 1);
-        let mut r = ReviewTaskState::new(make_task(tid, proj_id, &short_id, &title, TaskStatus::HumanReview));
+        let mut r = ReviewTaskState::new(make_task(
+            tid,
+            proj_id,
+            &short_id,
+            &title,
+            TaskStatus::HumanReview,
+        ));
         r.suggested_agent_name = Some(format!("agent-{}", (i % 5) + 1));
         r.progress_percent = Some((i % 100) as u8);
         tasks.push(r);
@@ -306,7 +318,9 @@ fn test_stress_large_task_count_100_tasks_navigation_and_review() {
     let mut terminal = create_terminal(120, 35);
 
     // Render initially
-    terminal.draw(|f| render(f, &state)).expect("Render failed with 100 tasks");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render failed with 100 tasks");
 
     // Scroll through all 100 tasks from top to bottom
     for i in 0..99 {
@@ -316,20 +330,28 @@ fn test_stress_large_task_count_100_tasks_navigation_and_review() {
     assert_eq!(state.selected_task_index, 99);
 
     // Verify terminal renders at bottom without panic
-    terminal.draw(|f| render(f, &state)).expect("Render failed at task 99");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render failed at task 99");
 
     // Approve 50 tasks with 'y' and reject 49 tasks with 'n'
     state.selected_task_index = 0;
     for i in 0..50 {
         let action = state.handle_key(press(KeyCode::Char('y')));
         assert!(matches!(action, Some(TuiAction::ApproveTask { .. })));
-        assert_eq!(state.review_tasks[i].human_decision, Some(ApprovalStatus::Approved));
+        assert_eq!(
+            state.review_tasks[i].human_decision,
+            Some(ApprovalStatus::Approved)
+        );
     }
 
     for i in 50..99 {
         let action = state.handle_key(press(KeyCode::Char('n')));
         assert!(matches!(action, Some(TuiAction::RejectTask { .. })));
-        assert_eq!(state.review_tasks[i].human_decision, Some(ApprovalStatus::Rejected));
+        assert_eq!(
+            state.review_tasks[i].human_decision,
+            Some(ApprovalStatus::Rejected)
+        );
     }
 
     // Scroll back up to 0
@@ -341,7 +363,7 @@ fn test_stress_large_task_count_100_tasks_navigation_and_review() {
 
 #[test]
 fn test_stress_cyclic_dependency_graph_in_dag_view() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
 
     let id_a = Uuid::new_v4();
@@ -349,21 +371,39 @@ fn test_stress_cyclic_dependency_graph_in_dag_view() {
     let id_c = Uuid::new_v4();
 
     // Create a 3-task circular dependency: A -> B -> C -> A
-    let mut task_a = ReviewTaskState::new(make_task(id_a, proj_id, "CYC-A", "Component A", TaskStatus::HumanReview));
+    let mut task_a = ReviewTaskState::new(make_task(
+        id_a,
+        proj_id,
+        "CYC-A",
+        "Component A",
+        TaskStatus::HumanReview,
+    ));
     task_a.dependencies.push(TaskDependency {
         dependent_id: id_a,
         depends_on_id: id_c,
         kind: DependencyKind::Blocks,
     });
 
-    let mut task_b = ReviewTaskState::new(make_task(id_b, proj_id, "CYC-B", "Component B", TaskStatus::HumanReview));
+    let mut task_b = ReviewTaskState::new(make_task(
+        id_b,
+        proj_id,
+        "CYC-B",
+        "Component B",
+        TaskStatus::HumanReview,
+    ));
     task_b.dependencies.push(TaskDependency {
         dependent_id: id_b,
         depends_on_id: id_a,
         kind: DependencyKind::Blocks,
     });
 
-    let mut task_c = ReviewTaskState::new(make_task(id_c, proj_id, "CYC-C", "Component C", TaskStatus::HumanReview));
+    let mut task_c = ReviewTaskState::new(make_task(
+        id_c,
+        proj_id,
+        "CYC-C",
+        "Component C",
+        TaskStatus::HumanReview,
+    ));
     task_c.dependencies.push(TaskDependency {
         dependent_id: id_c,
         depends_on_id: id_b,
@@ -377,28 +417,50 @@ fn test_stress_cyclic_dependency_graph_in_dag_view() {
     let mut terminal = create_terminal(120, 30);
 
     // Must render cleanly without infinite loop or panic
-    terminal.draw(|f| render(f, &state)).expect("DAG render panicked on circular dependency!");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("DAG render panicked on circular dependency!");
 
     let rendered = buffer_to_string(&terminal);
-    assert!(rendered.contains("0 Root(s) Ready"), "Cyclic graph must report 0 ready roots");
-    assert!(rendered.contains("3 Dependent"), "All 3 tasks in cycle must be classified as dependents");
-    assert!(rendered.contains("blocks"), "Blocking edges must be rendered");
+    assert!(
+        rendered.contains("0 Root(s) Ready"),
+        "Cyclic graph must report 0 ready roots"
+    );
+    assert!(
+        rendered.contains("3 Dependent"),
+        "All 3 tasks in cycle must be classified as dependents"
+    );
+    assert!(
+        rendered.contains("blocks"),
+        "Blocking edges must be rendered"
+    );
 
     // Also verify full-width DAG view (details pane toggled off)
     state.show_details_pane = false;
-    terminal.draw(|f| render(f, &state)).expect("Full-width DAG render failed");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Full-width DAG render failed");
     let full_rendered = buffer_to_string(&terminal);
-    assert!(full_rendered.contains("3 Dependent(s)"), "Full width DAG contains full label");
+    assert!(
+        full_rendered.contains("3 Dependent(s)"),
+        "Full width DAG contains full label"
+    );
 }
 
 #[test]
 fn test_stress_self_loop_dependency_in_dag_view() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
     let id_self = Uuid::new_v4();
 
     // Task that depends on itself: Self -> Self
-    let mut task_self = ReviewTaskState::new(make_task(id_self, proj_id, "SELF-1", "Self Referencing", TaskStatus::HumanReview));
+    let mut task_self = ReviewTaskState::new(make_task(
+        id_self,
+        proj_id,
+        "SELF-1",
+        "Self Referencing",
+        TaskStatus::HumanReview,
+    ));
     task_self.dependencies.push(TaskDependency {
         dependent_id: id_self,
         depends_on_id: id_self,
@@ -410,7 +472,9 @@ fn test_stress_self_loop_dependency_in_dag_view() {
     state.show_dag_view = true;
 
     let mut terminal = create_terminal(100, 25);
-    terminal.draw(|f| render(f, &state)).expect("DAG render panicked on self-loop dependency");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("DAG render panicked on self-loop dependency");
 
     let rendered = buffer_to_string(&terminal);
     assert!(rendered.contains("1 Tasks"));
@@ -419,14 +483,26 @@ fn test_stress_self_loop_dependency_in_dag_view() {
 
 #[test]
 fn test_stress_wide_dependency_graph_fan_out_and_fan_in() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
 
     let root_id = Uuid::new_v4();
-    let root_task = ReviewTaskState::new(make_task(root_id, proj_id, "ROOT-0", "Master Root Task", TaskStatus::HumanReview));
+    let root_task = ReviewTaskState::new(make_task(
+        root_id,
+        proj_id,
+        "ROOT-0",
+        "Master Root Task",
+        TaskStatus::HumanReview,
+    ));
 
     let sink_id = Uuid::new_v4();
-    let mut sink_task = ReviewTaskState::new(make_task(sink_id, proj_id, "SINK-99", "Master Sink Task", TaskStatus::HumanReview));
+    let mut sink_task = ReviewTaskState::new(make_task(
+        sink_id,
+        proj_id,
+        "SINK-99",
+        "Master Sink Task",
+        TaskStatus::HumanReview,
+    ));
 
     let mut tasks = vec![root_task];
 
@@ -434,7 +510,13 @@ fn test_stress_wide_dependency_graph_fan_out_and_fan_in() {
     // Fan-in: sink_task depends on all 50 intermediate tasks
     for i in 1..=50 {
         let mid_id = Uuid::new_v4();
-        let mut mid_task = ReviewTaskState::new(make_task(mid_id, proj_id, &format!("MID-{}", i), "Parallel Worker", TaskStatus::HumanReview));
+        let mut mid_task = ReviewTaskState::new(make_task(
+            mid_id,
+            proj_id,
+            &format!("MID-{}", i),
+            "Parallel Worker",
+            TaskStatus::HumanReview,
+        ));
         mid_task.dependencies.push(TaskDependency {
             dependent_id: mid_id,
             depends_on_id: root_id,
@@ -454,7 +536,9 @@ fn test_stress_wide_dependency_graph_fan_out_and_fan_in() {
     state.show_dag_view = true;
 
     let mut terminal = create_terminal(140, 50);
-    terminal.draw(|f| render(f, &state)).expect("DAG render panicked on 50-wide fan-out/fan-in graph");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("DAG render panicked on 50-wide fan-out/fan-in graph");
 
     let rendered = buffer_to_string(&terminal);
     assert!(rendered.contains("52 Tasks"));
@@ -464,13 +548,19 @@ fn test_stress_wide_dependency_graph_fan_out_and_fan_in() {
 
 #[test]
 fn test_stress_orphaned_external_dependency_ids() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
 
     let task_id = Uuid::new_v4();
     let external_dep_id = Uuid::new_v4(); // Does NOT exist in review_tasks
 
-    let mut task = ReviewTaskState::new(make_task(task_id, proj_id, "ORPH-1", "Orphaned Dep Task", TaskStatus::HumanReview));
+    let mut task = ReviewTaskState::new(make_task(
+        task_id,
+        proj_id,
+        "ORPH-1",
+        "Orphaned Dep Task",
+        TaskStatus::HumanReview,
+    ));
     task.dependencies.push(TaskDependency {
         dependent_id: task_id,
         depends_on_id: external_dep_id,
@@ -483,13 +573,20 @@ fn test_stress_orphaned_external_dependency_ids() {
     let mut terminal = create_terminal(120, 30);
 
     // 1. Task cards + details pane inspector (must render 'External Prerequisite')
-    terminal.draw(|f| render(f, &state)).expect("Render panicked on external dep in details pane");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render panicked on external dep in details pane");
     let content = buffer_to_string(&terminal);
-    assert!(content.contains("External Prerequisite"), "Details pane must display 'External Prerequisite'");
+    assert!(
+        content.contains("External Prerequisite"),
+        "Details pane must display 'External Prerequisite'"
+    );
 
     // 2. DAG view (must not panic when mapping non-existent dep UUID)
     state.show_dag_view = true;
-    terminal.draw(|f| render(f, &state)).expect("DAG view panicked on external dep UUID");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("DAG view panicked on external dep UUID");
 }
 
 // ============================================================================
@@ -499,7 +596,7 @@ fn test_stress_orphaned_external_dependency_ids() {
 #[test]
 fn test_stress_terminal_buffer_small_40x15() {
     let mut terminal = create_terminal(40, 15);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
 
     let screens = [
         CurrentScreen::ProjectInput,
@@ -511,7 +608,9 @@ fn test_stress_terminal_buffer_small_40x15() {
     // Render every screen at 40x15
     for screen in screens {
         state.current_screen = screen;
-        terminal.draw(|f| render(f, &state)).unwrap_or_else(|e| panic!("Failed rendering {:?} at 40x15: {:?}", screen, e));
+        terminal
+            .draw(|f| render(f, &state))
+            .unwrap_or_else(|e| panic!("Failed rendering {:?} at 40x15: {:?}", screen, e));
     }
 
     // Render PlanReview with details pane toggled off and on
@@ -553,7 +652,7 @@ fn test_stress_terminal_buffer_small_40x15() {
 #[test]
 fn test_stress_terminal_buffer_ultra_wide_300x100() {
     let mut terminal = create_terminal(300, 100);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
 
     let screens = [
         CurrentScreen::ProjectInput,
@@ -564,7 +663,9 @@ fn test_stress_terminal_buffer_ultra_wide_300x100() {
 
     for screen in screens {
         state.current_screen = screen;
-        terminal.draw(|f| render(f, &state)).unwrap_or_else(|e| panic!("Failed rendering {:?} at 300x100: {:?}", screen, e));
+        terminal
+            .draw(|f| render(f, &state))
+            .unwrap_or_else(|e| panic!("Failed rendering {:?} at 300x100: {:?}", screen, e));
     }
 
     // Render DAG view at 300x100
@@ -593,20 +694,16 @@ fn test_stress_terminal_buffer_ultra_wide_300x100() {
 
 #[test]
 fn test_stress_terminal_buffer_degenerate_dimensions() {
-    let state = AppState::new().with_mock_data();
+    let state = AppState::new().with_test_data();
 
     // Test highly degenerate sizes to ensure no arithmetic overflow/underflow or division by zero
-    let extreme_sizes = [
-        (10, 5),
-        (20, 8),
-        (30, 10),
-        (250, 15),
-        (40, 200),
-    ];
+    let extreme_sizes = [(10, 5), (20, 8), (30, 10), (250, 15), (40, 200)];
 
     for (w, h) in extreme_sizes {
         let mut terminal = create_terminal(w, h);
-        terminal.draw(|f| render(f, &state)).unwrap_or_else(|e| panic!("Panicked on degenerate size {w}x{h}: {:?}", e));
+        terminal
+            .draw(|f| render(f, &state))
+            .unwrap_or_else(|e| panic!("Panicked on degenerate size {w}x{h}: {:?}", e));
     }
 }
 
@@ -616,7 +713,7 @@ fn test_stress_terminal_buffer_degenerate_dimensions() {
 
 #[test]
 fn test_stress_utf8_inline_editor_japanese_cjk() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
 
     // Enter edit mode
@@ -634,7 +731,10 @@ fn test_stress_utf8_inline_editor_japanese_cjk() {
     let japanese_text = "こんにちは世界";
     for c in japanese_text.chars() {
         state.handle_key(press(KeyCode::Char(c)));
-        assert!(state.edit_buffer.is_char_boundary(state.edit_cursor), "Cursor must remain on UTF-8 char boundary!");
+        assert!(
+            state.edit_buffer.is_char_boundary(state.edit_cursor),
+            "Cursor must remain on UTF-8 char boundary!"
+        );
     }
     assert_eq!(state.edit_buffer, japanese_text);
     assert_eq!(state.edit_cursor, japanese_text.len());
@@ -643,14 +743,20 @@ fn test_stress_utf8_inline_editor_japanese_cjk() {
     let chars_count = japanese_text.chars().count();
     for _ in 0..chars_count {
         state.handle_key(press(KeyCode::Left));
-        assert!(state.edit_buffer.is_char_boundary(state.edit_cursor), "Left navigation must stay on UTF-8 char boundary");
+        assert!(
+            state.edit_buffer.is_char_boundary(state.edit_cursor),
+            "Left navigation must stay on UTF-8 char boundary"
+        );
     }
     assert_eq!(state.edit_cursor, 0);
 
     // Navigate Right across 3-byte characters
     for _ in 0..chars_count {
         state.handle_key(press(KeyCode::Right));
-        assert!(state.edit_buffer.is_char_boundary(state.edit_cursor), "Right navigation must stay on UTF-8 char boundary");
+        assert!(
+            state.edit_buffer.is_char_boundary(state.edit_cursor),
+            "Right navigation must stay on UTF-8 char boundary"
+        );
     }
     assert_eq!(state.edit_cursor, japanese_text.len());
 
@@ -664,7 +770,9 @@ fn test_stress_utf8_inline_editor_japanese_cjk() {
     let action = state.handle_key(press(KeyCode::Enter));
     assert_eq!(state.input_mode, InputMode::Normal);
     match action {
-        Some(TuiAction::EditTaskDescription { new_description, .. }) => {
+        Some(TuiAction::EditTaskDescription {
+            new_description, ..
+        }) => {
             assert_eq!(new_description, "こんにちは");
         }
         other => panic!("Expected EditTaskDescription, got {:?}", other),
@@ -673,7 +781,7 @@ fn test_stress_utf8_inline_editor_japanese_cjk() {
 
 #[test]
 fn test_stress_utf8_inline_editor_emojis_4bytes() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
 
     state.handle_key(press(KeyCode::Char('e')));
@@ -713,7 +821,7 @@ fn test_stress_utf8_inline_editor_emojis_4bytes() {
 
 #[test]
 fn test_stress_utf8_inline_editor_mixed_alphabets_and_rendering() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
 
     state.handle_key(press(KeyCode::Char('e')));
@@ -731,7 +839,9 @@ fn test_stress_utf8_inline_editor_mixed_alphabets_and_rendering() {
 
     // Verify it renders in DetailsPaneWidget on screen without panics
     let mut terminal = create_terminal(120, 30);
-    terminal.draw(|f| render(f, &state)).expect("Rendering failed with complex UTF-8 string");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Rendering failed with complex UTF-8 string");
 
     let rendered = buffer_to_string(&terminal);
     assert!(rendered.contains("Café"));
@@ -741,7 +851,7 @@ fn test_stress_utf8_inline_editor_mixed_alphabets_and_rendering() {
 
 #[test]
 fn test_stress_utf8_project_input_name_and_description() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::ProjectInput;
 
     // Enter project edit mode
@@ -785,7 +895,7 @@ fn test_stress_utf8_project_input_name_and_description() {
 
 #[test]
 fn test_stress_dag_view_vertical_scrolling_large_graph() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
 
     // 52-task graph: 1 root -> 50 intermediate -> 1 sink
@@ -793,12 +903,30 @@ fn test_stress_dag_view_vertical_scrolling_large_graph() {
     let sink_id = Uuid::new_v4();
     let mut tasks = Vec::new();
 
-    tasks.push(ReviewTaskState::new(make_task(root_id, proj_id, "ROOT-0", "Root Task", TaskStatus::Approved)));
-    let mut sink_task = ReviewTaskState::new(make_task(sink_id, proj_id, "SINK-99", "Final Sink Task", TaskStatus::HumanReview));
+    tasks.push(ReviewTaskState::new(make_task(
+        root_id,
+        proj_id,
+        "ROOT-0",
+        "Root Task",
+        TaskStatus::Approved,
+    )));
+    let mut sink_task = ReviewTaskState::new(make_task(
+        sink_id,
+        proj_id,
+        "SINK-99",
+        "Final Sink Task",
+        TaskStatus::HumanReview,
+    ));
 
     for i in 1..=50 {
         let mid_id = Uuid::new_v4();
-        let mut mid_task = ReviewTaskState::new(make_task(mid_id, proj_id, &format!("MID-{i}"), "Parallel Worker", TaskStatus::HumanReview));
+        let mut mid_task = ReviewTaskState::new(make_task(
+            mid_id,
+            proj_id,
+            &format!("MID-{i}"),
+            "Parallel Worker",
+            TaskStatus::HumanReview,
+        ));
         mid_task.dependencies.push(TaskDependency {
             dependent_id: mid_id,
             depends_on_id: root_id,
@@ -822,20 +950,30 @@ fn test_stress_dag_view_vertical_scrolling_large_graph() {
 
     // When root is selected (index 0), root task should be visible in buffer
     state.selected_task_index = 0;
-    terminal.draw(|f| render(f, &state)).expect("Render failed at index 0");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render failed at index 0");
     let content_top = buffer_to_string(&terminal);
-    assert!(content_top.contains("ROOT-0"), "Root task must be visible when selected at top");
+    assert!(
+        content_top.contains("ROOT-0"),
+        "Root task must be visible when selected at top"
+    );
 
     // When the final sink task is selected (index 51), DAG should scroll vertically to show SINK-99
     state.selected_task_index = 51;
-    terminal.draw(|f| render(f, &state)).expect("Render failed at index 51");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render failed at index 51");
     let content_bottom = buffer_to_string(&terminal);
-    assert!(content_bottom.contains("SINK-99"), "Final sink task must be scrolled into view when selected");
+    assert!(
+        content_bottom.contains("SINK-99"),
+        "Final sink task must be scrolled into view when selected"
+    );
 }
 
 #[test]
 fn test_stress_inline_editor_cursor_indicator_position() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
     state.show_details_pane = true;
 
@@ -857,7 +995,9 @@ fn test_stress_inline_editor_cursor_indicator_position() {
 
     // Terminal render: when at end, cursor '_' is at the end
     let mut terminal = create_terminal(120, 30);
-    terminal.draw(|f| render(f, &state)).expect("Render failed at end of buffer");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render failed at end of buffer");
     let rendered_end = buffer_to_string(&terminal);
     assert!(rendered_end.contains("Hello World_"));
 
@@ -868,7 +1008,9 @@ fn test_stress_inline_editor_cursor_indicator_position() {
     assert_eq!(state.edit_cursor, 5);
 
     // Terminal render: visual cursor '_' must be inserted at index 5: "Hello_ World"
-    terminal.draw(|f| render(f, &state)).expect("Render failed with cursor in middle");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render failed with cursor in middle");
     let rendered_middle = buffer_to_string(&terminal);
     assert!(
         rendered_middle.contains("Hello_ World"),

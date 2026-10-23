@@ -1,15 +1,14 @@
-use std::time::Instant;
 use chrono::Utc;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use serde_json::json;
+use std::time::Instant;
 use uuid::Uuid;
 
 use coordinator::observability::CoordinatorEvent;
 use coordinator::tui::{
-    render, AppState, ConfirmationModalState, CurrentScreen, TuiUpdateEvent,
-    MAX_RECENT_EVENTS,
+    render, AppState, ConfirmationModalState, CurrentScreen, TuiUpdateEvent, MAX_RECENT_EVENTS,
 };
 
 fn create_terminal(width: u16, height: u16) -> Terminal<TestBackend> {
@@ -61,7 +60,7 @@ fn buffer_to_string(terminal: &Terminal<TestBackend>) -> String {
 
 #[test]
 fn test_challenge1_push_recent_event_burst_1k() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let start = Instant::now();
 
     for i in 0..1_000 {
@@ -86,7 +85,7 @@ fn test_challenge1_push_recent_event_burst_1k() {
 
 #[test]
 fn test_challenge1_push_recent_event_burst_5k() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let start = Instant::now();
 
     for i in 0..5_000 {
@@ -111,7 +110,7 @@ fn test_challenge1_push_recent_event_burst_5k() {
 
 #[test]
 fn test_challenge1_push_recent_event_burst_10k() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let start = Instant::now();
 
     for i in 0..10_000 {
@@ -133,12 +132,15 @@ fn test_challenge1_push_recent_event_burst_10k() {
     assert!(state.recent_events.len() <= MAX_RECENT_EVENTS);
     println!("Challenge 1: push_recent_event 10,000 events took: {elapsed:?}");
     // Performance assertion: 10,000 events should complete in well under 500ms
-    assert!(elapsed.as_millis() < 500, "10k burst exceeded performance limit: {elapsed:?}");
+    assert!(
+        elapsed.as_millis() < 500,
+        "10k burst exceeded performance limit: {elapsed:?}"
+    );
 }
 
 #[test]
 fn test_challenge1_update_event_recent_events_batch_1k() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let batch: Vec<CoordinatorEvent> = (0..1_000).map(sample_event).collect();
 
     state.apply_update(TuiUpdateEvent::RecentEvents(batch));
@@ -157,7 +159,7 @@ fn test_challenge1_update_event_recent_events_batch_1k() {
 
 #[test]
 fn test_challenge1_update_event_recent_events_batch_5k() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let batch: Vec<CoordinatorEvent> = (0..5_000).map(sample_event).collect();
 
     state.apply_update(TuiUpdateEvent::RecentEvents(batch));
@@ -176,7 +178,7 @@ fn test_challenge1_update_event_recent_events_batch_5k() {
 
 #[test]
 fn test_challenge1_update_event_recent_events_batch_10k() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let batch: Vec<CoordinatorEvent> = (0..10_000).map(sample_event).collect();
 
     state.apply_update(TuiUpdateEvent::RecentEvents(batch));
@@ -195,7 +197,7 @@ fn test_challenge1_update_event_recent_events_batch_10k() {
 
 #[test]
 fn test_challenge1_fifo_eviction_and_newest_ordering() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     for i in 0..500 {
         state.push_recent_event(sample_event(i));
     }
@@ -238,10 +240,12 @@ const SCREENS: [CurrentScreen; 5] = [
 #[test]
 fn test_challenge2_extreme_size_boundary_47x9_renders_clean_message_zero_panics() {
     let mut terminal = create_terminal(47, 9);
-    let state = AppState::new().with_mock_data();
+    let state = AppState::new().with_test_data();
 
     // Must render cleanly without panic
-    terminal.draw(|f| render(f, &state)).expect("Render failed at 47x9");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render failed at 47x9");
 
     let text = buffer_to_string(&terminal);
     assert!(
@@ -263,11 +267,12 @@ fn test_challenge2_matrix_across_all_dimensions_and_screens() {
     for (width, height, label) in RESIZE_DIMENSIONS {
         for screen in SCREENS {
             let mut terminal = create_terminal(width, height);
-            let mut state = AppState::new().with_mock_data();
+            let mut state = AppState::new().with_test_data();
             state.current_screen = screen;
 
-            terminal.draw(|f| render(f, &state))
-                .unwrap_or_else(|e| panic!("Draw failed on {width}x{height} ({label}) for screen {screen:?}: {e}"));
+            terminal.draw(|f| render(f, &state)).unwrap_or_else(|e| {
+                panic!("Draw failed on {width}x{height} ({label}) for screen {screen:?}: {e}")
+            });
 
             let text = buffer_to_string(&terminal);
             if width < 48 || height < 10 {
@@ -292,35 +297,36 @@ fn test_challenge2_matrix_with_active_modals() {
         // Modal 1: Help Modal
         {
             let mut terminal = create_terminal(width, height);
-            let mut state = AppState::new().with_mock_data();
+            let mut state = AppState::new().with_test_data();
             state.show_help_modal = true;
 
-            terminal.draw(|f| render(f, &state))
-                .unwrap_or_else(|e| panic!("Panic with Help Modal open on {width}x{height} ({label}): {e}"));
+            terminal.draw(|f| render(f, &state)).unwrap_or_else(|e| {
+                panic!("Panic with Help Modal open on {width}x{height} ({label}): {e}")
+            });
         }
 
         // Modal 2: Command Palette Modal
         {
             let mut terminal = create_terminal(width, height);
-            let mut state = AppState::new().with_mock_data();
+            let mut state = AppState::new();
             state.show_command_palette = true;
             state.command_palette_query = "task".to_string();
 
-            terminal.draw(|f| render(f, &state))
-                .unwrap_or_else(|e| panic!("Panic with Command Palette open on {width}x{height} ({label}): {e}"));
+            terminal.draw(|f| render(f, &state)).unwrap_or_else(|e| {
+                panic!("Panic with Command Palette open on {width}x{height} ({label}): {e}")
+            });
         }
 
         // Modal 3: Confirmation Dialog Modal
         {
             let mut terminal = create_terminal(width, height);
-            let mut state = AppState::new().with_mock_data();
-            state.pending_confirmation = Some(ConfirmationModalState::cancel(
-                Uuid::new_v4(),
-                "TASK-101",
-            ));
+            let mut state = AppState::new();
+            state.pending_confirmation =
+                Some(ConfirmationModalState::cancel(Uuid::new_v4(), "TASK-101"));
 
-            terminal.draw(|f| render(f, &state))
-                .unwrap_or_else(|e| panic!("Panic with Confirmation Modal open on {width}x{height} ({label}): {e}"));
+            terminal.draw(|f| render(f, &state)).unwrap_or_else(|e| {
+                panic!("Panic with Confirmation Modal open on {width}x{height} ({label}): {e}")
+            });
         }
     }
 }
@@ -331,13 +337,15 @@ fn test_challenge2_matrix_with_active_modals() {
 
 #[test]
 fn test_challenge3_empty_query_filtering_and_rendering() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.show_command_palette = true;
     state.command_palette_query = "".to_string();
     state.command_palette_selected_index = 0;
 
     let mut terminal = create_terminal(80, 24);
-    terminal.draw(|f| render(f, &state)).expect("Render failed on empty query");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render failed on empty query");
 
     let text = buffer_to_string(&terminal);
     assert!(text.contains("Command Palette"), "Palette header missing");
@@ -359,7 +367,7 @@ fn test_challenge3_special_characters_fuzzing() {
     ];
 
     for query in special_queries {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         state.show_command_palette = true;
 
         // Type each character into state via KeyCode::Char
@@ -374,12 +382,15 @@ fn test_challenge3_special_characters_fuzzing() {
         );
 
         // Render buffer check
-        terminal.draw(|f| render(f, &state))
+        terminal
+            .draw(|f| render(f, &state))
             .unwrap_or_else(|e| panic!("Render panicked on special character query {query}: {e}"));
 
         let text = buffer_to_string(&terminal);
         // If no commands match, it should display "No matching commands found"
-        let matches = coordinator::tui::widgets::command_palette::filtered_commands(&state.command_palette_query);
+        let matches = coordinator::tui::widgets::command_palette::filtered_commands(
+            &state.command_palette_query,
+        );
         if matches.is_empty() {
             assert!(
                 text.contains("No matching commands"),
@@ -401,13 +412,17 @@ fn test_challenge3_extreme_length_queries_over_100_chars() {
     ];
 
     for query in &long_queries {
-        let mut state = AppState::new().with_mock_data();
+        let mut state = AppState::new().with_test_data();
         state.show_command_palette = true;
         state.command_palette_query = query.clone();
         state.command_palette_selected_index = 0;
 
-        terminal.draw(|f| render(f, &state))
-            .unwrap_or_else(|e| panic!("Render panicked on query length {}: {e}", query.chars().count()));
+        terminal.draw(|f| render(f, &state)).unwrap_or_else(|e| {
+            panic!(
+                "Render panicked on query length {}: {e}",
+                query.chars().count()
+            )
+        });
 
         // Safe Down and Up navigation
         state.handle_key(make_key(KeyCode::Down));
@@ -429,7 +444,7 @@ fn test_challenge3_extreme_length_queries_over_100_chars() {
 #[test]
 fn test_challenge3_rapid_backspaces_underflow_fuzzing() {
     let mut terminal = create_terminal(80, 24);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.show_command_palette = true;
 
     // Type 20 chars
@@ -446,14 +461,16 @@ fn test_challenge3_rapid_backspaces_underflow_fuzzing() {
     assert_eq!(state.command_palette_query, "");
 
     // Must render cleanly
-    terminal.draw(|f| render(f, &state)).expect("Render failed after backspace underflow");
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Render failed after backspace underflow");
     let text = buffer_to_string(&terminal);
     assert!(text.contains("Go to Dashboard"));
 }
 
 #[test]
 fn test_challenge3_selection_clamping_navigation_and_dispatch() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.show_command_palette = true;
     state.command_palette_query = "nav".to_string();
 

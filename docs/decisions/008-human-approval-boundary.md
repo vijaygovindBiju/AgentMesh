@@ -119,5 +119,5 @@ This means at any time, the coordinator can answer:
 
 - The coordinator cannot be used as a "just run everything the AI says" tool — human input is required before any agent starts work.
 - The approval screen UX must be efficient enough that reviewing 10–20 tasks is not painful.
-- For automated testing, `MockLlmProvider` + a test-mode approval path (auto-approve all) can be used in integration tests.
+- For automated testing, `AgyProvider` + a test-mode approval path (auto-approve all) can be used in integration tests.
 - The "auto-approve" test path must be explicitly gated (e.g., `AGENTMESH_AUTO_APPROVE=true` env var) and must not be reachable in production builds.

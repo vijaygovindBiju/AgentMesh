@@ -6,9 +6,7 @@ use coordinator::tui::state::{
     AppState, CurrentScreen, DashboardFocus, DestructiveAction, DiagnosticsFocus, TuiAction,
 };
 use coordinator::tui::widgets::FooterWidget;
-use crossterm::event::{
-    KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use serde_json::json;
@@ -28,7 +26,13 @@ fn assert_buffer_contains(terminal: &Terminal<TestBackend>, needle: &str) {
     );
 }
 
-fn sample_task(id: Uuid, project_id: Uuid, short_id: &str, title: &str, status: TaskStatus) -> Task {
+fn sample_task(
+    id: Uuid,
+    project_id: Uuid,
+    short_id: &str,
+    title: &str,
+    status: TaskStatus,
+) -> Task {
     Task {
         id,
         project_id,
@@ -64,21 +68,29 @@ fn sample_event(i: usize) -> CoordinatorEvent {
 
 #[test]
 fn test_mouse_scroll_plan_review_tasks_list() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
     state.show_dag_view = false;
 
     let proj_id = Uuid::new_v4();
     for i in 1..=5 {
-        let task = sample_task(Uuid::new_v4(), proj_id, &format!("TASK-{i}"), &format!("Task {i}"), TaskStatus::HumanReview);
-        state.review_tasks.push(coordinator::tui::state::ReviewTaskState {
-            task,
-            suggested_agent_name: None,
-            overlap_warnings: Vec::new(),
-            dependencies: Vec::new(),
-            human_decision: None,
-            progress_percent: None,
-        });
+        let task = sample_task(
+            Uuid::new_v4(),
+            proj_id,
+            &format!("TASK-{i}"),
+            &format!("Task {i}"),
+            TaskStatus::HumanReview,
+        );
+        state
+            .review_tasks
+            .push(coordinator::tui::state::ReviewTaskState {
+                task,
+                suggested_agent_name: None,
+                overlap_warnings: Vec::new(),
+                dependencies: Vec::new(),
+                human_decision: None,
+                progress_percent: None,
+            });
     }
 
     assert_eq!(state.selected_task_index, 0);
@@ -109,7 +121,7 @@ fn test_mouse_scroll_plan_review_tasks_list() {
 
 #[test]
 fn test_mouse_scroll_plan_review_dag_offset() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
     state.show_dag_view = true;
     assert_eq!(state.dag_scroll_offset, 0);
@@ -145,7 +157,7 @@ fn test_mouse_scroll_plan_review_dag_offset() {
 
 #[test]
 fn test_mouse_scroll_dashboard_focused_tables() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
     // 1. Tasks Table focus
@@ -335,15 +347,23 @@ fn test_bulk_approval_shift_a_opens_confirmation_modal() {
 
     let proj_id = Uuid::new_v4();
     for i in 1..=3 {
-        let task = sample_task(Uuid::new_v4(), proj_id, &format!("TASK-{i}"), &format!("Task {i}"), TaskStatus::HumanReview);
-        state.review_tasks.push(coordinator::tui::state::ReviewTaskState {
-            task,
-            suggested_agent_name: None,
-            overlap_warnings: Vec::new(),
-            dependencies: Vec::new(),
-            human_decision: None,
-            progress_percent: None,
-        });
+        let task = sample_task(
+            Uuid::new_v4(),
+            proj_id,
+            &format!("TASK-{i}"),
+            &format!("Task {i}"),
+            TaskStatus::HumanReview,
+        );
+        state
+            .review_tasks
+            .push(coordinator::tui::state::ReviewTaskState {
+                task,
+                suggested_agent_name: None,
+                overlap_warnings: Vec::new(),
+                dependencies: Vec::new(),
+                human_decision: None,
+                progress_percent: None,
+            });
     }
 
     assert!(state.pending_confirmation.is_none());
@@ -378,15 +398,23 @@ fn test_bulk_approval_via_command_palette() {
 
     let proj_id = Uuid::new_v4();
     for i in 1..=2 {
-        let task = sample_task(Uuid::new_v4(), proj_id, &format!("TASK-{i}"), &format!("Task {i}"), TaskStatus::HumanReview);
-        state.review_tasks.push(coordinator::tui::state::ReviewTaskState {
-            task,
-            suggested_agent_name: None,
-            overlap_warnings: Vec::new(),
-            dependencies: Vec::new(),
-            human_decision: None,
-            progress_percent: None,
-        });
+        let task = sample_task(
+            Uuid::new_v4(),
+            proj_id,
+            &format!("TASK-{i}"),
+            &format!("Task {i}"),
+            TaskStatus::HumanReview,
+        );
+        state
+            .review_tasks
+            .push(coordinator::tui::state::ReviewTaskState {
+                task,
+                suggested_agent_name: None,
+                overlap_warnings: Vec::new(),
+                dependencies: Vec::new(),
+                human_decision: None,
+                progress_percent: None,
+            });
     }
 
     // Open palette ':'
@@ -469,26 +497,42 @@ fn test_dashboard_renders_unicode_progress_bar_and_status_icons() {
     state.current_screen = CurrentScreen::Dashboard;
 
     let proj_id = Uuid::new_v4();
-    let task1 = sample_task(Uuid::new_v4(), proj_id, "PLAN-1", "Setup Database", TaskStatus::Completed);
-    let task2 = sample_task(Uuid::new_v4(), proj_id, "PLAN-2", "Worker Engine", TaskStatus::Executing);
+    let task1 = sample_task(
+        Uuid::new_v4(),
+        proj_id,
+        "PLAN-1",
+        "Setup Database",
+        TaskStatus::Completed,
+    );
+    let task2 = sample_task(
+        Uuid::new_v4(),
+        proj_id,
+        "PLAN-2",
+        "Worker Engine",
+        TaskStatus::Executing,
+    );
 
-    state.review_tasks.push(coordinator::tui::state::ReviewTaskState {
-        task: task1,
-        suggested_agent_name: Some("RustSpecialist".to_string()),
-        overlap_warnings: Vec::new(),
-        dependencies: Vec::new(),
-        human_decision: Some(ApprovalStatus::Approved),
-        progress_percent: Some(100),
-    });
+    state
+        .review_tasks
+        .push(coordinator::tui::state::ReviewTaskState {
+            task: task1,
+            suggested_agent_name: Some("RustSpecialist".to_string()),
+            overlap_warnings: Vec::new(),
+            dependencies: Vec::new(),
+            human_decision: Some(ApprovalStatus::Approved),
+            progress_percent: Some(100),
+        });
 
-    state.review_tasks.push(coordinator::tui::state::ReviewTaskState {
-        task: task2,
-        suggested_agent_name: Some("GoSpecialist".to_string()),
-        overlap_warnings: Vec::new(),
-        dependencies: Vec::new(),
-        human_decision: Some(ApprovalStatus::Approved),
-        progress_percent: Some(60),
-    });
+    state
+        .review_tasks
+        .push(coordinator::tui::state::ReviewTaskState {
+            task: task2,
+            suggested_agent_name: Some("GoSpecialist".to_string()),
+            overlap_warnings: Vec::new(),
+            dependencies: Vec::new(),
+            human_decision: Some(ApprovalStatus::Approved),
+            progress_percent: Some(60),
+        });
 
     terminal
         .draw(|f| DashboardScreen::render(f, f.area(), &state))

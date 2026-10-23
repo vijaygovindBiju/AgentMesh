@@ -26,7 +26,7 @@ AgentMesh is a central AI coordinator for multiple human-controlled AI coding ag
 │                              ┌──────────────▼──────────────────┐  │
 │                              │        LlmProvider Layer         │  │
 │                              │  (trait, not coupled to vendor)  │  │
-│                              │  ├── MockLlmProvider (default)   │  │
+│                              │  ├── AgyProvider (default)   │  │
 │                              │  └── AnthropicProvider           │  │
 │                              │  (OpenAI/Gemini: not implemented)│  │
 │                              └─────────────────────────────────┘  │
@@ -57,7 +57,7 @@ AgentMesh is a central AI coordinator for multiple human-controlled AI coding ag
                        ┌───────────────┴───────────────┐
                        │                               │
              ┌─────────▼──────────┐        ┌──────────▼───────────┐
-             │   Mock Agent        │        │   agy Adapter        │
+             │   Agy Agent        │        │   agy Adapter        │
              │                    │        │                      │
              │  Implements full   │        │  Spawns agy CLI      │
              │  AgentAdapter      │        │  as subprocess       │
@@ -78,7 +78,7 @@ NATS is the transport layer. Task state (status, assignment, delivery, history) 
 No task advances past `HumanReview` without explicit human approval. The coordinator's deterministic logic handles state transitions after approval; the LLM is only invoked for planning.
 
 ### 3. Agent protocol is transport-independent
-The `agent-protocol` crate defines message types with no dependency on NATS, HTTP, or any specific transport. All adapters (mock, agy, future) implement the same interface.
+The `agent-protocol` crate defines message types with no dependency on NATS, HTTP, or any specific transport. All adapters (agy, agy, future) implement the same interface.
 
 ### 4. LlmProvider is runtime-configurable
 The coordinator core depends on a `LlmProvider` trait. The concrete provider is selected at startup from environment configuration. The coordinator never imports provider-specific code directly.

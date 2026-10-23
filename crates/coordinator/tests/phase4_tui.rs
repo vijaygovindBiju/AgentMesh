@@ -29,10 +29,10 @@ fn press_key(code: KeyCode) -> KeyEvent {
 
 #[test]
 fn test_tui_human_review_keybindings_and_action_emission() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let mut emitted_actions = Vec::new();
 
-    // Verify initial mock data setup
+    // Verify initial agy data setup
     assert_eq!(state.current_screen, CurrentScreen::PlanReview);
     assert_eq!(state.review_tasks.len(), 3);
     assert_eq!(state.selected_task_index, 0);
@@ -125,7 +125,7 @@ fn test_tui_rendering_headless_all_modes() {
     let backend = TestBackend::new(140, 45);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
 
     // Render Plan Review
     terminal
@@ -168,7 +168,7 @@ fn test_tui_rendering_headless_all_modes() {
 fn test_milestone2_dag_view_toggle_and_rendering() {
     let backend = TestBackend::new(140, 45);
     let mut terminal = Terminal::new(backend).unwrap();
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
 
     assert!(!state.show_dag_view);
@@ -191,7 +191,7 @@ fn test_milestone2_dag_view_toggle_and_rendering() {
 fn test_milestone2_help_modal_toggle_and_rendering() {
     let backend = TestBackend::new(140, 45);
     let mut terminal = Terminal::new(backend).unwrap();
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
 
     assert!(!state.show_help_modal);
     // Press '?' to toggle help modal on
@@ -212,7 +212,7 @@ fn test_milestone2_help_modal_toggle_and_rendering() {
 fn test_milestone2_agent_inspector_modal_and_focus_switching() {
     let backend = TestBackend::new(140, 45);
     let mut terminal = Terminal::new(backend).unwrap();
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Dashboard;
 
     // Initial focus is AgentsTable
@@ -240,7 +240,9 @@ fn test_milestone2_agent_inspector_modal_and_focus_switching() {
     // Draw and verify modal
     terminal.draw(|f| render(f, &state)).unwrap();
     let buf = buffer_to_string(&terminal);
-    assert!(buf.contains("Agent Capability Profile") || buf.contains("Runtime") || buf.contains("OS"));
+    assert!(
+        buf.contains("Agent Capability Profile") || buf.contains("Runtime") || buf.contains("OS")
+    );
 
     // Close inspector with Esc
     state.handle_key(press_key(KeyCode::Esc));
@@ -251,10 +253,10 @@ fn test_milestone2_agent_inspector_modal_and_focus_switching() {
 fn test_milestone2_details_pane_prerequisite_mapping() {
     let backend = TestBackend::new(140, 45);
     let mut terminal = Terminal::new(backend).unwrap();
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
 
-    // Task 1 depends on Task 0 in mock data
+    // Task 1 depends on Task 0 in agy data
     state.selected_task_index = 1;
     terminal.draw(|f| render(f, &state)).unwrap();
     let buf = buffer_to_string(&terminal);
@@ -267,7 +269,7 @@ fn test_milestone2_details_pane_prerequisite_mapping() {
 fn test_milestone2_real_time_progress_update_ingestion() {
     let backend = TestBackend::new(140, 45);
     let mut terminal = Terminal::new(backend).unwrap();
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let task_id = state.review_tasks[0].task.id;
 
     // Send ProgressUpdate message
@@ -298,7 +300,7 @@ fn test_milestone2_real_time_progress_update_ingestion() {
 fn test_milestone2_diagnostics_live_events_sliding_window_and_modals() {
     let backend = TestBackend::new(140, 45);
     let mut terminal = Terminal::new(backend).unwrap();
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::Diagnostics;
 
     // Add 40 events to test sliding window beyond 30
@@ -343,7 +345,7 @@ fn test_milestone2_diagnostics_live_events_sliding_window_and_modals() {
 
 #[test]
 fn test_milestone2_inline_editor_utf8_multibyte_support() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
 
     // Start inline editing
@@ -380,10 +382,11 @@ fn test_milestone2_inline_editor_utf8_multibyte_support() {
     let action = state.handle_key(press_key(KeyCode::Enter));
     assert_eq!(state.input_mode, InputMode::Normal);
     match action {
-        Some(TuiAction::EditTaskDescription { new_description, .. }) => {
+        Some(TuiAction::EditTaskDescription {
+            new_description, ..
+        }) => {
             assert_eq!(new_description, "東京  🚀");
         }
         other => panic!("Expected EditTaskDescription, got {:?}", other),
     }
 }
-

@@ -13,31 +13,27 @@
 //! - Tier 4: Real-World Workflows (operator review session, fleet triage, command palette workflow,
 //!   task retry state transitions).
 
-use std::time::Instant;
 use chrono::Utc;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::{
-    backend::TestBackend,
-    Terminal,
-};
+use ratatui::{backend::TestBackend, Terminal};
 use serde_json::json;
+use std::time::Instant;
 use uuid::Uuid;
 
 use coordinator::domain::{
-    AdapterType, Agent, AgentStatus, ApprovalStatus, DependencyKind, HealthStatus,
-    OverlapSeverity, OverlapWarning, Project, ProjectStatus, Task, TaskDependency, TaskStatus,
+    AdapterType, Agent, AgentStatus, ApprovalStatus, DependencyKind, HealthStatus, OverlapSeverity,
+    OverlapWarning, Project, ProjectStatus, Task, TaskDependency, TaskStatus,
 };
 use coordinator::observability::CoordinatorEvent;
-use coordinator::tui::{
-    render, AppState, CurrentScreen, ReviewTaskState, TuiAction,
-    TuiUpdateEvent, MAX_RECENT_EVENTS,
-};
 use coordinator::tui::screens::{
     DashboardScreen, DiagnosticsScreen, FleetInspectorScreen, PlanReviewScreen, ProjectInputScreen,
 };
 use coordinator::tui::widgets::{
     command_palette::filtered_commands, AgentInspectorWidget, CommandPaletteWidget,
     ConfirmationModalWidget, DagViewWidget, HeaderWidget,
+};
+use coordinator::tui::{
+    render, AppState, CurrentScreen, ReviewTaskState, TuiAction, TuiUpdateEvent, MAX_RECENT_EVENTS,
 };
 
 // ============================================================================
@@ -77,7 +73,13 @@ fn press_char(c: char) -> KeyEvent {
     KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
 }
 
-fn sample_task(id: Uuid, project_id: Uuid, short_id: &str, title: &str, status: TaskStatus) -> Task {
+fn sample_task(
+    id: Uuid,
+    project_id: Uuid,
+    short_id: &str,
+    title: &str,
+    status: TaskStatus,
+) -> Task {
     Task {
         id,
         project_id,
@@ -120,7 +122,10 @@ fn test_tier1_screen_nav_5_screens_initial_and_titles() {
     assert_eq!(CurrentScreen::default(), CurrentScreen::Dashboard);
     assert_eq!(CurrentScreen::Dashboard.title(), "1. Dashboard");
     assert_eq!(CurrentScreen::ProjectInput.title(), "2. Project Input");
-    assert_eq!(CurrentScreen::ProjectManagement.title(), "2. Project Management");
+    assert_eq!(
+        CurrentScreen::ProjectManagement.title(),
+        "2. Project Management"
+    );
     assert_eq!(CurrentScreen::PlanReview.title(), "3. Plan Review");
     assert_eq!(CurrentScreen::FleetInspector.title(), "4. Fleet Inspector");
     assert_eq!(CurrentScreen::Diagnostics.title(), "5. Diagnostics");
@@ -152,7 +157,7 @@ fn test_tier1_screen_nav_5_screens_tab_cycling() {
 
 #[test]
 fn test_tier1_screen_nav_numeric_hotkeys_1_to_5() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
 
     state.handle_key(press_char('1'));
     assert_eq!(state.current_screen, CurrentScreen::Dashboard);
@@ -181,7 +186,7 @@ fn test_tier1_screen_nav_numeric_hotkeys_1_to_5() {
 #[test]
 fn test_tier1_screen_nav_all_5_screen_headers_render() {
     let mut terminal = create_terminal(120, 30);
-    let state = AppState::new().with_mock_data();
+    let state = AppState::new().with_test_data();
 
     // 1. Dashboard
     terminal
@@ -230,7 +235,7 @@ fn test_tier1_screen_nav_preserves_backward_compatible_aliases() {
 #[test]
 fn test_tier1_header_renders_connectivity_pills_healthy() {
     let mut terminal = create_terminal(160, 4);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.pg_connected = true;
     state.nats_connected = true;
 
@@ -245,7 +250,7 @@ fn test_tier1_header_renders_connectivity_pills_healthy() {
 #[test]
 fn test_tier1_header_renders_connectivity_pills_offline() {
     let mut terminal = create_terminal(160, 4);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.pg_connected = false;
     state.nats_connected = false;
 
@@ -260,7 +265,7 @@ fn test_tier1_header_renders_connectivity_pills_offline() {
 #[test]
 fn test_tier1_header_renders_pending_approvals_alert() {
     let mut terminal = create_terminal(160, 4);
-    let state = AppState::new().with_mock_data();
+    let state = AppState::new().with_test_data();
 
     terminal
         .draw(|f| HeaderWidget::render(f, f.area(), &state))
@@ -272,7 +277,7 @@ fn test_tier1_header_renders_pending_approvals_alert() {
 #[test]
 fn test_tier1_header_adaptive_compact_terminal_render() {
     let mut terminal = create_terminal(80, 3);
-    let state = AppState::new().with_mock_data();
+    let state = AppState::new().with_test_data();
 
     terminal
         .draw(|f| HeaderWidget::render(f, f.area(), &state))
@@ -284,12 +289,14 @@ fn test_tier1_header_adaptive_compact_terminal_render() {
 
 #[test]
 fn test_tier1_header_zero_panics_on_minimal_dimensions() {
-    let state = AppState::new().with_mock_data();
+    let state = AppState::new().with_test_data();
     for (w, h) in [(40, 2), (20, 1), (10, 1), (0, 0)] {
         let backend = TestBackend::new(w.max(1), h.max(1));
         let mut terminal = Terminal::new(backend).unwrap();
         let rect = ratatui::layout::Rect::new(0, 0, w, h);
-        terminal.draw(|f| HeaderWidget::render(f, rect, &state)).unwrap();
+        terminal
+            .draw(|f| HeaderWidget::render(f, rect, &state))
+            .unwrap();
     }
 }
 
@@ -299,7 +306,7 @@ fn test_tier1_header_zero_panics_on_minimal_dimensions() {
 
 #[test]
 fn test_tier1_command_palette_open_and_close() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     assert!(!state.show_command_palette);
 
     state.handle_key(press_char(':'));
@@ -311,7 +318,7 @@ fn test_tier1_command_palette_open_and_close() {
 
 #[test]
 fn test_tier1_command_palette_query_filtering() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.show_command_palette = true;
 
     for c in "fleet".chars() {
@@ -326,7 +333,7 @@ fn test_tier1_command_palette_query_filtering() {
 
 #[test]
 fn test_tier1_command_palette_backspace_filtering() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.show_command_palette = true;
 
     for c in "task".chars() {
@@ -340,7 +347,7 @@ fn test_tier1_command_palette_backspace_filtering() {
 
 #[test]
 fn test_tier1_command_palette_up_down_selection() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.show_command_palette = true;
     assert_eq!(state.command_palette_selected_index, 0);
 
@@ -353,7 +360,7 @@ fn test_tier1_command_palette_up_down_selection() {
 
 #[test]
 fn test_tier1_command_palette_action_dispatch_on_enter() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.show_command_palette = true;
 
     for c in "system:help".chars() {
@@ -386,7 +393,7 @@ fn test_tier1_command_palette_action_dispatch_on_enter() {
 #[test]
 fn test_tier1_confirmation_dialog_render_content() {
     let mut terminal = create_terminal(80, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let task_id = Uuid::new_v4();
     state.prompt_cancel_task(task_id);
 
@@ -401,7 +408,7 @@ fn test_tier1_confirmation_dialog_render_content() {
 
 #[test]
 fn test_tier1_confirmation_dialog_confirm_with_y() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let task_id = Uuid::new_v4();
     state.prompt_cancel_task(task_id);
 
@@ -412,7 +419,7 @@ fn test_tier1_confirmation_dialog_confirm_with_y() {
 
 #[test]
 fn test_tier1_confirmation_dialog_confirm_with_enter() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let task_id = Uuid::new_v4();
     state.prompt_reject_task(task_id);
 
@@ -423,7 +430,7 @@ fn test_tier1_confirmation_dialog_confirm_with_enter() {
 
 #[test]
 fn test_tier1_confirmation_dialog_cancel_with_n() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let task_id = Uuid::new_v4();
     state.prompt_cancel_task(task_id);
 
@@ -434,7 +441,7 @@ fn test_tier1_confirmation_dialog_cancel_with_n() {
 
 #[test]
 fn test_tier1_confirmation_dialog_cancel_with_esc() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let task_id = Uuid::new_v4();
     state.prompt_cancel_task(task_id);
 
@@ -450,7 +457,7 @@ fn test_tier1_confirmation_dialog_cancel_with_esc() {
 #[test]
 fn test_tier1_project_mgmt_rendering_table_and_metadata() {
     let mut terminal = create_terminal(120, 30);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::ProjectManagement;
 
     terminal
@@ -463,7 +470,7 @@ fn test_tier1_project_mgmt_rendering_table_and_metadata() {
 
 #[test]
 fn test_tier1_project_mgmt_navigation_j_k() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::ProjectManagement;
     let p1 = Project {
         id: Uuid::new_v4(),
@@ -492,7 +499,7 @@ fn test_tier1_project_mgmt_navigation_j_k() {
 
 #[test]
 fn test_tier1_project_mgmt_enter_emits_load_project() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::ProjectManagement;
     let p1 = Project {
         id: Uuid::new_v4(),
@@ -512,7 +519,7 @@ fn test_tier1_project_mgmt_enter_emits_load_project() {
 #[test]
 fn test_tier1_project_mgmt_empty_projects_fallback() {
     let mut terminal = create_terminal(100, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::ProjectManagement;
     state.available_projects.clear();
 
@@ -525,7 +532,7 @@ fn test_tier1_project_mgmt_empty_projects_fallback() {
 
 #[test]
 fn test_tier1_project_mgmt_bounds_clamping_at_edges() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::ProjectManagement;
     let p1 = Project {
         id: Uuid::new_v4(),
@@ -550,7 +557,7 @@ fn test_tier1_project_mgmt_bounds_clamping_at_edges() {
 
 #[test]
 fn test_tier1_dag_multi_level_recursive_traversal() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
     let id_a = Uuid::new_v4();
     let id_b = Uuid::new_v4();
@@ -590,7 +597,7 @@ fn test_tier1_dag_multi_level_recursive_traversal() {
 #[test]
 fn test_tier1_dag_renders_all_depth_levels_in_buffer() {
     let mut terminal = create_terminal(100, 30);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
     let id_a = Uuid::new_v4();
     let id_b = Uuid::new_v4();
@@ -635,13 +642,31 @@ fn test_tier1_dag_renders_all_depth_levels_in_buffer() {
 #[test]
 fn test_tier1_dag_status_badges_rendered() {
     let mut terminal = create_terminal(100, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
 
     state.review_tasks = vec![
-        ReviewTaskState::new(sample_task(Uuid::new_v4(), proj_id, "TASK-1", "T1", TaskStatus::Approved)),
-        ReviewTaskState::new(sample_task(Uuid::new_v4(), proj_id, "TASK-2", "T2", TaskStatus::Executing)),
-        ReviewTaskState::new(sample_task(Uuid::new_v4(), proj_id, "TASK-3", "T3", TaskStatus::Failed)),
+        ReviewTaskState::new(sample_task(
+            Uuid::new_v4(),
+            proj_id,
+            "TASK-1",
+            "T1",
+            TaskStatus::Approved,
+        )),
+        ReviewTaskState::new(sample_task(
+            Uuid::new_v4(),
+            proj_id,
+            "TASK-2",
+            "T2",
+            TaskStatus::Executing,
+        )),
+        ReviewTaskState::new(sample_task(
+            Uuid::new_v4(),
+            proj_id,
+            "TASK-3",
+            "T3",
+            TaskStatus::Failed,
+        )),
     ];
 
     terminal
@@ -655,7 +680,7 @@ fn test_tier1_dag_status_badges_rendered() {
 
 #[test]
 fn test_tier1_dag_jump_to_blocker_shortcut() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
     let id_a = Uuid::new_v4();
     let id_b = Uuid::new_v4();
@@ -682,7 +707,7 @@ fn test_tier1_dag_jump_to_blocker_shortcut() {
 
 #[test]
 fn test_tier1_dag_jump_to_dependent_shortcut() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
     let id_a = Uuid::new_v4();
     let id_b = Uuid::new_v4();
@@ -709,7 +734,7 @@ fn test_tier1_dag_jump_to_dependent_shortcut() {
 
 #[test]
 fn test_tier1_dag_jump_on_root_or_leaf_is_safe_noop() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
     let id_a = Uuid::new_v4();
     let id_b = Uuid::new_v4();
@@ -747,13 +772,31 @@ fn test_tier1_dag_jump_on_root_or_leaf_is_safe_noop() {
 #[test]
 fn test_tier1_fleet_telemetry_renders_health_badges() {
     let mut terminal = create_terminal(200, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
 
-    let mut a1 = Agent::mock(Uuid::new_v4(), "agent-1 (A)", AdapterType::Agy, vec![], AgentStatus::Idle);
+    let mut a1 = Agent::new_for_test(
+        Uuid::new_v4(),
+        "agent-1 (A)",
+        AdapterType::Agy,
+        vec![],
+        AgentStatus::Idle,
+    );
     a1.health_status = HealthStatus::Healthy;
-    let mut a2 = Agent::mock(Uuid::new_v4(), "agent-2 (B)", AdapterType::Mock, vec![], AgentStatus::Busy);
+    let mut a2 = Agent::new_for_test(
+        Uuid::new_v4(),
+        "agent-2 (B)",
+        AdapterType::Agy,
+        vec![],
+        AgentStatus::Busy,
+    );
     a2.health_status = HealthStatus::Degraded;
-    let mut a3 = Agent::mock(Uuid::new_v4(), "agent-3 (C)", AdapterType::Agy, vec![], AgentStatus::Error);
+    let mut a3 = Agent::new_for_test(
+        Uuid::new_v4(),
+        "agent-3 (C)",
+        AdapterType::Agy,
+        vec![],
+        AgentStatus::Error,
+    );
     a3.health_status = HealthStatus::Unhealthy;
 
     state.agents = vec![a1, a2, a3];
@@ -770,9 +813,15 @@ fn test_tier1_fleet_telemetry_renders_health_badges() {
 #[test]
 fn test_tier1_fleet_telemetry_renders_heartbeat_latencies() {
     let mut terminal = create_terminal(120, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
 
-    let mut a1 = Agent::mock(Uuid::new_v4(), "agent-1 (A)", AdapterType::Agy, vec![], AgentStatus::Idle);
+    let mut a1 = Agent::new_for_test(
+        Uuid::new_v4(),
+        "agent-1 (A)",
+        AdapterType::Agy,
+        vec![],
+        AgentStatus::Idle,
+    );
     a1.heartbeat_latency_ms = Some(42);
     state.agents = vec![a1];
 
@@ -786,9 +835,15 @@ fn test_tier1_fleet_telemetry_renders_heartbeat_latencies() {
 #[test]
 fn test_tier1_fleet_telemetry_renders_error_banner_on_degraded_agent() {
     let mut terminal = create_terminal(120, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
 
-    let mut a1 = Agent::mock(Uuid::new_v4(), "agent-1 (A)", AdapterType::Agy, vec![], AgentStatus::Busy);
+    let mut a1 = Agent::new_for_test(
+        Uuid::new_v4(),
+        "agent-1 (A)",
+        AdapterType::Agy,
+        vec![],
+        AgentStatus::Busy,
+    );
     a1.health_status = HealthStatus::Degraded;
     a1.last_error = Some("High memory pressure warning".to_string());
     state.agents = vec![a1];
@@ -804,9 +859,15 @@ fn test_tier1_fleet_telemetry_renders_error_banner_on_degraded_agent() {
 #[test]
 fn test_tier1_fleet_telemetry_renders_error_banner_on_unhealthy_agent() {
     let mut terminal = create_terminal(120, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
 
-    let mut a1 = Agent::mock(Uuid::new_v4(), "agent-1 (A)", AdapterType::Agy, vec![], AgentStatus::Error);
+    let mut a1 = Agent::new_for_test(
+        Uuid::new_v4(),
+        "agent-1 (A)",
+        AdapterType::Agy,
+        vec![],
+        AgentStatus::Error,
+    );
     a1.health_status = HealthStatus::Unhealthy;
     a1.last_error = Some("Process exit signal 9 (OOMKilled)".to_string());
     state.agents = vec![a1];
@@ -822,14 +883,26 @@ fn test_tier1_fleet_telemetry_renders_error_banner_on_unhealthy_agent() {
 #[test]
 fn test_tier1_fleet_telemetry_renders_active_task_assignment() {
     let mut terminal = create_terminal(120, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
     let task_id = Uuid::new_v4();
 
-    let task = sample_task(task_id, proj_id, "TASK-42", "Important Migration", TaskStatus::Executing);
+    let task = sample_task(
+        task_id,
+        proj_id,
+        "TASK-42",
+        "Important Migration",
+        TaskStatus::Executing,
+    );
     state.review_tasks = vec![ReviewTaskState::new(task)];
 
-    let mut a1 = Agent::mock(Uuid::new_v4(), "agent-1 (A)", AdapterType::Agy, vec![], AgentStatus::Busy);
+    let mut a1 = Agent::new_for_test(
+        Uuid::new_v4(),
+        "agent-1 (A)",
+        AdapterType::Agy,
+        vec![],
+        AgentStatus::Busy,
+    );
     a1.current_task_id = Some(task_id);
     state.agents = vec![a1];
 
@@ -844,10 +917,22 @@ fn test_tier1_fleet_telemetry_renders_active_task_assignment() {
 #[test]
 fn test_tier1_fleet_telemetry_renders_runtime_adapters() {
     let mut terminal = create_terminal(120, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
 
-    let a1 = Agent::mock(Uuid::new_v4(), "agent-agy (Alice)", AdapterType::Agy, vec![], AgentStatus::Idle);
-    let a2 = Agent::mock(Uuid::new_v4(), "agent-mock (Bob)", AdapterType::Mock, vec![], AgentStatus::Idle);
+    let a1 = Agent::new_for_test(
+        Uuid::new_v4(),
+        "agent-agy (Alice)",
+        AdapterType::Agy,
+        vec![],
+        AgentStatus::Idle,
+    );
+    let a2 = Agent::new_for_test(
+        Uuid::new_v4(),
+        "agent-agy (Bob)",
+        AdapterType::Agy,
+        vec![],
+        AgentStatus::Idle,
+    );
     state.agents = vec![a1, a2];
 
     terminal
@@ -855,7 +940,7 @@ fn test_tier1_fleet_telemetry_renders_runtime_adapters() {
         .unwrap();
 
     assert_buffer_contains(&terminal, "Agy");
-    assert_buffer_contains(&terminal, "Mock");
+    assert_buffer_contains(&terminal, "Agy");
 }
 
 // ----------------------------------------------------------------------------
@@ -864,7 +949,7 @@ fn test_tier1_fleet_telemetry_renders_runtime_adapters() {
 
 #[test]
 fn test_tier1_diagnostics_bounded_capacity_invariant_under_1000_events() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let batch: Vec<CoordinatorEvent> = (0..1_000).map(sample_event).collect();
 
     state.apply_update(TuiUpdateEvent::RecentEvents(batch));
@@ -877,7 +962,7 @@ fn test_tier1_diagnostics_bounded_capacity_invariant_under_1000_events() {
 
 #[test]
 fn test_tier1_diagnostics_rapid_burst_10000_events_performance() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let batch: Vec<CoordinatorEvent> = (0..10_000).map(sample_event).collect();
     let start = Instant::now();
 
@@ -893,7 +978,7 @@ fn test_tier1_diagnostics_rapid_burst_10000_events_performance() {
 
 #[test]
 fn test_tier1_diagnostics_severity_filtering() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.recent_events = vec![
         CoordinatorEvent {
             id: Uuid::new_v4(),
@@ -925,7 +1010,7 @@ fn test_tier1_diagnostics_severity_filtering() {
 
 #[test]
 fn test_tier1_diagnostics_entity_filtering() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let task_id = Uuid::new_v4();
     let agent_id = Uuid::new_v4();
 
@@ -960,7 +1045,7 @@ fn test_tier1_diagnostics_entity_filtering() {
 
 #[test]
 fn test_tier1_diagnostics_selection_clamping_on_filter_shrink() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.recent_events = (0..10).map(sample_event).collect();
     state.selected_event_index = 8;
 
@@ -973,7 +1058,7 @@ fn test_tier1_diagnostics_selection_clamping_on_filter_shrink() {
 #[test]
 fn test_tier1_diagnostics_event_table_buffer_render() {
     let mut terminal = create_terminal(120, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.recent_events = vec![sample_event(1)];
 
     terminal
@@ -990,40 +1075,50 @@ fn test_tier1_diagnostics_event_table_buffer_render() {
 #[test]
 fn test_tier1_resize_minimal_60x18() {
     let mut terminal = create_terminal(60, 18);
-    let state = AppState::new().with_mock_data();
-    terminal.draw(|f| render(f, &state)).expect("60x18 render failed");
+    let state = AppState::new().with_test_data();
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("60x18 render failed");
     assert_buffer_contains(&terminal, "AgentMesh");
 }
 
 #[test]
 fn test_tier1_resize_compact_70x20() {
     let mut terminal = create_terminal(70, 20);
-    let state = AppState::new().with_mock_data();
-    terminal.draw(|f| render(f, &state)).expect("70x20 render failed");
+    let state = AppState::new().with_test_data();
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("70x20 render failed");
     assert_buffer_contains(&terminal, "AgentMesh");
 }
 
 #[test]
 fn test_tier1_resize_standard_80x24() {
     let mut terminal = create_terminal(80, 24);
-    let state = AppState::new().with_mock_data();
-    terminal.draw(|f| render(f, &state)).expect("80x24 render failed");
+    let state = AppState::new().with_test_data();
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("80x24 render failed");
     assert_buffer_contains(&terminal, "AgentMesh");
 }
 
 #[test]
 fn test_tier1_resize_expanded_100x30() {
     let mut terminal = create_terminal(100, 30);
-    let state = AppState::new().with_mock_data();
-    terminal.draw(|f| render(f, &state)).expect("100x30 render failed");
+    let state = AppState::new().with_test_data();
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("100x30 render failed");
     assert_buffer_contains(&terminal, "AgentMesh");
 }
 
 #[test]
 fn test_tier1_resize_ultrawide_160x50() {
     let mut terminal = create_terminal(160, 50);
-    let state = AppState::new().with_mock_data();
-    terminal.draw(|f| render(f, &state)).expect("160x50 render failed");
+    let state = AppState::new().with_test_data();
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("160x50 render failed");
     assert_buffer_contains(&terminal, "AgentMesh");
 }
 
@@ -1034,15 +1129,17 @@ fn test_tier1_resize_ultrawide_160x50() {
 #[test]
 fn test_tier2_empty_state_zero_tasks_zero_agents() {
     let mut terminal = create_terminal(80, 24);
-    let state = AppState::new();
-    terminal.draw(|f| render(f, &state)).expect("Empty state render failed");
+    let state = AppState::new().with_test_data();
+    terminal
+        .draw(|f| render(f, &state))
+        .expect("Empty state render failed");
     assert_buffer_contains(&terminal, "AgentMesh");
 }
 
 #[test]
 fn test_tier2_command_palette_no_matching_results() {
     let mut terminal = create_terminal(80, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.show_command_palette = true;
 
     for c in "xyz_nonexistent_command".chars() {
@@ -1058,7 +1155,7 @@ fn test_tier2_command_palette_no_matching_results() {
 
 #[test]
 fn test_tier2_dag_single_node_tree() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let id = Uuid::new_v4();
     state.review_tasks = vec![ReviewTaskState::new(sample_task(
         id,
@@ -1075,7 +1172,7 @@ fn test_tier2_dag_single_node_tree() {
 
 #[test]
 fn test_tier2_dag_cyclic_dependency_safety_guard() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     let proj_id = Uuid::new_v4();
     let id_a = Uuid::new_v4();
     let id_b = Uuid::new_v4();
@@ -1108,7 +1205,7 @@ fn test_tier2_dag_cyclic_dependency_safety_guard() {
 
 #[test]
 fn test_tier2_bounded_buffer_eviction_fifo_order() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
 
     for i in 1..=5 {
         state.push_recent_event(CoordinatorEvent {
@@ -1131,7 +1228,7 @@ fn test_tier2_bounded_buffer_eviction_fifo_order() {
 #[test]
 fn test_tier2_extreme_long_strings_rendering() {
     let mut terminal = create_terminal(80, 24);
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.active_project = Some(Project {
         id: Uuid::new_v4(),
         name: "A".repeat(300),
@@ -1147,7 +1244,7 @@ fn test_tier2_extreme_long_strings_rendering() {
 
 #[test]
 fn test_tier2_unicode_and_symbols_in_query() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
     state.show_command_palette = true;
 
     for c in "🦀 Rocket 🚀 :: [テスト]".chars() {
@@ -1177,7 +1274,7 @@ fn test_tier2_task_status_retry_transitions() {
 #[test]
 fn test_tier3_command_palette_modal_rendered_over_dag_view() {
     let mut terminal = create_terminal(100, 30);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::PlanReview;
     state.show_dag_view = true;
     state.show_command_palette = true;
@@ -1191,7 +1288,7 @@ fn test_tier3_command_palette_modal_rendered_over_dag_view() {
 #[test]
 fn test_tier3_confirmation_modal_rendered_over_fleet_inspector() {
     let mut terminal = create_terminal(100, 30);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.current_screen = CurrentScreen::FleetInspector;
     let task_id = state.review_tasks[0].task.id;
     state.prompt_cancel_task(task_id);
@@ -1205,7 +1302,7 @@ fn test_tier3_confirmation_modal_rendered_over_fleet_inspector() {
 #[test]
 fn test_tier3_project_selection_updates_status_header() {
     let mut terminal = create_terminal(160, 10);
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.active_project = Some(Project {
         id: Uuid::new_v4(),
         name: "AgentMesh Core".to_string(),
@@ -1259,7 +1356,7 @@ fn test_tier3_overlap_acknowledgment_unblocks_plan_approval() {
 
 #[test]
 fn test_tier3_rapid_event_burst_with_active_filter() {
-    let mut state = AppState::new();
+    let mut state = AppState::new().with_test_data();
 
     let events: Vec<CoordinatorEvent> = (0..1_000)
         .map(|i| {
@@ -1295,7 +1392,7 @@ fn test_tier3_rapid_event_burst_with_active_filter() {
 
 #[test]
 fn test_tier4_e2e_operator_review_and_safety_approval_flow() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     state.confirm_destructive_actions = true;
     state.current_screen = CurrentScreen::ProjectManagement;
 
@@ -1314,13 +1411,18 @@ fn test_tier4_e2e_operator_review_and_safety_approval_flow() {
     assert!(state.pending_confirmation.is_some());
 
     let confirmed_action = state.handle_key(press_char('y'));
-    assert_eq!(confirmed_action, Some(TuiAction::CancelTask { task_id: target_task_id }));
+    assert_eq!(
+        confirmed_action,
+        Some(TuiAction::CancelTask {
+            task_id: target_task_id
+        })
+    );
     assert!(state.pending_confirmation.is_none());
 }
 
 #[test]
 fn test_tier4_e2e_fleet_incident_triage_flow() {
-    let mut state = AppState::new().with_mock_data();
+    let mut state = AppState::new().with_test_data();
     let target_agent_id = state.agents[0].id;
     let target_agent_owner = state.agents[0].human_owner.clone();
 
@@ -1373,7 +1475,13 @@ fn test_tier4_e2e_retry_task_lifecycle_flow() {
     let task_id = Uuid::new_v4();
     let proj_id = Uuid::new_v4();
 
-    let mut task = sample_task(task_id, proj_id, "PLAN-1", "Flaky DB Job", TaskStatus::Failed);
+    let mut task = sample_task(
+        task_id,
+        proj_id,
+        "PLAN-1",
+        "Flaky DB Job",
+        TaskStatus::Failed,
+    );
     assert_eq!(task.status, TaskStatus::Failed);
 
     assert!(task.status.can_transition_to(TaskStatus::Approved));

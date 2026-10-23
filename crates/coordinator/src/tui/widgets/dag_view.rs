@@ -31,8 +31,9 @@ impl DagViewWidget {
         frame.render_widget(block, area);
 
         if state.review_tasks.is_empty() {
-            let empty = Paragraph::new("No tasks proposed yet. Go to [2: Proj] to submit a project.")
-                .style(Style::default().fg(Color::DarkGray));
+            let empty =
+                Paragraph::new("No tasks proposed yet. Go to [2: Proj] to submit a project.")
+                    .style(Style::default().fg(Color::DarkGray));
             frame.render_widget(empty, inner_area);
             return;
         }
@@ -91,7 +92,9 @@ impl DagViewWidget {
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             ),
             None => match item.task.status {
-                TaskStatus::Proposed => ("Proposed".to_string(), Style::default().fg(Color::DarkGray)),
+                TaskStatus::Proposed => {
+                    ("Proposed".to_string(), Style::default().fg(Color::DarkGray))
+                }
                 TaskStatus::HumanReview => (
                     "HumanReview".to_string(),
                     Style::default()
@@ -108,10 +111,7 @@ impl DagViewWidget {
                     "Rejected".to_string(),
                     Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                 ),
-                TaskStatus::Assigned => (
-                    "Assigned".to_string(),
-                    Style::default().fg(Color::Cyan),
-                ),
+                TaskStatus::Assigned => ("Assigned".to_string(), Style::default().fg(Color::Cyan)),
                 TaskStatus::Executing => (
                     "Executing".to_string(),
                     Style::default()

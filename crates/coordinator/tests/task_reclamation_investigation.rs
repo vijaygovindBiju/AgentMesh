@@ -75,7 +75,10 @@ impl<'a> TestCleanupGuard<'a> {
     }
 }
 
-async fn create_test_project_and_task(pool: &PgPool, guard: &mut TestCleanupGuard<'_>) -> (Uuid, Uuid) {
+async fn create_test_project_and_task(
+    pool: &PgPool,
+    guard: &mut TestCleanupGuard<'_>,
+) -> (Uuid, Uuid) {
     let proj = ProjectRepository::create(
         pool,
         &NewProject {
@@ -91,8 +94,8 @@ async fn create_test_project_and_task(pool: &PgPool, guard: &mut TestCleanupGuar
         pool,
         &NewProposal {
             project_id: proj.id,
-            ai_provider: "mock".to_string(),
-            ai_model: "mock-v1".to_string(),
+            ai_provider: "agy".to_string(),
+            ai_model: "agy-v1".to_string(),
             raw_prompt: "p".to_string(),
             raw_response: "{}".to_string(),
         },
@@ -125,7 +128,7 @@ async fn create_test_agent(pool: &PgPool, name: &str, guard: &mut TestCleanupGua
         &NewAgent {
             human_owner: name.to_string(),
             api_key_hash: format!("hash_{}", &Uuid::new_v4().to_string()[..8]),
-            adapter_type: AdapterType::Mock,
+            adapter_type: AdapterType::Agy,
             capabilities: vec!["rust".to_string()],
             nats_subject: format!("agents.{agent_id}.events"),
             role: Some(AgentRole::Worker.to_string()),
@@ -395,9 +398,14 @@ async fn test_reclamation_transfers_task_ownership_and_state_consistently() {
         .unwrap();
 
         if attempt < 3 {
-            TaskDeliveryRepository::record_ack(&pool, delivery.id, AckKind::Term, DeliveryStatus::Terminal)
-                .await
-                .unwrap();
+            TaskDeliveryRepository::record_ack(
+                &pool,
+                delivery.id,
+                AckKind::Term,
+                DeliveryStatus::Terminal,
+            )
+            .await
+            .unwrap();
         } else {
             TaskDeliveryRepository::mark_delivered(&pool, delivery.id, attempt as i64)
                 .await
@@ -541,14 +549,11 @@ async fn test_stale_unheartbeated_fixtures_marked_offline_and_not_assigned() {
     TaskRepository::update_status(&pool, task_id, TaskStatus::Approved)
         .await
         .unwrap();
-    // Record mock approval
-    let proposal_id = sqlx::query_scalar!(
-        "SELECT proposal_id FROM tasks WHERE id = $1",
-        task_id
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    // Record agy approval
+    let proposal_id = sqlx::query_scalar!("SELECT proposal_id FROM tasks WHERE id = $1", task_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
 
     let _ = ProposalRepository::record_approval(
         &pool,

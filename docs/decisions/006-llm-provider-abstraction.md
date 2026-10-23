@@ -12,7 +12,7 @@ The coordinator needs to call a large language model to decompose project descri
 Requirements:
 - The coordinator core must not import any provider-specific SDK or HTTP client code.
 - The provider must be selectable at runtime via environment configuration.
-- The interface must be testable without real API keys (mock provider for tests).
+- The interface must be testable without real API keys (agy provider for tests).
 - The input/output contract must be independent of the provider's API format.
 
 ---
@@ -114,21 +114,21 @@ The coordinator never crashes on a malformed LLM response.
 
 ---
 
-## Test / Mock Provider
+## Test / Agy Provider
 
-A `MockLlmProvider` is implemented in the coordinator crate (behind `#[cfg(test)]` or a feature flag):
+A `AgyProvider` is implemented in the coordinator crate (behind `#[cfg(test)]` or a feature flag):
 
 ```rust
-pub struct MockLlmProvider {
+pub struct AgyProvider {
     pub plan: ProposedPlan,
 }
 
-impl LlmProvider for MockLlmProvider {
+impl LlmProvider for AgyProvider {
     async fn propose_plan(&self, _project: &ProjectContext, _agents: &[AgentContext]) -> Result<ProposedPlan> {
         Ok(self.plan.clone())
     }
-    fn provider_name(&self) -> &str { "mock" }
-    fn model_name(&self) -> &str { "mock-v1" }
+    fn provider_name(&self) -> &str { "agy" }
+    fn model_name(&self) -> &str { "agy-v1" }
 }
 ```
 

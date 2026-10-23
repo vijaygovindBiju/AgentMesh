@@ -47,21 +47,47 @@ impl HelpModalWidget {
 
         let lines = vec![
             Line::from(vec![
-                Span::styled(" [1]..[5] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [1]..[5] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Direct screen jump  |  "),
-                Span::styled(" [Tab / BackTab / [ / ]] ", Style::default().fg(Color::Cyan)),
+                Span::styled(
+                    " [Tab / BackTab / [ / ]] ",
+                    Style::default().fg(Color::Cyan),
+                ),
                 Span::raw("Cycle screens"),
             ]),
             Line::from(vec![
-                Span::styled(" Mouse ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " Mouse ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Click tabs to jump, wheel scroll across lists & DAG"),
             ]),
             Line::from(vec![
-                Span::styled(" [:] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [:] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Command palette  |  "),
-                Span::styled(" [?] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [?] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Help cheatsheet  |  "),
-                Span::styled(" [Q] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Q] ",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Quit"),
             ]),
             Line::from(""),
@@ -70,15 +96,30 @@ impl HelpModalWidget {
                 Style::default().fg(Color::DarkGray),
             )]),
             Line::from(vec![
-                Span::styled(" [← / →] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [← / →] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Switch pane focus (Agents, Tasks, Overlaps)  |  "),
-                Span::styled(" [A] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [A] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Ack overlap"),
             ]),
             Line::from(vec![
                 Span::styled(" [↑ / ↓] ", Style::default().fg(Color::Cyan)),
                 Span::raw("Select item  |  "),
-                Span::styled(" [C / Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [C / Enter] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Inspect agent capability profile"),
             ]),
             Line::from(""),
@@ -89,13 +130,28 @@ impl HelpModalWidget {
             Line::from(vec![
                 Span::styled(" [↑ / ↓] ", Style::default().fg(Color::Cyan)),
                 Span::raw("Navigate projects  |  "),
-                Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Enter] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Load project  |  "),
-                Span::styled(" [I] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [I] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Create new project"),
             ]),
             Line::from(vec![
-                Span::styled(" [D] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [D] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Run the built-in demo project using the configured planner"),
             ]),
             Line::from(""),
@@ -104,21 +160,44 @@ impl HelpModalWidget {
                 Style::default().fg(Color::DarkGray),
             )]),
             Line::from(vec![
-                Span::styled(" [G] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [G] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Toggle ASCII DAG Graph view  |  "),
                 Span::styled(" [Enter] ", Style::default().fg(Color::Cyan)),
                 Span::raw("Toggle details pane"),
             ]),
             Line::from(vec![
-                Span::styled(" [Y] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Y] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Approve  |  "),
-                Span::styled(" [Shift+A] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Shift+A] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Approve ALL  |  "),
-                Span::styled(" [N] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [N] ",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Reject"),
             ]),
             Line::from(vec![
-                Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [E] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Edit  |  "),
                 Span::styled(" [R] ", Style::default().fg(Color::Cyan)),
                 Span::raw("Retry  |  "),
@@ -135,7 +214,12 @@ impl HelpModalWidget {
             Line::from(vec![
                 Span::styled(" [↑ / ↓] ", Style::default().fg(Color::Cyan)),
                 Span::raw("Select agent  |  "),
-                Span::styled(" [C / Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [C / Enter] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Inspect agent capabilities & active task assignment"),
             ]),
             Line::from(""),
@@ -144,17 +228,37 @@ impl HelpModalWidget {
                 Style::default().fg(Color::DarkGray),
             )]),
             Line::from(vec![
-                Span::styled(" [← / →] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [← / →] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Switch stream / timeline  |  "),
-                Span::styled(" [F] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [F] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Severity filter  |  "),
-                Span::styled(" [E] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [E] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Entity filter"),
             ]),
             Line::from(vec![
                 Span::styled(" [↑ / ↓] ", Style::default().fg(Color::Cyan)),
                 Span::raw("Scroll event stream  |  "),
-                Span::styled(" [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [Enter] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Inspect payload / task lifecycle drilldown"),
             ]),
             Line::from(""),
