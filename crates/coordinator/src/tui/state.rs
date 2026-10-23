@@ -75,6 +75,7 @@ pub enum CurrentScreen {
     PlanReview,
     FleetInspector,
     Diagnostics,
+    Settings,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -149,6 +150,7 @@ impl CurrentScreen {
             CurrentScreen::PlanReview => "3. Plan Review",
             CurrentScreen::FleetInspector => "4. Fleet Inspector",
             CurrentScreen::Diagnostics => "5. Diagnostics",
+            CurrentScreen::Settings => "6. Settings",
         }
     }
 }
@@ -272,7 +274,6 @@ pub struct AppState {
     pub theme: Theme,
     pub font_style: FontStyle,
     pub settings_selected_index: usize,
-    pub show_settings: bool,
     pub input_mode: InputMode,
 
     // Connectivity state
@@ -351,7 +352,6 @@ impl AppState {
             theme: Theme::default(),
             font_style: FontStyle::default(),
             settings_selected_index: 0,
-            show_settings: false,
             input_mode: InputMode::Normal,
 
             pg_connected: false,
@@ -719,6 +719,7 @@ impl AppState {
                             self.selected_project_index += 1;
                         }
                     }
+                    CurrentScreen::Settings => {}
                 }
                 None
             }
@@ -770,6 +771,7 @@ impl AppState {
                             self.selected_project_index -= 1;
                         }
                     }
+                    CurrentScreen::Settings => {}
                 }
                 None
             }
@@ -792,6 +794,8 @@ impl AppState {
                         self.current_screen = CurrentScreen::FleetInspector;
                     } else if col < 55 {
                         self.current_screen = CurrentScreen::Diagnostics;
+                    } else if col < 66 {
+                        self.current_screen = CurrentScreen::Settings;
                     }
                 }
                 None
@@ -919,11 +923,9 @@ impl AppState {
             return self.handle_command_palette_key(key);
         }
 
-        if self.show_settings {
+        if self.current_screen == CurrentScreen::Settings {
             match key.code {
-                KeyCode::Esc | KeyCode::Char('s') | KeyCode::Char('S') => {
-                    self.show_settings = false
-                }
+                KeyCode::Esc | KeyCode::Char('s') | KeyCode::Char('S') => self.current_screen = CurrentScreen::Dashboard,
                 KeyCode::Up | KeyCode::Char('k') => {
                     self.settings_selected_index = self.settings_selected_index.saturating_sub(1)
                 }
@@ -946,7 +948,7 @@ impl AppState {
                         };
                     }
                 }
-                _ => {}
+                _ => return self.handle_normal_mode_key(key),
             }
             return None;
         }
@@ -1030,6 +1032,7 @@ impl AppState {
                             self.current_screen = CurrentScreen::Diagnostics;
                             None
                         }
+                        "nav:settings" => { self.current_screen = CurrentScreen::Settings; None }
                         "demo:run" => Some(TuiAction::SubmitProject {
                             name: DEMO_PROJECT_NAME.to_string(),
                             description: DEMO_PROJECT_DESCRIPTION.to_string(),
@@ -1096,7 +1099,7 @@ impl AppState {
                             None
                         }
                         "system:settings" => {
-                            self.show_settings = true;
+                            self.current_screen = CurrentScreen::Settings;
                             None
                         }
                         "system:quit" => {
@@ -1131,7 +1134,7 @@ impl AppState {
                 None
             }
             KeyCode::Char('s') | KeyCode::Char('S') => {
-                self.show_settings = true;
+                self.current_screen = CurrentScreen::Settings;
                 None
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => {
@@ -1182,6 +1185,7 @@ impl AppState {
                 self.current_screen = CurrentScreen::Diagnostics;
                 None
             }
+            KeyCode::Char('6') => { self.current_screen = CurrentScreen::Settings; None }
             KeyCode::Char('r') | KeyCode::Char('R') => {
                 if self.current_screen == CurrentScreen::PlanReview {
                     if let Some(item) = self.review_tasks.get(self.selected_task_index) {
@@ -1264,6 +1268,7 @@ impl AppState {
                 CurrentScreen::Dashboard => self.handle_dashboard_key(key),
                 CurrentScreen::FleetInspector => self.handle_fleet_inspector_key(key),
                 CurrentScreen::Diagnostics => self.handle_diagnostics_key(key),
+                CurrentScreen::Settings => None,
             },
         }
     }
@@ -1814,13 +1819,15 @@ impl AppState {
             }
             CurrentScreen::PlanReview => CurrentScreen::FleetInspector,
             CurrentScreen::FleetInspector => CurrentScreen::Diagnostics,
-            CurrentScreen::Diagnostics => CurrentScreen::Dashboard,
+            CurrentScreen::Diagnostics => CurrentScreen::Settings,
+            CurrentScreen::Settings => CurrentScreen::Dashboard,
         };
     }
 
     pub fn cycle_screen_back(&mut self) {
         self.current_screen = match self.current_screen {
-            CurrentScreen::Dashboard => CurrentScreen::Diagnostics,
+            CurrentScreen::Dashboard => CurrentScreen::Settings,
+            CurrentScreen::Settings => CurrentScreen::Diagnostics,
             CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => {
                 CurrentScreen::Dashboard
             }
@@ -2462,9 +2469,12 @@ mod tests {
         assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
 
         state.handle_key(make_key(KeyCode::Tab));
+        assert_eq!(state.current_screen, CurrentScreen::Settings);
+
+        state.handle_key(make_key(KeyCode::Tab));
         assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 
-        // Direct number keys (1:Dash, 2:Proj, 3:Plan, 4:Fleet, 5:Diag)
+        // Direct number keys (1:Dash, 2:Proj, 3:Plan, 4:Fleet, 5:Diag, 6:Settings)
         state.handle_key(make_key(KeyCode::Char('1')));
         assert_eq!(state.current_screen, CurrentScreen::Dashboard);
 
@@ -2479,6 +2489,9 @@ mod tests {
 
         state.handle_key(make_key(KeyCode::Char('5')));
         assert_eq!(state.current_screen, CurrentScreen::Diagnostics);
+
+        state.handle_key(make_key(KeyCode::Char('6')));
+        assert_eq!(state.current_screen, CurrentScreen::Settings);
     }
 
     #[test]

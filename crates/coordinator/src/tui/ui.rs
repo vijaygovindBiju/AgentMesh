@@ -54,6 +54,7 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         CurrentScreen::Dashboard => DashboardScreen::render(frame, chunks[1], state),
         CurrentScreen::FleetInspector => FleetInspectorScreen::render(frame, chunks[1], state),
         CurrentScreen::Diagnostics => DiagnosticsScreen::render(frame, chunks[1], state),
+        CurrentScreen::Settings => SettingsWidget::render(frame, chunks[1], state),
     }
 
     // 3. Footer
@@ -72,10 +73,6 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     // 6. Safety Confirmation Modal Dialog Overlay
     if state.pending_confirmation.is_some() {
         ConfirmationModalWidget::render(frame, size, state);
-    }
-
-    if state.show_settings {
-        SettingsWidget::render(frame, size, state);
     }
 
     // Recolor semantic UI colors globally so every screen and modal follows

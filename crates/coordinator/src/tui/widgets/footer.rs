@@ -128,7 +128,16 @@ impl FooterWidget {
 
                     if is_compact {
                         // Prioritize top 4-5 actions on compact screens (<85 cols)
-                        if matches!(
+                        if state.current_screen == CurrentScreen::Settings {
+                            vec![
+                                Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
+                                Span::raw("Select  "),
+                                Span::styled(" [←/→] ", Style::default().fg(Color::Cyan)),
+                                Span::raw("Change  "),
+                                Span::styled(" [Esc] ", Style::default().fg(Color::Yellow)),
+                                Span::raw("Dashboard"),
+                            ]
+                        } else if matches!(
                             state.current_screen,
                             CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement
                         ) {
@@ -188,6 +197,14 @@ impl FooterWidget {
                     } else {
                         // Standard / wide layout (>=85 cols)
                         match state.current_screen {
+                            CurrentScreen::Settings => vec![
+                                Span::styled(" [↑/↓] ", Style::default().fg(Color::Cyan)),
+                                Span::raw("Select Setting  "),
+                                Span::styled(" [←/→] ", Style::default().fg(Color::Cyan)),
+                                Span::raw("Change Value  "),
+                                Span::styled(" [Esc] ", Style::default().fg(Color::Yellow)),
+                                Span::raw("Dashboard"),
+                            ],
                             CurrentScreen::PlanReview => {
                                 let dag_label = if state.show_dag_view { "Cards" } else { "DAG" };
                                 let mut hints = vec![
