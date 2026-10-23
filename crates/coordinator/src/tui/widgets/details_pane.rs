@@ -26,10 +26,10 @@ impl DetailsPaneWidget {
 
         let title_text = match (is_focused, area.width) {
             (true, w) if w >= 46 => " [▶ FOCUSED] Task Details & Inspector [Enter to toggle] ",
-            (true, w) if w >= 30 => " [▶ FOCUSED] Task Details [Enter] ",
+            (true, w) if w >= 38 => " [▶ FOCUSED] Task Details [Enter] ",
             (true, _) => " [▶ FOCUSED] Inspector ",
             (false, w) if w >= 46 => " Task Details & Inspector [Enter to toggle] ",
-            (false, w) if w >= 30 => " Task Details [Enter] ",
+            (false, w) if w >= 38 => " Task Details [Enter] ",
             (false, _) => " Inspector ",
         };
 

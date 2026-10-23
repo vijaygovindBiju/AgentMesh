@@ -1023,6 +1023,12 @@ The Operator TUI provides an intuitive, high-ergonomics interface with full mous
 - [x] M3: Content-Adaptive Task Inspector (Dynamic height allocation, `Wrap { trim: true }`, vertical scrolling, scroll reset on task change) [DONE]
 - [x] M4: Task List Rendering & Card Ergonomics (Combined focus+selection badge, 2-line metadata wrapping, title ellipsis, dynamic card height, sliding-window scroll) [DONE]
 - [x] M_TEST: E2E Testing Track: Usability & Ergonomics Test Suite (Expanded `phase22_plan_review_ergonomics.rs`, `TEST_INFRA.md`, publish `TEST_READY.md` - 25/25 passed) [DONE]
+- [x] Gate 2 Layout Defect Remediation (`worker_fix_gate2`):
+  - [x] Header tab 6 clipping at 90..97 cols fixed by reducing Chunk 1 constraint from `Min(25)` to `Min(12)`
+  - [x] Header status pill truncation at 120 cols fixed by concise pill formatting when `inner_width < 50`
+  - [x] Plan review left pane title focus badge clipping on 60..85 cols fixed by raising threshold from `>= 30` to `>= 42`
+  - [x] Task inspector right pane title focus badge clipping at 60 cols fixed by raising threshold from `>= 30` to `>= 38`
+  - [x] Updated stress test reproducer assertions in `phase22_preview_challenger_stress.rs` to verify zero clipping
 - [ ] M5: Final Milestone: 100% E2E Test Pass & Coverage Hardening (All TUI tests passing, clippy clean, Reviewers, Challengers, Forensic Auditor, git commits) [TODO]
 
 

@@ -335,7 +335,7 @@ fn test_harness1_proper_title_adaptation_across_all_sizes() {
                 rendered.contains("Proposed Task Decomposition (Human Review)"),
                 "Width {w}: Expected full left title at left_width {left_width}"
             );
-        } else if left_width >= 30 {
+        } else if left_width >= 42 {
             assert!(
                 rendered.contains("Proposed Tasks (Review)"),
                 "Width {w}: Expected compact left title at left_width {left_width}"
@@ -992,8 +992,8 @@ fn test_harness4_pane_alignment_across_all_breakpoints() {
 fn test_harness4_empirical_findings_reproducers() {
     // ------------------------------------------------------------------------
     // Defect 1: Header Tab 6 Overflow & Border Truncation at 90..97 Columns
-    // At width 90, standard 3-chunk header attempts to fit 18 + 25 + 58 = 101 cols.
-    // Ratatui shrinks Chunk 2 below 55 inner cols, causing Tab 6 ("6:Set") to vanish.
+    // Chunk 1 constraint changed to Min(12), allocating full 58 columns to
+    // Chunk 2 at width 90. All 6 tabs ("6:Set") render fully unclipped.
     // ------------------------------------------------------------------------
     {
         let mut state = AppState::new();
@@ -1004,20 +1004,17 @@ fn test_harness4_empirical_findings_reproducers() {
         terminal_90.draw(|f| ui::render(f, &state)).unwrap();
         let rendered_90 = buffer_to_string(&terminal_90);
 
-        // Tab 6 is clipped off at 90 columns:
-        let tab6_missing_at_90 = !rendered_90.contains("6:Set");
         assert!(
-            tab6_missing_at_90,
-            "Empirical verification confirms Tab 6 is truncated/clipped at 90 cols"
+            rendered_90.contains("6:Set"),
+            "Remediation verification confirms Tab 6 is unclipped and visible at 90 cols"
         );
-        println!("[Empirical Defect 1 Confirmed]: At 90 cols, Tab 6 is missing from header buffer:\n{}", rendered_90.lines().nth(1).unwrap_or(""));
+        println!("[Remediation 1 Verified]: At 90 cols, Tab 6 is present in header:\n{}", rendered_90.lines().nth(1).unwrap_or(""));
     }
 
     // ------------------------------------------------------------------------
     // Defect 2: Header Status Pill Clipping at Standard 120 Columns
-    // At width 120, header height is 3, preventing multi-row layout. All pills
-    // are forced onto a single line requiring 50 cols, but Chunk 1 inner width is 42.
-    // Result: "[Pending: 0]" is clipped to "[P".
+    // At inner width < 50, concise status pills ([PG: ●] [NATS: ●] [Ag: 0/0] [P: 0])
+    // fit inside 42 columns without truncation of pending pill.
     // ------------------------------------------------------------------------
     {
         let mut state = AppState::new();
@@ -1030,16 +1027,20 @@ fn test_harness4_empirical_findings_reproducers() {
 
         let header_row1 = rendered_120.lines().nth(1).unwrap_or("");
         assert!(
-            header_row1.contains("[P│"),
-            "Empirical verification confirms [Pending: ...] is clipped to '[P' at 120 cols"
+            !header_row1.contains("[P│"),
+            "Remediation verification confirms Pending pill is not clipped to '[P│' at 120 cols"
         );
-        println!("[Empirical Defect 2 Confirmed]: At 120 cols, Pending pill is clipped:\n{header_row1}");
+        assert!(
+            header_row1.contains("[P:") || header_row1.contains("[Pending:"),
+            "Remediation verification confirms Pending pill is fully rendered at 120 cols: {header_row1}"
+        );
+        println!("[Remediation 2 Verified]: At 120 cols, status pills render without truncation:\n{header_row1}");
     }
 
     // ------------------------------------------------------------------------
     // Defect 3: Plan Review Focus Badge Clipping on Compact Viewports (80x24)
-    // At width 80, left pane width is 36 cols. Title string is 38 chars wide:
-    // " Proposed Tasks (Review) [▶ FOCUSED] ". Closing bracket clips into border.
+    // Adaptive title threshold raised from >= 30 to >= 42 cols, selecting "Tasks"
+    // so " Tasks [▶ FOCUSED] " fits in 36 cols without border clipping.
     // ------------------------------------------------------------------------
     {
         let mut state = AppState::new();
@@ -1053,16 +1054,20 @@ fn test_harness4_empirical_findings_reproducers() {
 
         let title_line = rendered_80.lines().nth(2).unwrap_or("");
         assert!(
-            title_line.contains("[▶ FOCUSED┓"),
-            "Empirical verification confirms [▶ FOCUSED] closing bracket is clipped into '┓' at 80 cols"
+            !title_line.contains("[▶ FOCUSED┓"),
+            "Remediation verification confirms focus badge is not clipped into '┓' at 80 cols"
         );
-        println!("[Empirical Defect 3 Confirmed]: At 80 cols, Focus badge is clipped into border:\n{title_line}");
+        assert!(
+            title_line.contains("Tasks [▶ FOCUSED]"),
+            "Remediation verification confirms compact left title fits cleanly at 80 cols: {title_line}"
+        );
+        println!("[Remediation 3 Verified]: At 80 cols, Focus badge fits cleanly:\n{title_line}");
     }
 
     // ------------------------------------------------------------------------
     // Defect 4: Task Inspector Focus Badge Clipping at 60 Columns
-    // At width 60, right pane is 32 cols. Title is 35 chars:
-    // " [▶ FOCUSED] Task Details [Enter] ". Truncated into "[Ent┓".
+    // Title threshold raised to >= 38 cols, selecting " [▶ FOCUSED] Inspector "
+    // (23 chars) fitting within 32-col pane with 9 cols to spare.
     // ------------------------------------------------------------------------
     {
         let mut state = AppState::new();
@@ -1076,10 +1081,14 @@ fn test_harness4_empirical_findings_reproducers() {
 
         let title_line_60 = rendered_60.lines().nth(2).unwrap_or("");
         assert!(
-            title_line_60.contains("[Ent┓"),
-            "Empirical verification confirms inspector title '[Enter]' is clipped into '[Ent┓' at 60 cols"
+            !title_line_60.contains("[Ent┓"),
+            "Remediation verification confirms inspector title is not clipped into '[Ent┓' at 60 cols"
         );
-        println!("[Empirical Defect 4 Confirmed]: At 60 cols, Inspector focus title is clipped into border:\n{title_line_60}");
+        assert!(
+            title_line_60.contains("[▶ FOCUSED] Inspector"),
+            "Remediation verification confirms compact inspector focus title fits cleanly at 60 cols: {title_line_60}"
+        );
+        println!("[Remediation 4 Verified]: At 60 cols, Inspector focus title fits cleanly:\n{title_line_60}");
     }
 }
 

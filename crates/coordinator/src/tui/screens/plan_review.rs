@@ -59,7 +59,7 @@ impl PlanReviewScreen {
 
         let base_title = if area.width >= 62 {
             "Proposed Task Decomposition (Human Review)"
-        } else if area.width >= 30 {
+        } else if area.width >= 42 {
             "Proposed Tasks (Review)"
         } else {
             "Tasks"
@@ -237,7 +237,7 @@ mod tests {
         state.review_tasks.push(make_test_task("T-1", "Compact Task"));
         term_compact.draw(|f| PlanReviewScreen::render(f, f.area(), &state)).unwrap();
         let rend_compact: String = term_compact.backend().buffer().content().iter().map(|c| c.symbol()).collect();
-        assert!(rend_compact.contains("Proposed Tasks (Review)"));
+        assert!(rend_compact.contains("Tasks"));
 
         // Wide (>=140 cols)
         let backend_wide = TestBackend::new(180, 40);

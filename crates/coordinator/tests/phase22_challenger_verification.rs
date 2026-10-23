@@ -606,3 +606,172 @@ fn test_high_contrast_indicator_focused_and_selected() {
         "Task 1 should not have '[✓]' since it is not selected"
     );
 }
+
+#[test]
+fn test_exhaustive_mouse_click_matrix_across_all_scroll_positions_and_screen_sizes() {
+    let screen_sizes = [(80, 24), (100, 30), (120, 30), (160, 45), (180, 50)];
+    let task_count = 10;
+
+    for (width, height) in screen_sizes {
+        for initial_selected in 0..task_count {
+            let mut state = setup_plan_state(task_count);
+            state.selected_task_index = initial_selected;
+
+            let mut terminal = create_terminal(width, height);
+            terminal
+                .draw(|frame| {
+                    coordinator::tui::ui::render(frame, &state);
+                })
+                .expect("Failed to draw frame");
+
+            let lines = buffer_to_lines(&terminal);
+
+            // Scan lines for rendered tasks in the left column (Task List)
+            let list_width = if width < 90 {
+                width * 46 / 100
+            } else if width < 140 {
+                width * 44 / 100
+            } else {
+                64
+            } as usize;
+
+            for (row_idx, line) in lines.iter().enumerate() {
+                let left_slice: String = line.chars().take(list_width).collect();
+
+                if let Some(pos) = left_slice.find("[T-") {
+                    let after = &left_slice[pos + 3..];
+                    if let Some(end) = after.find(']') {
+                        let id_str = &after[..end];
+                        if let Ok(task_num) = id_str.parse::<usize>() {
+                            let mut click_state = setup_plan_state(task_count);
+                            click_state.set_viewport_size(width, height);
+                            click_state.selected_task_index = initial_selected;
+                            click_state.handle_mouse(make_mouse_click(10, row_idx as u16, KeyModifiers::NONE));
+                            assert_eq!(
+                                click_state.selected_task_index, task_num,
+                                "Failed at ({width}x{height}), initial_selected={initial_selected}: clicked row {row_idx} rendering [T-{task_num}], but selected {}",
+                                click_state.selected_task_index
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_exhaustive_column_boundary_matrix_across_all_breakpoints() {
+    let widths = [70, 80, 89, 90, 100, 120, 139, 140, 160, 180, 200];
+    let height = 30;
+
+    for width in widths {
+        let expected_list_width = if width < 90 {
+            width * 46 / 100
+        } else if width < 140 {
+            width * 44 / 100
+        } else {
+            64
+        };
+
+        let mut state = setup_plan_state(5);
+        state.selected_task_index = 0;
+        state.inspector_scroll_offset = 0;
+
+        let mut terminal = create_terminal(width, height);
+        terminal
+            .draw(|frame| {
+                coordinator::tui::ui::render(frame, &state);
+            })
+            .expect("Failed to draw frame");
+
+        // 1. Column list_width - 1 MUST be inside Task List
+        let col_left = expected_list_width - 1;
+        state.handle_mouse(make_mouse_scroll(col_left, 10, MouseEventKind::ScrollDown));
+        assert_eq!(
+            state.selected_task_index, 1,
+            "At width {width}: col {col_left} (expected Task List) failed to scroll task selection"
+        );
+        assert_eq!(
+            state.inspector_scroll_offset, 0,
+            "At width {width}: col {col_left} scroll modified inspector offset"
+        );
+
+        // 2. Column list_width MUST be inside Inspector
+        let col_right = expected_list_width;
+        state.handle_mouse(make_mouse_scroll(col_right, 10, MouseEventKind::ScrollDown));
+        assert_eq!(
+            state.selected_task_index, 1,
+            "At width {width}: col {col_right} (expected Inspector) modified task selection"
+        );
+        assert_eq!(
+            state.inspector_scroll_offset, 1,
+            "At width {width}: col {col_right} failed to scroll inspector offset"
+        );
+    }
+}
+
+#[test]
+fn test_mouse_click_edge_cases_and_adversarial_inputs() {
+    // 1. Empty plan: clicking anywhere in task list must not panic or select anything
+    let mut empty_state = setup_plan_state(0);
+    empty_state.set_viewport_size(120, 30);
+    assert!(empty_state.review_tasks.is_empty());
+    for row in [0, 4, 10, 15, 25, 29] {
+        for col in [0, 10, 30, 50, 119] {
+            empty_state.handle_mouse(make_mouse_click(col, row, KeyModifiers::NONE));
+            assert_eq!(empty_state.selected_task_index, 0);
+            assert!(empty_state.selected_task_indices.is_empty());
+        }
+    }
+
+    // 2. Short plan (2 tasks) on large terminal (120x30):
+    // Cards only exist at rows 4..8 (task 0) and rows 9..13 (task 1).
+    // Clicking rows 14..25 (empty space below cards) must be a safe no-op.
+    let mut state = setup_plan_state(2);
+    state.set_viewport_size(120, 30);
+    state.selected_task_index = 0;
+
+    for empty_row in 14..26 {
+        state.handle_mouse(make_mouse_click(10, empty_row, KeyModifiers::NONE));
+        assert_eq!(
+            state.selected_task_index, 0,
+            "Clicking empty row {empty_row} below cards altered selected_task_index"
+        );
+    }
+
+    // 3. Top and bottom border row safety of Plan Review container:
+    // With header_height = 3, row 3 is the top border (list_top - 1).
+    // Row 26 is the bottom border (header_height + body_height - 1).
+    for border_row in [3, 26] {
+        state.handle_mouse(make_mouse_click(10, border_row, KeyModifiers::NONE));
+        assert_eq!(
+            state.selected_task_index, 0,
+            "Clicking border row {border_row} altered selected_task_index"
+        );
+    }
+
+    // 4. Ctrl+Click multi-selection toggle mechanics
+    state.current_screen = CurrentScreen::PlanReview;
+    state.handle_mouse(make_mouse_click(10, 9, KeyModifiers::CONTROL)); // Click card 1
+    assert_eq!(state.selected_task_index, 1);
+    assert_eq!(state.selected_task_indices.len(), 1);
+    assert!(state.selected_task_indices.contains(&1));
+
+    state.handle_mouse(make_mouse_click(10, 9, KeyModifiers::CONTROL)); // Click card 1 again (toggle off)
+    assert_eq!(state.selected_task_index, 1);
+    assert!(state.selected_task_indices.is_empty());
+
+    state.handle_mouse(make_mouse_click(10, 4, KeyModifiers::CONTROL)); // Click card 0
+    state.handle_mouse(make_mouse_click(10, 9, KeyModifiers::CONTROL)); // Click card 1
+    assert_eq!(state.selected_task_indices.len(), 2);
+    assert!(state.selected_task_indices.contains(&0));
+    assert!(state.selected_task_indices.contains(&1));
+
+    // Normal click clears multi-selection
+    state.handle_mouse(make_mouse_click(10, 4, KeyModifiers::NONE));
+    assert_eq!(state.selected_task_index, 0);
+    assert!(state.selected_task_indices.is_empty());
+}
+
+

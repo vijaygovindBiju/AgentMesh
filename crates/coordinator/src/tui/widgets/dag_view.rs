@@ -215,6 +215,7 @@ impl DagViewWidget {
     }
 
     /// Recursively render a tree node and all its downstream dependents
+    #[allow(clippy::too_many_arguments)]
     fn render_tree_node(
         task_id: Uuid,
         depth: usize,

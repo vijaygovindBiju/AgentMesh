@@ -165,7 +165,7 @@ impl HeaderWidget {
                 .direction(Direction::Horizontal)
                 .constraints([
                     Constraint::Length(18), // Brand/version
-                    Constraint::Min(25),    // Active project name & status pills
+                    Constraint::Min(12),    // Active project name & status pills
                     Constraint::Length(58), // Screen tabs, right-sized for 6 tabs
                 ])
                 .split(area);
@@ -250,6 +250,38 @@ impl HeaderWidget {
                         ]),
                     ]
                 }
+            } else if inner_width < 50 {
+                let pg_pill_concise = if state.pg_connected {
+                    Span::styled("[PG: ●]", Style::default().fg(Color::Green))
+                } else {
+                    Span::styled("[PG: ○]", Style::default().fg(Color::Red))
+                };
+                let nats_pill_concise = if state.nats_connected {
+                    Span::styled("[NATS: ●]", Style::default().fg(Color::Green))
+                } else {
+                    Span::styled("[NATS: ○]", Style::default().fg(Color::Red))
+                };
+                let agent_ratio_concise = Span::styled(
+                    format!("[Ag: {active_agents}/{total_agents}]"),
+                    Style::default().fg(Color::Cyan),
+                );
+                let pending_pill_concise = Span::styled(
+                    format!("[P: {pending_count}]"),
+                    if pending_count > 0 {
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::DarkGray)
+                    },
+                );
+                vec![Line::from(vec![
+                    pg_pill_concise,
+                    Span::raw(" "),
+                    nats_pill_concise,
+                    Span::raw(" "),
+                    agent_ratio_concise,
+                    Span::raw(" "),
+                    pending_pill_concise,
+                ])]
             } else {
                 vec![Line::from(vec![
                     pg_pill,
