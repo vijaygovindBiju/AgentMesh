@@ -142,6 +142,8 @@ impl FooterWidget {
                             CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement
                         ) {
                             vec![
+                                Span::styled(" [C] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                                Span::raw("Copy "),
                                 Span::styled(
                                     " [D] ",
                                     Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
@@ -250,6 +252,8 @@ impl FooterWidget {
                                 hints
                             }
                             CurrentScreen::ProjectInput | CurrentScreen::ProjectManagement => vec![
+                                Span::styled(" [C] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                                Span::raw("Copy Project  "),
                                 Span::styled(
                                     " [D] ",
                                     Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),

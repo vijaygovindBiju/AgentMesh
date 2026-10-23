@@ -925,7 +925,9 @@ impl AppState {
 
         if self.current_screen == CurrentScreen::Settings {
             match key.code {
-                KeyCode::Esc | KeyCode::Char('s') | KeyCode::Char('S') => self.current_screen = CurrentScreen::Dashboard,
+                KeyCode::Esc | KeyCode::Char('s') | KeyCode::Char('S') => {
+                    self.current_screen = CurrentScreen::Dashboard
+                }
                 KeyCode::Up | KeyCode::Char('k') => {
                     self.settings_selected_index = self.settings_selected_index.saturating_sub(1)
                 }
@@ -1032,7 +1034,10 @@ impl AppState {
                             self.current_screen = CurrentScreen::Diagnostics;
                             None
                         }
-                        "nav:settings" => { self.current_screen = CurrentScreen::Settings; None }
+                        "nav:settings" => {
+                            self.current_screen = CurrentScreen::Settings;
+                            None
+                        }
                         "demo:run" => Some(TuiAction::SubmitProject {
                             name: DEMO_PROJECT_NAME.to_string(),
                             description: DEMO_PROJECT_DESCRIPTION.to_string(),
@@ -1185,7 +1190,10 @@ impl AppState {
                 self.current_screen = CurrentScreen::Diagnostics;
                 None
             }
-            KeyCode::Char('6') => { self.current_screen = CurrentScreen::Settings; None }
+            KeyCode::Char('6') => {
+                self.current_screen = CurrentScreen::Settings;
+                None
+            }
             KeyCode::Char('r') | KeyCode::Char('R') => {
                 if self.current_screen == CurrentScreen::PlanReview {
                     if let Some(item) = self.review_tasks.get(self.selected_task_index) {
@@ -1259,6 +1267,24 @@ impl AppState {
                             );
                             None
                         }
+                    KeyCode::Char('c') | KeyCode::Char('C') => {
+                        let project = self
+                            .available_projects
+                            .get(self.selected_project_index)
+                            .or(self.active_project.as_ref())
+                            .cloned();
+                        if let Some(project) = project {
+                            self.project_name_input = format!("{} (Copy)", project.name);
+                            self.project_desc_input = project.description;
+                            self.project_focus_field = 0;
+                            self.project_input_cursor = self.project_name_input.chars().count();
+                            self.input_mode = InputMode::EnteringProject;
+                            self.status_message = Some("Project copied into the form. Edit the name or details, then submit to create a separate project.".to_string());
+                        } else {
+                            self.status_message = Some("Select a project to copy.".to_string());
+                        }
+                        None
+                    }
                     KeyCode::Char('d') | KeyCode::Char('D') => Some(TuiAction::SubmitProject {
                                 name: DEMO_PROJECT_NAME.to_string(),
                                 description: DEMO_PROJECT_DESCRIPTION.to_string(),
@@ -2654,6 +2680,24 @@ mod tests {
                 description: "Test Desc".to_string(),
             })
         );
+    }
+
+    #[test]
+    fn test_copy_project_prefills_creation_form_and_preserves_source() {
+        let mut state = AppState::new().with_mock_data();
+        state.current_screen = CurrentScreen::ProjectManagement;
+        let source = state.available_projects[state.selected_project_index].clone();
+
+        state.handle_key(make_key(KeyCode::Char('c')));
+
+        assert_eq!(state.input_mode, InputMode::EnteringProject);
+        assert_eq!(state.project_name_input, format!("{} (Copy)", source.name));
+        assert_eq!(state.project_desc_input, source.description);
+        assert_eq!(
+            state.available_projects[state.selected_project_index].id,
+            source.id
+        );
+        assert_eq!(state.project_focus_field, 0);
     }
 
     #[test]
