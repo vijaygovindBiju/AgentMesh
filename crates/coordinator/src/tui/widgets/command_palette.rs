@@ -275,7 +275,8 @@ mod tests {
         assert_eq!(fleet[0].name, "nav:fleet");
 
         let task = filtered_commands("Task");
-        assert_eq!(task.len(), 5);
+        assert_eq!(task.len(), 6);
+        assert!(task.iter().any(|command| command.name == "task:approve_all"));
 
         let none = filtered_commands("xyz_nonexistent_token");
         assert!(none.is_empty());

@@ -957,11 +957,13 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 
 ## Phase 22 — Operator TUI Usability & Ergonomics Enhancement
 
-- [!] Run full coordinator test suite for TUI verification (requested 2026-10-23): 128/129 coordinator library tests passed; one TUI command palette assertion failed. TUI integration suites: 244 passed, 1 failed (`phase21_preview_challenger::test_challenge1_blocker_and_dependent_navigation`).
+- [x] Fix two stale TUI test expectations found in the full test run (2026-10-23).
 
 Verification run (2026-10-23):
-- `cargo test -p coordinator`: FAILED — `tui::widgets::command_palette::tests::test_filtered_commands_case_insensitive_matching` got 6 matches, expected 5; 128/129 library tests passed.
-- TUI integration suites run individually: 244 passed, 1 failed. `phase21_preview_challenger::test_challenge1_blocker_and_dependent_navigation` expected selection index 1, got 2; remaining selected suites passed.
+- Updated the command palette test to include the `task:approve_all` command, and enabled DAG view in the dependency jump test to reflect its `[`/`]` navigation context.
+- `cargo test -p coordinator --lib`: 129/129 passed.
+- TUI integration suites (`phase4_tui`, Phase 20/21/22 TUI and stress suites, and `mock_data_purged_verification`): 245/245 passed.
+- `cargo test -p coordinator`: TUI library and main tests passed, but the overall command stopped in `phase18_real_world_validation` with 3 failures unrelated to TUI changes (`test_phase18_5_dependency_chain_and_auto_assignment`, `test_phase18_10_distributed_two_agent_execution`, and `test_phase18_3_worktree_real_agy_execution_and_finalization`).
 
 **Goal:** Elevate the Coordinator Terminal User Interface (TUI) into an intuitive, responsive, and delightful operator console with native mouse navigation (tab clicking, wheel scrolling), vibrant visual hierarchy and focus badges, bulk task approval workflow, rich toast notification banners, informative empty states, and expanded cheatsheets.
 

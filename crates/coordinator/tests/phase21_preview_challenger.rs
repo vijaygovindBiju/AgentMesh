@@ -398,6 +398,7 @@ fn test_challenge1_cycle_below_root_resistance() {
 fn test_challenge1_blocker_and_dependent_navigation() {
     let mut state = AppState::new();
     state.current_screen = CurrentScreen::PlanReview;
+    state.show_dag_view = true;
 
     let proj_id = Uuid::new_v4();
     let id_a = Uuid::new_v4();
