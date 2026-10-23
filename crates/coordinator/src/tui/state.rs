@@ -403,7 +403,7 @@ impl AppState {
             show_help_modal: false,
 
             status_message: Some(
-                "Welcome to AgentMesh Coordinator. Press [Tab] to switch screens.".to_string(),
+                "Ready. Press [Tab] to switch screens.".to_string(),
             ),
             should_quit: false,
         }

@@ -30,8 +30,8 @@ impl FooterWidget {
             Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Percentage(65),
-                    Constraint::Percentage(35),
+                    Constraint::Percentage(75),
+                    Constraint::Percentage(25),
                 ])
                 .split(area)
         };
@@ -471,6 +471,19 @@ mod tests {
         assert!(rendered.contains("Cmd"));
         assert!(rendered.contains("[Tab]"));
         assert!(rendered.contains("Nav"));
+    }
+
+    #[test]
+    fn test_wide_footer_keeps_actions_and_status_visible() {
+        let backend = TestBackend::new(240, 3);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let state = AppState::new();
+
+        terminal.draw(|f| FooterWidget::render(f, f.area(), &state)).unwrap();
+
+        let rendered: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        assert!(rendered.contains("Quit"));
+        assert!(rendered.contains("switch screens"));
     }
 
     #[test]

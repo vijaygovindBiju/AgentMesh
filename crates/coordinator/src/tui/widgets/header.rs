@@ -16,7 +16,7 @@ impl HeaderWidget {
             return;
         }
 
-        let is_compact = area.width < 90;
+        let is_compact = area.width < 130;
 
         // Connectivity and status pills
         let pg_pill = if state.pg_connected {
@@ -146,7 +146,7 @@ impl HeaderWidget {
                 .constraints([
                     Constraint::Length(22), // Brand/version
                     Constraint::Min(25),    // Active project name & status pills
-                    Constraint::Length(52), // Screen tabs
+                    Constraint::Length(60), // Screen tabs, including Settings
                 ])
                 .split(area);
 
@@ -302,6 +302,19 @@ mod tests {
 
         assert!(rendered.contains("[PG: ○ OFF]"));
         assert!(rendered.contains("[NATS: ○ OFF]"));
+    }
+
+    #[test]
+    fn test_wide_header_shows_complete_settings_tab() {
+        let backend = TestBackend::new(240, 5);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut state = AppState::new();
+        state.current_screen = CurrentScreen::Settings;
+
+        terminal.draw(|f| HeaderWidget::render(f, f.area(), &state)).unwrap();
+
+        let rendered: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        assert!(rendered.contains("6:Set"));
     }
 
     #[test]
