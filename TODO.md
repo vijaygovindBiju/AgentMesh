@@ -959,6 +959,7 @@ All v1.0 end-to-end multi-agent validation workflows pass cleanly. Verified acro
 
 - [x] Fix two stale TUI test expectations found in the full test run (2026-10-23).
 - [!] Rerun full workspace test suite on request (2026-10-23): `cargo test --workspace` stops in `phase18_real_world_validation` with the same three failures noted in the previous coordinator-wide run; workspace tests after that suite were not reached.
+- [!] Launch Docker dependencies and inspect the TUI/demo flow on request (2026-10-23): TUI starts and connects, but there is no "Run Demo" button/action. `phase7_e2e_demo` skips against the authenticated Compose NATS because it connects without a token; with isolated temporary Docker PostgreSQL/NATS, it reaches execution but fails because assignment selects a different agent than its hard-coded expectation. Temporary containers removed; normal Compose dependencies remain running.
 
 Verification run (2026-10-23):
 - Updated the command palette test to include the `task:approve_all` command, and enabled DAG view in the dependency jump test to reflect its `[`/`]` navigation context.
