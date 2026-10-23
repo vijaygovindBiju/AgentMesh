@@ -443,7 +443,7 @@ AgentMesh uses PostgreSQL 16 for state persistence and NATS 2.10 for durable Jet
 
 Launch the infrastructure:
 ```bash
-docker compose up -d
+docker compose up -d --wait
 ```
 
 Verify service health:
@@ -514,7 +514,7 @@ Experience a complete coordinated multi-agent workflow in under 2 minutes:
 
 ### 1. Start Backing Services
 ```bash
-docker compose up -d
+docker compose up -d --wait
 ```
 
 ### 2. Start Coordinator TUI
@@ -960,8 +960,8 @@ For in-depth architectural specifications and deployment walkthroughs, consult t
 ## Troubleshooting
 
 ### PostgreSQL Connection Failures
-- **Symptom**: Coordinator logs `Failed to connect to PostgreSQL database` and enters Standalone Demo Mode.
-- **Resolution**: Check `docker compose ps` to ensure the container is healthy. Verify `DATABASE_URL` in `.env`. If you changed the password in `.env` after the first launch, clear the volume: `docker compose down -v && docker compose up -d`.
+- **Symptom**: Coordinator logs `Failed to connect to PostgreSQL database`.
+- **Resolution**: Start Docker services and wait for health checks with `docker compose up -d --wait`. Then verify `DATABASE_URL` in `.env`. If you changed the password in `.env` after the first launch, clear the volume: `docker compose down -v && docker compose up -d --wait`.
 
 ### NATS Connection Failures
 - **Symptom**: `Failed to connect to NATS at nats://localhost:4222`.
