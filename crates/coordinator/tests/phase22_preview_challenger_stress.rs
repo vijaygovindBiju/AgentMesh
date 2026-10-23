@@ -873,3 +873,213 @@ fn test_harness3_extreme_100_tasks_plan_navigation_and_selection() {
         .count();
     assert_eq!(approved_count, 50);
 }
+
+
+// ============================================================================
+// HARNESS 4: Extreme Dimensions & Viewport Boundaries (Gate 2 Challenger)
+// Dimensions: 0x0, 1x1, 2x2, 10x5, 47x9, 48x10, 80x24, 89x24, 90x24,
+//             119x30, 120x30, 139x35, 140x35, 180x50, 240x60, 250x60, 500x120
+// ============================================================================
+
+const EXTREME_DIMENSIONS_MATRIX: &[(u16, u16)] = &[
+    (0, 0),
+    (1, 1),
+    (2, 2),
+    (10, 5),
+    (47, 9),
+    (48, 10),
+    (60, 18),
+    (80, 24),
+    (89, 24),
+    (90, 24),
+    (119, 30),
+    (120, 30),
+    (139, 35),
+    (140, 35),
+    (180, 50),
+    (240, 60),
+    (250, 60),
+    (300, 80),
+    (500, 120),
+];
+
+#[test]
+fn test_harness4_extreme_degenerate_and_boundary_resolutions_zero_panics() {
+    for &(w, h) in EXTREME_DIMENSIONS_MATRIX {
+        let mut state = AppState::new();
+        state.current_screen = CurrentScreen::PlanReview;
+        state.show_details_pane = true;
+        populate_sample_plan(&mut state, 8);
+
+        let mut terminal = create_terminal(w, h);
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            terminal
+                .draw(|f| ui::render(f, &state))
+                .expect("terminal.draw failed");
+        }));
+        assert!(
+            res.is_ok(),
+            "Panic during ui::render at extreme dimensions ({w}, {h})"
+        );
+
+        // Also test direct PlanReviewScreen::render
+        let rect = ratatui::layout::Rect {
+            x: 0,
+            y: 0,
+            width: w,
+            height: h,
+        };
+        let res_screen = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            terminal
+                .draw(|f| coordinator::tui::screens::PlanReviewScreen::render(f, rect, &state))
+                .expect("PlanReviewScreen::render failed");
+        }));
+        assert!(
+            res_screen.is_ok(),
+            "Panic during direct PlanReviewScreen::render at dimensions ({w}, {h})"
+        );
+    }
+}
+
+#[test]
+fn test_harness4_pane_alignment_across_all_breakpoints() {
+    let test_widths = [
+        48u16, 60, 70, 80, 85, 89, 90, 95, 100, 119, 120, 139, 140, 160, 180, 200, 240, 250, 300, 500
+    ];
+
+    for &w in &test_widths {
+        let h = 35u16;
+        let (left_c, right_c) = if w < 90 {
+            (ratatui::layout::Constraint::Percentage(46), ratatui::layout::Constraint::Percentage(54))
+        } else if w < 140 {
+            (ratatui::layout::Constraint::Percentage(44), ratatui::layout::Constraint::Percentage(56))
+        } else {
+            (ratatui::layout::Constraint::Length(64), ratatui::layout::Constraint::Min(76))
+        };
+
+        let header_h = if w < 90 { 2 } else { 3 };
+        let main_h = h.saturating_sub(header_h + 3);
+
+        let body_rect = ratatui::layout::Rect {
+            x: 0,
+            y: header_h,
+            width: w,
+            height: main_h,
+        };
+
+        let chunks = ratatui::layout::Layout::default()
+            .direction(ratatui::layout::Direction::Horizontal)
+            .constraints([left_c, right_c])
+            .split(body_rect);
+
+        assert_eq!(chunks[0].y, chunks[1].y, "Width {w}: Mismatched vertical alignment");
+        assert_eq!(chunks[0].height, chunks[1].height, "Width {w}: Mismatched heights");
+        assert!(
+            chunks[0].right() <= chunks[1].left(),
+            "Width {w}: Left pane overlaps right pane! left_right={}, right_left={}",
+            chunks[0].right(),
+            chunks[1].left()
+        );
+        assert!(
+            chunks[1].right() <= w,
+            "Width {w}: Right pane overflows terminal width! right_edge={}, max={w}",
+            chunks[1].right()
+        );
+    }
+}
+
+#[test]
+fn test_harness4_empirical_findings_reproducers() {
+    // ------------------------------------------------------------------------
+    // Defect 1: Header Tab 6 Overflow & Border Truncation at 90..97 Columns
+    // At width 90, standard 3-chunk header attempts to fit 18 + 25 + 58 = 101 cols.
+    // Ratatui shrinks Chunk 2 below 55 inner cols, causing Tab 6 ("6:Set") to vanish.
+    // ------------------------------------------------------------------------
+    {
+        let mut state = AppState::new();
+        state.current_screen = CurrentScreen::PlanReview;
+        populate_sample_plan(&mut state, 4);
+
+        let mut terminal_90 = create_terminal(90, 25);
+        terminal_90.draw(|f| ui::render(f, &state)).unwrap();
+        let rendered_90 = buffer_to_string(&terminal_90);
+
+        // Tab 6 is clipped off at 90 columns:
+        let tab6_missing_at_90 = !rendered_90.contains("6:Set");
+        assert!(
+            tab6_missing_at_90,
+            "Empirical verification confirms Tab 6 is truncated/clipped at 90 cols"
+        );
+        println!("[Empirical Defect 1 Confirmed]: At 90 cols, Tab 6 is missing from header buffer:\n{}", rendered_90.lines().nth(1).unwrap_or(""));
+    }
+
+    // ------------------------------------------------------------------------
+    // Defect 2: Header Status Pill Clipping at Standard 120 Columns
+    // At width 120, header height is 3, preventing multi-row layout. All pills
+    // are forced onto a single line requiring 50 cols, but Chunk 1 inner width is 42.
+    // Result: "[Pending: 0]" is clipped to "[P".
+    // ------------------------------------------------------------------------
+    {
+        let mut state = AppState::new();
+        state.current_screen = CurrentScreen::PlanReview;
+        populate_sample_plan(&mut state, 4);
+
+        let mut terminal_120 = create_terminal(120, 30);
+        terminal_120.draw(|f| ui::render(f, &state)).unwrap();
+        let rendered_120 = buffer_to_string(&terminal_120);
+
+        let header_row1 = rendered_120.lines().nth(1).unwrap_or("");
+        assert!(
+            header_row1.contains("[P│"),
+            "Empirical verification confirms [Pending: ...] is clipped to '[P' at 120 cols"
+        );
+        println!("[Empirical Defect 2 Confirmed]: At 120 cols, Pending pill is clipped:\n{header_row1}");
+    }
+
+    // ------------------------------------------------------------------------
+    // Defect 3: Plan Review Focus Badge Clipping on Compact Viewports (80x24)
+    // At width 80, left pane width is 36 cols. Title string is 38 chars wide:
+    // " Proposed Tasks (Review) [▶ FOCUSED] ". Closing bracket clips into border.
+    // ------------------------------------------------------------------------
+    {
+        let mut state = AppState::new();
+        state.current_screen = CurrentScreen::PlanReview;
+        state.plan_review_focus = PlanReviewFocus::TaskList;
+        populate_sample_plan(&mut state, 4);
+
+        let mut terminal_80 = create_terminal(80, 24);
+        terminal_80.draw(|f| ui::render(f, &state)).unwrap();
+        let rendered_80 = buffer_to_string(&terminal_80);
+
+        let title_line = rendered_80.lines().nth(2).unwrap_or("");
+        assert!(
+            title_line.contains("[▶ FOCUSED┓"),
+            "Empirical verification confirms [▶ FOCUSED] closing bracket is clipped into '┓' at 80 cols"
+        );
+        println!("[Empirical Defect 3 Confirmed]: At 80 cols, Focus badge is clipped into border:\n{title_line}");
+    }
+
+    // ------------------------------------------------------------------------
+    // Defect 4: Task Inspector Focus Badge Clipping at 60 Columns
+    // At width 60, right pane is 32 cols. Title is 35 chars:
+    // " [▶ FOCUSED] Task Details [Enter] ". Truncated into "[Ent┓".
+    // ------------------------------------------------------------------------
+    {
+        let mut state = AppState::new();
+        state.current_screen = CurrentScreen::PlanReview;
+        state.plan_review_focus = PlanReviewFocus::TaskInspector;
+        populate_sample_plan(&mut state, 4);
+
+        let mut terminal_60 = create_terminal(60, 18);
+        terminal_60.draw(|f| ui::render(f, &state)).unwrap();
+        let rendered_60 = buffer_to_string(&terminal_60);
+
+        let title_line_60 = rendered_60.lines().nth(2).unwrap_or("");
+        assert!(
+            title_line_60.contains("[Ent┓"),
+            "Empirical verification confirms inspector title '[Enter]' is clipped into '[Ent┓' at 60 cols"
+        );
+        println!("[Empirical Defect 4 Confirmed]: At 60 cols, Inspector focus title is clipped into border:\n{title_line_60}");
+    }
+}
+
